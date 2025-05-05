@@ -25,18 +25,18 @@ export default function ServerStatsCards({ playerData, streamerData, viewerData,
       <CardContent className="grid grid-cols-3 gap-4">
         <div className="flex flex-col">
           <span className="text-xs text-muted-foreground flex items-center gap-1">
-            <Users className="h-3 w-3" /> Current
+            <Users className="h-3 w-3" /> Current Player
           </span>
           <span className="text-xl font-bold">{loading ? "-" : current}</span>
         </div>
 
         <div className="flex flex-col">
-          <span className="text-xs text-muted-foreground">Peak</span>
+          <span className="text-xs text-muted-foreground">Peak Players</span>
           <span className="text-xl font-bold">{loading ? "-" : peak}</span>
         </div>
 
         <div className="flex flex-col">
-          <span className="text-xs text-muted-foreground">Average</span>
+          <span className="text-xs text-muted-foreground">Average Players</span>
           <span className="text-xl font-bold">{loading ? "-" : average}</span>
         </div>
         <div className="flex flex-col">
