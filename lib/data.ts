@@ -66,7 +66,7 @@ export function getTimeAggregation(timeRange: TimeRange): TimeAggregation {
     case "24h":
       return "hour"
     case "7d":
-      return "day"
+      return "hour"
     case "30d":
       return "day"
     case "90d":

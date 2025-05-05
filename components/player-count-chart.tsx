@@ -130,6 +130,13 @@ export default function PlayerCountChart({ data, serverIds, serverNames, loading
           minute: "2-digit",
         })
       case "7d":
+        return date.toLocaleString(undefined, {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
       case "30d":
         // Format: Jan 1, 2023
         return date.toLocaleDateString(undefined, {
@@ -167,7 +174,7 @@ export default function PlayerCountChart({ data, serverIds, serverNames, loading
     <ChartContainer config={chartConfig} className="text-muted-foreground">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" />
+          <CartesianGrid strokeDasharray="4 4" />
           <XAxis
             dataKey="timestamp"
             tickFormatter={formatTimestamp}
