@@ -11,6 +11,9 @@ export type TimeRange =
   | "180d" // Last 6 months
   | "365d" // Last year
   | "all" // All time
+  | "2h" // Last 2 hours
+  | "4h" // Last 4 hours
+  | "8h" // Last 8 hours
 
 export type TimeAggregation =
   | "minute" // Group by minute
@@ -41,6 +44,12 @@ export function getTimeAggregation(timeRange: TimeRange): TimeAggregation {
     case "1h":
       return "minute"
     case "6h":
+      return "minute"
+    case "2h":
+      return "minute"
+    case "4h":
+      return "minute"
+    case "8h":
       return "minute"
     case "24h":
       return "hour"
@@ -144,8 +153,17 @@ export async function getPlayerCounts(serverIds: string[], timeRange: TimeRange)
       case "1h":
         startDate = new Date(now.getTime() - 1 * 60 * 60 * 1000)
         break
+      case "2h":
+        startDate = new Date(now.getTime() - 2 * 60 * 60 * 1000)
+        break
+      case "4h":
+        startDate = new Date(now.getTime() - 4 * 60 * 60 * 1000)
+        break
       case "6h":
         startDate = new Date(now.getTime() - 6 * 60 * 60 * 1000)
+        break
+      case "8h":
+        startDate = new Date(now.getTime() - 8 * 60 * 60 * 1000)
         break
       case "24h":
         startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)

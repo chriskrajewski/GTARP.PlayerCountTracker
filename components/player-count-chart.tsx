@@ -57,12 +57,15 @@ export default function PlayerCountChart({ data, serverIds, serverNames, loading
     // Different format based on time range
     switch (timeRange) {
       case "1h":
+      case "2h":
+      case "4h":
       case "6h":
         // Format: 12:30
         return date.toLocaleTimeString(undefined, {
           hour: "2-digit",
           minute: "2-digit",
         })
+      case "8h":
       case "24h":
         // Format: 12:00
         return date.toLocaleTimeString(undefined, {
@@ -113,7 +116,10 @@ export default function PlayerCountChart({ data, serverIds, serverNames, loading
     // Different format based on time range
     switch (timeRange) {
       case "1h":
+      case "2h":
+      case "4h":
       case "6h":
+      case "8h":
       case "24h":
         // Format: Jan 1, 2023 12:30 PM
         return date.toLocaleString(undefined, {

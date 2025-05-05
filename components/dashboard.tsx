@@ -105,9 +105,12 @@ export default function Dashboard() {
 
         <div className="w-full sm:w-auto overflow-x-auto">
           <Tabs defaultValue="24h" value={timeRange} onValueChange={handleTimeRangeChange} className="w-full">
-            <TabsList className="grid grid-cols-4 md:grid-cols-8">
+            <TabsList className="grid grid-cols-4 md:grid-cols-11">
               <TabsTrigger value="1h">1h</TabsTrigger>
+              <TabsTrigger value="2h">2h</TabsTrigger>
+              <TabsTrigger value="4h">4h</TabsTrigger>
               <TabsTrigger value="6h">6h</TabsTrigger>
+              <TabsTrigger value="8h">8h</TabsTrigger>
               <TabsTrigger value="24h">24h</TabsTrigger>
               <TabsTrigger value="7d">7d</TabsTrigger>
               <TabsTrigger value="30d">30d</TabsTrigger>
