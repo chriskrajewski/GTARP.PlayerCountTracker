@@ -47,11 +47,11 @@ export function MultiServerSelect({ servers, selectedServers, onChange, disabled
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between sm:w-[250px]"
+          className="w-full justify-between sm:w-[320px]"
           disabled={disabled}
         >
           {selectedServers.length > 0 ? (
-            <div className="flex flex-wrap gap-1 max-w-[200px] overflow-hidden">
+            <div className="flex flex-wrap gap-1 max-w-[300px] overflow-hidden">
               {selectedServers.length <= 2 ? (
                 selectedServers.map((serverId) => (
                   <Badge key={serverId} variant="secondary" className="mr-1">
