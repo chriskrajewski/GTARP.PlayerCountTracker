@@ -7,9 +7,13 @@ import {
   getServers,
   getPlayerCounts,
   aggregateDataForChart,
+  getStreamCounts,
+  getViewerCounts,
   type TimeRange,
   type ServerData,
   type PlayerCountData,
+  type StreamCountData,
+  type ViewerCountData
 } from "@/lib/data"
 import PlayerCountChart from "./player-count-chart"
 import ServerStatsCards from "./server-stats-cards"
@@ -20,6 +24,8 @@ export default function Dashboard() {
   const [selectedServers, setSelectedServers] = useState<string[]>([])
   const [timeRange, setTimeRange] = useState<TimeRange>("24h")
   const [playerData, setPlayerData] = useState<PlayerCountData[]>([])
+  const [streamData, setStreamerData] = useState<StreamCountData[]>([])
+  const [viewData, setViewerData] = useState<ViewerCountData[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -49,7 +55,11 @@ export default function Dashboard() {
       try {
         setLoading(true)
         const data = await getPlayerCounts(selectedServers, timeRange)
+        const streamData = await getStreamCounts(selectedServers, timeRange)
+        const viewData = await getViewerCounts(selectedServers, timeRange)
         setPlayerData(data)
+        setStreamerData(streamData)
+        setViewerData(viewData)
         setLoading(false)
       } catch (err) {
         console.error("Error loading player data:", err)
@@ -131,6 +141,8 @@ export default function Dashboard() {
               serverId={serverId} 
               serverName={getServerNameById(serverId)}
               loading={loading} 
+              streamerData={streamData}
+              viewerData={viewData}
             />
           ))}
         </div>

@@ -33,6 +33,18 @@ export type PlayerCountData = {
   server_id: string
 }
 
+export type StreamCountData = {
+  timestamp: string
+  streamercount: number
+  server_id: string
+}
+
+export type ViewerCountData = {
+  timestamp: string
+  viewcount: number
+  server_id: string
+}
+
 export type AggregatedData = {
   timestamp: string
   [key: string]: number | string
@@ -200,6 +212,146 @@ export async function getPlayerCounts(serverIds: string[], timeRange: TimeRange)
   return data
 }
 
+export async function getStreamCounts(serverIds: string[], timeRange: TimeRange): Promise<StreamCountData[]> {
+  const isClient = typeof window !== "undefined";
+  const client = isClient ? supabase : createServerClient();
+
+  console.log(serverIds);
+  let query = client
+    .from("streamer_count")
+    .select("server_id, timestamp, streamercount")
+    .order("timestamp", { ascending: true });
+
+  if (serverIds.length > 0) {
+    query = query.in("server_id", serverIds);
+  }
+
+  // Apply time filter
+  const now = new Date();
+  if (timeRange !== "all") {
+    let startDate: Date;
+    switch (timeRange) {
+      case "1h":
+        startDate = new Date(now.getTime() - 1 * 60 * 60 * 1000)
+        break
+      case "2h":
+        startDate = new Date(now.getTime() - 2 * 60 * 60 * 1000)
+        break
+      case "4h":
+        startDate = new Date(now.getTime() - 4 * 60 * 60 * 1000)
+        break
+      case "6h":
+        startDate = new Date(now.getTime() - 6 * 60 * 60 * 1000)
+        break
+      case "8h":
+        startDate = new Date(now.getTime() - 8 * 60 * 60 * 1000)
+        break
+      case "24h":
+        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+        break
+      case "7d":
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        break
+      case "30d":
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+        break
+      case "90d":
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+        break
+      case "180d":
+        startDate = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000)
+        break
+      case "365d":
+        startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+        break
+      default:
+        startDate = new Date(0)
+    }
+    query = query.gte("timestamp", startDate.toISOString());
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("Error fetching streamer counts:", error);
+    return [];
+  }
+
+  console.log("getStreamCounts result:", data); // Add this to debug
+  console.log("getStreamCounts serverids result:", serverIds); // Add this to debug
+  return data || []; // Ensure we always return an array
+}
+
+export async function getViewerCounts(serverIds: string[], timeRange: TimeRange): Promise<ViewerCountData[]> {
+  const isClient = typeof window !== "undefined";
+  const client = isClient ? supabase : createServerClient();
+
+  console.log(serverIds);
+  let query = client
+    .from("viewer_count")
+    .select("server_id, timestamp, viewcount")
+    .order("timestamp", { ascending: true });
+
+  if (serverIds.length > 0) {
+    query = query.in("server_id", serverIds);
+  }
+
+  // Apply time filter
+  const now = new Date();
+  if (timeRange !== "all") {
+    let startDate: Date;
+    switch (timeRange) {
+      case "1h":
+        startDate = new Date(now.getTime() - 1 * 60 * 60 * 1000)
+        break
+      case "2h":
+        startDate = new Date(now.getTime() - 2 * 60 * 60 * 1000)
+        break
+      case "4h":
+        startDate = new Date(now.getTime() - 4 * 60 * 60 * 1000)
+        break
+      case "6h":
+        startDate = new Date(now.getTime() - 6 * 60 * 60 * 1000)
+        break
+      case "8h":
+        startDate = new Date(now.getTime() - 8 * 60 * 60 * 1000)
+        break
+      case "24h":
+        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+        break
+      case "7d":
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        break
+      case "30d":
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+        break
+      case "90d":
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+        break
+      case "180d":
+        startDate = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000)
+        break
+      case "365d":
+        startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+        break
+      default:
+        startDate = new Date(0)
+    }
+    query = query.gte("timestamp", startDate.toISOString());
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("Error fetching viewer counts:", error);
+    return [];
+  }
+
+  console.log("getViewerCounts result:", data); // Add this to debug
+  console.log("getViewerCounts serverids result:", serverIds); // Add this to debug
+  return data || []; // Ensure we always return an array
+}
+
 // Aggregate data by time period
 export function aggregateDataByTime(
   data: PlayerCountData[],
@@ -302,4 +454,46 @@ export function getServerStats(data: PlayerCountData[], serverId: string) {
   const average = Math.round(counts.reduce((sum, count) => sum + count, 0) / counts.length)
 
   return { current, peak, average }
+}
+
+export function getStreamerStats(streamData: StreamCountData[], serverId: string) {
+  if (!Array.isArray(streamData)) {
+    console.error("getStreamerStats: Invalid or undefined data provided - ", streamData);
+    return { streamCurrent: 0, streamPeak: 0, streamAverage: 0 };
+  }
+
+  const serverData = streamData.filter((item) => item.server_id === serverId);
+
+  if (serverData.length === 0) {
+    return { streamCurrent: 0, streamPeak: 0, streamAverage: 0 };
+  }
+
+  const counts = serverData.map((item) => item.streamercount);
+  const streamCurrent = serverData[serverData.length - 1]?.streamercount || 0;
+  const streamPeak = Math.max(...counts);
+  const streamAverage = Math.round(counts.reduce((sum, count) => sum + count, 0) / counts.length);
+
+
+  return { streamCurrent, streamPeak, streamAverage };
+}
+
+export function getViewerStats(streamData: ViewerCountData[], serverId: string) {
+  if (!Array.isArray(streamData)) {
+    console.error("getViewStats: Invalid or undefined data provided - ", streamData);
+    return { viewerurrent: 0, viewerPeak: 0, viewerAverage: 0 };
+  }
+
+  const serverData = streamData.filter((item) => item.server_id === serverId);
+
+  if (serverData.length === 0) {
+    return { viewerurrent: 0, viewerPeak: 0, viewerAverage: 0 };
+  }
+
+  const counts = serverData.map((item) => item.viewcount);
+  const viewerCurrent = serverData[serverData.length - 1]?.viewcount || 0;
+  const viewerPeak = Math.max(...counts);
+  const viewerAverage = Math.round(counts.reduce((sum, count) => sum + count, 0) / counts.length);
+
+
+  return { viewerCurrent, viewerPeak, viewerAverage };
 }
