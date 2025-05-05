@@ -25,7 +25,7 @@ export default function ServerStatsCards({ playerData, streamerData, viewerData,
       <CardContent className="grid grid-cols-3 gap-4">
         <div className="flex flex-col">
           <span className="text-xs text-muted-foreground flex items-center gap-1">
-            <Users className="h-3 w-3" /> Current Player
+            <Users className="h-3 w-3" /> Current Players
           </span>
           <span className="text-xl font-bold">{loading ? "-" : current}</span>
         </div>
