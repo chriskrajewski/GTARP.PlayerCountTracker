@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { Analytics } from "@vercel/analytics/react"
 import { Suspense } from "react"
 import { SpeedInsights } from "@vercel/speed-insights/react"
+import Script from "next/script";
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -24,7 +25,14 @@ export default function RootLayout({
       <head>
         <script src="https://cdn.jsdelivr.net/npm/@statsig/js-client@3/build/statsig-js-client+session-replay+web-analytics.min.js?apikey=client-Nu49JS6kPL97gZnvHVQZF64xQpf7aCGgRMdLm3wrEt5">
         </script>
-        <script async src="https://www.googletagmanager.com/gtag/js?id=G-546BM3B67W"></script>
+        <Script src="https://www.googletagmanager.com/gtag/js?id=G-546BM3B67W" strategy="afterInteractive">
+        {`
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments)}
+          gtag('js', new Date());
+          gtag('config', 'G-546BM3B67W');
+        `}
+      </Script>
       </head>
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
