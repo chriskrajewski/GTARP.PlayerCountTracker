@@ -1,8 +1,14 @@
-# FiveMPlayerCountFrontEnd
+# GTA RP Player and Viewer Count Tracker
 
-use api2db_py/api_ingest.py to fetch FiveM API data into Supabase.
+Check it out at https://fivemstats.krtech.io
 
-fill in your SUPABASE_URL and SUPABASE_KEY in your .env
+## How to build and run!
 
-run vercel dev if using vercel or next build and next start
+- Create your Supabase schema from api2db/sql/sqlSetup.sql
+
+- Use api2db/edgeFunction to ingest data into Supabase via Supabase Edge Functions on a cron job
+
+- Fill in your SUPABASE_URL, SUPABASE_KEY, TWITCH_CLIENT, and TWITCH_CLIENT_SECRET in your .env
+
+- Run ``` vercel dev ``` if using vercel or ``` next build ``` and ``` next start ```
  
