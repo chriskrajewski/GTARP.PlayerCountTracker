@@ -1,0 +1,74 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import "https://deno.land/std@0.168.0/dotenv/load.ts";
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+const SUPABASE_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+// List of server IDs to query
+const SERVER_IDS = [
+  "o3re8y",
+  "3lamjz",
+  "9mxzbe",
+  "46pb7q"
+];
+const BASE_API_URL = "https://servers-frontend.fivem.net/api/servers/single/";
+serve(async (req)=>{
+  if (req.method !== "GET") {
+    return new Response("Method Not Allowed", {
+      status: 405
+    });
+  }
+  try {
+    const headers = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+      "Accept": "application/json, text/plain, */*",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Referer": "https://servers.fivem.net/",
+      "Origin": "https://servers.fivem.net"
+    };
+    const timestamp = new Date().toISOString();
+    const results = [];
+    // Iterate through each server ID
+    for (const server_id of SERVER_IDS){
+      const API_URL = `${BASE_API_URL}${server_id}`;
+      try {
+        const response = await fetch(API_URL, {
+          headers
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error for server ${server_id}! status: ${response.status}`);
+        }
+        const data = await response.json();
+        const current_players = data?.Data?.selfReportedClients || 0;
+        const record = {
+          timestamp,
+          player_count: current_players,
+          server_id
+        };
+        const { error } = await supabase.from("player_counts").insert(record);
+        if (error) {
+          throw new Error(`Supabase error for server ${server_id}: ${error.message}`);
+        }
+        results.push(`[${timestamp}] Server ${server_id}: Successfully saved player count: ${current_players}`);
+      } catch (serverError) {
+        const errorMessage = serverError instanceof Error ? serverError.message : String(serverError);
+        results.push(`[${timestamp}] Server ${server_id}: Error: ${errorMessage}`);
+      }
+    }
+    return new Response(results.join("\n"), {
+      status: 200,
+      headers: {
+        "Content-Type": "text/plain"
+      }
+    });
+  } catch (error) {
+    const timestamp = new Date().toISOString();
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return new Response(`[${timestamp}] Unexpected error: ${errorMessage}`, {
+      status: 500,
+      headers: {
+        "Content-Type": "text/plain"
+      }
+    });
+  }
+});
