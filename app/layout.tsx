@@ -21,11 +21,10 @@ export default function RootLayout({
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <html lang="en">
+    <><html lang="en">
       <head>
-        <script src="https://cdn.jsdelivr.net/npm/@statsig/js-client@3/build/statsig-js-client+session-replay+web-analytics.min.js?apikey=client-Nu49JS6kPL97gZnvHVQZF64xQpf7aCGgRMdLm3wrEt5">
-        </script>
-        <Script src="https://www.googletagmanager.com/gtag/js?id=G-546BM3B67W" strategy="afterInteractive">
+        <script src="https://cdn.jsdelivr.net/npm/@statsig/js-client@3/build/statsig-js-client+session-replay+web-analytics.min.js?apikey=${process.env.STATSIG_KEY}"/>
+      <Script src="https://www.googletagmanager.com/gtag/js?id=G-546BM3B67W" strategy="afterInteractive">
         {`
           window.dataLayer = window.dataLayer || [];
           function gtag(){dataLayer.push(arguments)}
@@ -33,8 +32,7 @@ export default function RootLayout({
           gtag('config', 'G-546BM3B67W');
         `}
       </Script>
-      </head>
-      <body className={inter.className}>
+    </head><body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <Suspense>
             {children}
@@ -42,7 +40,7 @@ export default function RootLayout({
             <SpeedInsights />
           </Suspense>
         </ThemeProvider>
-      </body>
+      </body></>
     </html>
   )
 }
