@@ -24,6 +24,7 @@ export default function Home() {
       <footer>
         <p className="footer"> Made by <a href="https://twitch.tv/alantiix"> twitch.tv/alantiix </a> </p>
         <a className="links" href="https://forms.office.com/r/r1rXgAGx6V"> Give me your feedback! </a>
+        <a className="links">Data mined from the FiveM API (https://servers-live.fivem.net/api/servers/) and Twitch's API</a>
       </footer>
     </main>
   )
