@@ -34,21 +34,38 @@ export default function PlayerCountChart({ data, serverIds, serverNames, loading
   // Create a config object for the chart
   const chartConfig: Record<string, { label: string; color: string }> = {}
 
-  // Define colors for each server
-  const colors = [
-    "hsl(var(--chart-1))",
-    "hsl(var(--chart-2))",
-    "hsl(var(--chart-3))",
-    "hsl(var(--chart-4))",
-    "hsl(var(--chart-5))",
-  ]
+// Define color mapping for each label with explicit type
+interface ColorMap {
+  [key: string]: string; // Index signature to allow any string key
+  unscripted: string;
+  onx: string;
+  nopixel: string;
+  prodigy: string;
+  default: string;
+}
 
-  serverIds.forEach((serverId, index) => {
-    chartConfig[serverId] = {
-      label: serverNames[serverId] || `Server ${serverId}`,
-      color: colors[index % colors.length],
-    }
-  })
+const colorMap: ColorMap = {
+  unscripted: "hsl(var(--unscripted))",
+  onx: "hsl(var(--onx))",
+  nopixel: "hsl(var(--nopixel))",
+  prodigy: "hsl(var(--prodigy))",
+  default: "hsl(var(--chart-5))",
+};
+
+serverIds.forEach((serverId) => {
+  const originalLabel = serverNames[serverId] || `Server ${serverId}`;
+  const normalizedLabel = originalLabel.toLowerCase(); // Normalize for comparison
+
+  // Find the matching key in colorMap
+  const matchedKey = Object.keys(colorMap).find((key) =>
+    normalizedLabel.includes(key)
+  );
+
+  chartConfig[serverId] = {
+    label: originalLabel, // Preserve original label for display
+    color: matchedKey ? colorMap[matchedKey] : colorMap.default,
+  };
+});
 
   // Format the timestamp for display based on time range
   const formatTimestamp = (timestamp: string) => {
