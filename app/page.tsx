@@ -2,6 +2,7 @@ import { Suspense } from "react"
 import Dashboard from "@/components/dashboard"
 import { DashboardSkeleton } from "@/components/dashboard-skeleton"
 import "@/styles/globals.css"
+import Link from "next/link"
 
 declare global {
   interface Window {
@@ -21,9 +22,13 @@ export default function Home() {
           <Dashboard />
         </Suspense>
       </div>
-      <footer>
+      <footer className="mt-12 pb-8">
         <p className="footer"> Made by <a href="https://twitch.tv/alantiix"> twitch.tv/alantiix </a> </p>
-        <a className="links" href="https://forms.office.com/r/r1rXgAGx6V"> Give me your feedback! </a>
+        <div className="flex flex-wrap gap-2 justify-center my-2">
+          <a className="links" href="https://forms.office.com/r/r1rXgAGx6V"> Give me your feedback! </a>
+          <span className="text-muted-foreground">•</span>
+          <Link href="/changelog" className="links">View Changelog</Link>
+        </div>
         <p className="footer">Data mined from the FiveM API (https://servers-live.fivem.net/api/servers/) and Twitch's API</p>
       </footer>
     </main>
