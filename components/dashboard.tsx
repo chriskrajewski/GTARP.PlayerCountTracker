@@ -19,6 +19,9 @@ import PlayerCountChart from "./player-count-chart"
 import ServerStatsCards from "./server-stats-cards"
 import { MultiServerSelect } from "./multi-server-select"
 
+// Local storage key for saving server selection
+const SELECTED_SERVERS_KEY = "selectedServers"
+
 export default function Dashboard() {
   const [servers, setServers] = useState<ServerData[]>([])
   const [selectedServers, setSelectedServers] = useState<string[]>([])
@@ -34,9 +37,39 @@ export default function Dashboard() {
       try {
         const serverData = await getServers()
         setServers(serverData)
-        if (serverData.length > 0) {
-          setSelectedServers([serverData[0].server_id])
+        
+        // Attempt to load saved server selection from localStorage
+        const savedSelection = localStorage.getItem(SELECTED_SERVERS_KEY)
+        
+        if (savedSelection) {
+          try {
+            const parsedSelection = JSON.parse(savedSelection)
+            // Verify the saved servers still exist in our current server list
+            const validSavedServers = parsedSelection.filter(
+              (id: string) => serverData.some(server => server.server_id === id)
+            )
+            
+            if (validSavedServers.length > 0) {
+              setSelectedServers(validSavedServers)
+            } else {
+              // If no valid servers from saved selection, default to first server
+              if (serverData.length > 0) {
+                setSelectedServers([serverData[0].server_id])
+              }
+            }
+          } catch (e) {
+            // If parsing fails, default to first server
+            if (serverData.length > 0) {
+              setSelectedServers([serverData[0].server_id])
+            }
+          }
+        } else {
+          // No saved selection, default to first server
+          if (serverData.length > 0) {
+            setSelectedServers([serverData[0].server_id])
+          }
         }
+        
         setLoading(false)
       } catch (err) {
         console.error("Error loading servers:", err)
@@ -70,6 +103,13 @@ export default function Dashboard() {
 
     loadPlayerData()
   }, [selectedServers, timeRange])
+
+  // Save selected servers to localStorage whenever they change
+  useEffect(() => {
+    if (selectedServers.length > 0) {
+      localStorage.setItem(SELECTED_SERVERS_KEY, JSON.stringify(selectedServers))
+    }
+  }, [selectedServers])
 
   const handleServerChange = (servers: string[]) => {
     setSelectedServers(servers)
