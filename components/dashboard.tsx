@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { RefreshCw } from "lucide-react"
 import {
   getServers,
   getPlayerCounts,
@@ -31,6 +33,7 @@ export default function Dashboard() {
   const [viewData, setViewerData] = useState<ViewerCountData[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
     async function loadServers() {
@@ -81,26 +84,30 @@ export default function Dashboard() {
     loadServers()
   }, [])
 
-  useEffect(() => {
-    async function loadPlayerData() {
-      if (selectedServers.length === 0) return
+  // Extract loadPlayerData function to make it reusable
+  const loadPlayerData = async () => {
+    if (selectedServers.length === 0) return
 
-      try {
-        setLoading(true)
-        const data = await getPlayerCounts(selectedServers, timeRange)
-        const streamData = await getStreamCounts(selectedServers, timeRange)
-        const viewData = await getViewerCounts(selectedServers, timeRange)
-        setPlayerData(data)
-        setStreamerData(streamData)
-        setViewerData(viewData)
-        setLoading(false)
-      } catch (err) {
-        console.error("Error loading player data:", err)
-        setError("Failed to load player data. Please check your connection and try again.")
-        setLoading(false)
-      }
+    try {
+      setLoading(true)
+      setRefreshing(true)
+      const data = await getPlayerCounts(selectedServers, timeRange)
+      const streamData = await getStreamCounts(selectedServers, timeRange)
+      const viewData = await getViewerCounts(selectedServers, timeRange)
+      setPlayerData(data)
+      setStreamerData(streamData)
+      setViewerData(viewData)
+      setLoading(false)
+      setRefreshing(false)
+    } catch (err) {
+      console.error("Error loading player data:", err)
+      setError("Failed to load player data. Please check your connection and try again.")
+      setLoading(false)
+      setRefreshing(false)
     }
+  }
 
+  useEffect(() => {
     loadPlayerData()
   }, [selectedServers, timeRange])
 
@@ -117,6 +124,10 @@ export default function Dashboard() {
 
   const handleTimeRangeChange = (value: string) => {
     setTimeRange(value as TimeRange)
+  }
+
+  const handleRefresh = () => {
+    loadPlayerData()
   }
 
   const chartData = aggregateDataForChart(playerData, selectedServers, timeRange)
@@ -146,14 +157,24 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <MultiServerSelect
-          servers={servers}
-          selectedServers={selectedServers}
-          onChange={handleServerChange}
-          disabled={loading || servers.length === 0}
-        />
-
-
+        <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+          <MultiServerSelect
+            servers={servers}
+            selectedServers={selectedServers}
+            onChange={handleServerChange}
+            disabled={loading || servers.length === 0}
+          />
+          <Button 
+            variant="outline" 
+            size="icon" 
+            onClick={handleRefresh} 
+            disabled={loading || refreshing || selectedServers.length === 0}
+            title="Refresh data"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            <span className="sr-only">Refresh data</span>
+          </Button>
+        </div>
       </div>
 
       {selectedServers.length > 0 && (

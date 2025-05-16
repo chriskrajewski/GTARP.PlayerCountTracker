@@ -70,7 +70,8 @@ serverIds.forEach((serverId) => {
   // Format the timestamp for display based on time range
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp)
-
+    
+    // Ensure we're using the user's local timezone
     // Different format based on time range
     switch (timeRange) {
       case "1h":
@@ -81,6 +82,9 @@ serverIds.forEach((serverId) => {
         return date.toLocaleTimeString(undefined, {
           hour: "2-digit",
           minute: "2-digit",
+          timeZone: "UTC",
+          timeZoneName: undefined,
+          hour12: true
         })
       case "8h":
       case "24h":
@@ -88,6 +92,9 @@ serverIds.forEach((serverId) => {
         return date.toLocaleTimeString(undefined, {
           hour: "2-digit",
           minute: "2-digit",
+          timeZone: "UTC",
+          timeZoneName: undefined,
+          hour12: true
         })
       case "7d":
       case "30d":
@@ -95,6 +102,7 @@ serverIds.forEach((serverId) => {
         return date.toLocaleDateString(undefined, {
           month: "short",
           day: "numeric",
+          timeZone: "UTC"
         })
       case "90d":
       case "180d":
@@ -107,6 +115,7 @@ serverIds.forEach((serverId) => {
         return date.toLocaleDateString(undefined, {
           month: "short",
           day: "numeric",
+          timeZone: "UTC"
         })
       case "365d":
       case "all":
@@ -114,6 +123,7 @@ serverIds.forEach((serverId) => {
         return date.toLocaleDateString(undefined, {
           month: "short",
           year: "numeric",
+          timeZone: "UTC"
         })
       default:
         return timestamp
@@ -145,6 +155,8 @@ serverIds.forEach((serverId) => {
           year: "numeric",
           hour: "2-digit",
           minute: "2-digit",
+          timeZone: "UTC",
+          timeZoneName: "short"
         })
       case "7d":
         return date.toLocaleString(undefined, {
@@ -153,6 +165,8 @@ serverIds.forEach((serverId) => {
           year: "numeric",
           hour: "2-digit",
           minute: "2-digit",
+          timeZone: "UTC",
+          timeZoneName: "short"
         })
       case "30d":
         // Format: Jan 1, 2023
@@ -160,6 +174,7 @@ serverIds.forEach((serverId) => {
           month: "short",
           day: "numeric",
           year: "numeric",
+          timeZone: "UTC"
         })
       case "90d":
       case "180d":
@@ -172,6 +187,7 @@ serverIds.forEach((serverId) => {
           month: "short",
           day: "numeric",
           year: "numeric",
+          timeZone: "UTC"
         })
       case "365d":
       case "all":
@@ -179,6 +195,7 @@ serverIds.forEach((serverId) => {
         return date.toLocaleDateString(undefined, {
           month: "long",
           year: "numeric",
+          timeZone: "UTC"
         })
       default:
         return timestamp
