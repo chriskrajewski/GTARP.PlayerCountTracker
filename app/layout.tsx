@@ -35,7 +35,7 @@ export default function RootLayout({
       </Script>
       </head>
       <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+        <ThemeProvider attribute="class" defaultTheme="dark" disableTransitionOnChange>
           <Suspense>
             {children}
             <Analytics />
