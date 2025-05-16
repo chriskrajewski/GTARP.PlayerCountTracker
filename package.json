@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "security-audit": "npm audit --production",
+    "check-types": "tsc --noEmit",
+    "verify": "npm run lint && npm run check-types && npm run security-audit",
+    "prepare-deploy": "npm run verify && npm run build"
   },
   "dependencies": {
     "@analytics/google-tag-manager": "^0.6.0",
