@@ -32,91 +32,42 @@ function generateRandomColor(serverId: string): string {
   return `hsl(${h}, ${s}%, ${l}%)`;
 }
 
-// Fixed sample colors to use as a last resort if database is not working
-const SAMPLE_COLORS = [
-  "hsl(165, 100%, 49%)",
-  "hsl(87, 73%, 49%)",
-  "hsl(328, 79%, 49%)",
-  "hsl(263, 90%, 51%)",
-  "hsl(36, 100%, 50%)",
-  "hsl(210, 100%, 55%)",
-  "hsl(15, 90%, 50%)",
-  "hsl(290, 70%, 60%)",
-];
-
 export default function PlayerCountChart({ data, serverIds, serverNames, loading, timeRange }: PlayerCountChartProps) {
   const [serverColors, setServerColors] = useState<Record<string, string>>({});
   const [randomColorCache, setRandomColorCache] = useState<Record<string, string>>({});
-  const [databaseColorsFailed, setDatabaseColorsFailed] = useState(false);
   
   // Fetch server colors from Supabase
   useEffect(() => {
     async function loadServerColors() {
       try {
         const colors = await getServerColors();
-        
-        if (!colors || colors.length === 0) {
-          setDatabaseColorsFailed(true);
-          return;
-        }
-        
         const colorMap: Record<string, string> = {};
         
-        // Create a mapping of server_id to color (case insensitive)
+        // Create a mapping of server_id to color
         colors.forEach(color => {
-          // Store both the original case and lowercase versions
           colorMap[color.server_id] = color.color_hsl;
-          colorMap[color.server_id.toLowerCase()] = color.color_hsl;
         });
         
         setServerColors(colorMap);
       } catch (error) {
-        setDatabaseColorsFailed(true);
+        console.error("Error loading server colors:", error);
       }
     }
     
     loadServerColors();
-  }, [serverIds]); // Add serverIds as a dependency so colors are reloaded when servers change
+  }, []);
 
   // Generate and cache random colors for servers not in the database
   useEffect(() => {
     const newRandomColors: Record<string, string> = { ...randomColorCache };
     let hasNewColors = false;
     
-    serverIds.forEach((serverId, index) => {
-      // Try multiple variations of the server ID to match with database
-      const variations = [
-        serverId,
-        serverId.toLowerCase(),
-        serverId.toUpperCase(),
-        serverId.trim()
-      ];
-      
-      // Check if any variation has a color in the database
-      let matchedColor: string | null = null;
-      for (const variation of variations) {
-        if (serverColors[variation]) {
-          matchedColor = serverColors[variation];
-          break;
-        }
-      }
-      
-      if (matchedColor) {
-        return;
-      }
-      
-      // If database colors failed completely, use sample colors as fallback
-      if (databaseColorsFailed) {
-        const sampleColor = SAMPLE_COLORS[index % SAMPLE_COLORS.length];
-        newRandomColors[serverId] = sampleColor;
-        hasNewColors = true;
-        return;
-      }
+    serverIds.forEach(serverId => {
+      // Skip if the server has a color in the database
+      if (serverColors[serverId]) return;
       
       // Skip if we've already generated a random color for this server
-      if (randomColorCache[serverId]) {
-        return;
-      }
+      if (randomColorCache[serverId]) return;
       
       // Generate and cache a new random color
       newRandomColors[serverId] = generateRandomColor(serverId);
@@ -126,7 +77,7 @@ export default function PlayerCountChart({ data, serverIds, serverNames, loading
     if (hasNewColors) {
       setRandomColorCache(newRandomColors);
     }
-  }, [serverIds, serverColors, randomColorCache, databaseColorsFailed]);
+  }, [serverIds, serverColors, randomColorCache]);
 
   if (loading) {
     return (
@@ -147,37 +98,14 @@ export default function PlayerCountChart({ data, serverIds, serverNames, loading
   // Create a config object for the chart
   const chartConfig: Record<string, { label: string; color: string }> = {}
 
-  serverIds.forEach((serverId, index) => {
+  serverIds.forEach((serverId) => {
     const originalLabel = serverNames[serverId] || `Server ${serverId}`;
     
-    // Try multiple variations of the server ID to match with database
-    const variations = [
-      serverId,
-      serverId.toLowerCase(),
-      serverId.toUpperCase(),
-      serverId.trim()
-    ];
-    
-    // Check if any variation has a color in the database
-    let matchedColor: string | null = null;
-    for (const variation of variations) {
-      if (serverColors[variation]) {
-        matchedColor = serverColors[variation];
-        break;
-      }
-    }
-    
-    if (matchedColor) {
+    // First check if we have a color from Supabase
+    if (serverColors[serverId]) {
       chartConfig[serverId] = {
         label: originalLabel,
-        color: matchedColor, // Use the matched database color
-      };
-    } else if (databaseColorsFailed && SAMPLE_COLORS.length > 0) {
-      // If database colors failed completely, use sample colors
-      const sampleColor = SAMPLE_COLORS[index % SAMPLE_COLORS.length];
-      chartConfig[serverId] = {
-        label: originalLabel,
-        color: sampleColor,
+        color: serverColors[serverId], // Use the Supabase color
       };
     } else {
       // Use random color from cache or generate a new one

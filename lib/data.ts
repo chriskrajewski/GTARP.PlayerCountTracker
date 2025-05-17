@@ -583,21 +583,12 @@ export async function getServerColors(): Promise<ServerColor[]> {
 
   const { data, error } = await client
     .from("server_colors")
-    .select("id, server_id, color_hsl");
+    .select("server_id, color_hsl");
 
   if (error) {
     console.error("Error fetching server colors:", error);
     return [];
   }
 
-  if (!data || data.length === 0) {
-    return [];
-  }
-  
-  // Normalize server IDs to ensure they match exactly as expected in the application
-  return data.map(color => ({
-    ...color,
-    // Ensure server_id is properly trimmed and consistent
-    server_id: color.server_id.trim(),
-  }));
+  return data || [];
 }
