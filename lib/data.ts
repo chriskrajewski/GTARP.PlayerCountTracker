@@ -55,6 +55,11 @@ export type DataStartInfo = {
   start_date: string;
 }
 
+export type LastRefreshInfo = {
+  server_id: string;
+  last_refresh: string;
+}
+
 // Get appropriate time aggregation based on time range
 export function getTimeAggregation(timeRange: TimeRange): TimeAggregation {
   switch (timeRange) {
@@ -522,6 +527,44 @@ export async function getDataStartTimes(): Promise<DataStartInfo[]> {
     return data || []
   } catch (err) {
     console.error("Error in getDataStartTimes:", err)
+    return []
+  }
+}
+
+export async function getLastRefreshTimes(): Promise<LastRefreshInfo[]> {
+  try {
+    // Check if we're in a browser environment
+    const isClient = typeof window !== "undefined"
+    const client = isClient ? supabase : createServerClient()
+
+    // This query gets the latest timestamp for each server_id
+    const { data, error } = await client
+      .from("player_counts")
+      .select("server_id, timestamp")
+      .order("timestamp", { ascending: false })
+
+    if (error) {
+      console.error("Error fetching last refresh times:", error)
+      return []
+    }
+
+    // Group by server_id and take only the most recent timestamp for each
+    const serverMap = new Map<string, string>()
+    data.forEach(item => {
+      if (!serverMap.has(item.server_id)) {
+        serverMap.set(item.server_id, item.timestamp)
+      }
+    })
+
+    // Convert the map to an array of objects
+    const lastRefreshData = Array.from(serverMap.entries()).map(([server_id, last_refresh]) => ({
+      server_id,
+      last_refresh
+    }))
+
+    return lastRefreshData
+  } catch (err) {
+    console.error("Error in getLastRefreshTimes:", err)
     return []
   }
 }
