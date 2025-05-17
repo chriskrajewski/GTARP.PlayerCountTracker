@@ -50,6 +50,11 @@ export type AggregatedData = {
   [key: string]: number | string
 }
 
+export type DataStartInfo = {
+  server_id: string;
+  start_date: string;
+}
+
 // Get appropriate time aggregation based on time range
 export function getTimeAggregation(timeRange: TimeRange): TimeAggregation {
   switch (timeRange) {
@@ -496,4 +501,27 @@ export function getViewerStats(streamData: ViewerCountData[], serverId: string) 
 
 
   return { viewerCurrent, viewerPeak, viewerAverage };
+}
+
+export async function getDataStartTimes(): Promise<DataStartInfo[]> {
+  try {
+    // Check if we're in a browser environment
+    const isClient = typeof window !== "undefined"
+    const client = isClient ? supabase : createServerClient()
+
+    const { data, error } = await client
+      .from("data_start")
+      .select("server_id, start_date")
+      .order("server_id", { ascending: true })
+
+    if (error) {
+      console.error("Error fetching data start times:", error)
+      return []
+    }
+
+    return data || []
+  } catch (err) {
+    console.error("Error in getDataStartTimes:", err)
+    return []
+  }
 }
