@@ -5,7 +5,8 @@ import "@/styles/globals.css"
 import Link from "next/link"
 import { DataStartPopup } from "@/components/data-start-popup"
 import { DataRefreshPopup } from "@/components/data-refresh-popup"
-import { TwitchIcon, DatabaseIcon, ExternalLinkIcon, MessageSquareIcon, ClipboardListIcon } from "lucide-react"
+import { TwitchIcon, DatabaseIcon, ExternalLinkIcon, MessageSquareIcon, ClipboardListIcon, GithubIcon } from "lucide-react"
+import FeedbackForm from "@/components/feedback-form"
 
 declare global {
   interface Window {
@@ -35,10 +36,14 @@ export default function Home() {
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-4 my-3 px-4">
-          <a href="https://forms.office.com/r/r1rXgAGx6V" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800/40 transition-colors text-sm font-medium">
-            <MessageSquareIcon className="h-4 w-4" />
-            Give me your feedback
-          </a>
+          <FeedbackForm 
+            trigger={
+              <button className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800/40 transition-colors text-sm font-medium">
+                <GithubIcon className="h-4 w-4" />
+                Report Issue/Feedback
+              </button>
+            }
+          />
           
           <Link href="/changelog" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded-full hover:bg-emerald-200 dark:hover:bg-emerald-800/40 transition-colors text-sm font-medium">
             <ClipboardListIcon className="h-4 w-4" />
