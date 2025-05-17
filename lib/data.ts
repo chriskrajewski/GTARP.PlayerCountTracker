@@ -60,6 +60,12 @@ export type LastRefreshInfo = {
   last_refresh: string;
 }
 
+// New type for server colors
+export type ServerColor = {
+  server_id: string;
+  color_hsl: string;
+}
+
 // Get appropriate time aggregation based on time range
 export function getTimeAggregation(timeRange: TimeRange): TimeAggregation {
   switch (timeRange) {
@@ -567,4 +573,31 @@ export async function getLastRefreshTimes(): Promise<LastRefreshInfo[]> {
     console.error("Error in getLastRefreshTimes:", err)
     return []
   }
+}
+
+// Add this new function to fetch server colors
+export async function getServerColors(): Promise<ServerColor[]> {
+  // Check if we're in a browser environment
+  const isClient = typeof window !== "undefined";
+  const client = isClient ? supabase : createServerClient();
+
+  const { data, error } = await client
+    .from("server_colors")
+    .select("id, server_id, color_hsl");
+
+  if (error) {
+    console.error("Error fetching server colors:", error);
+    return [];
+  }
+
+  if (!data || data.length === 0) {
+    return [];
+  }
+  
+  // Normalize server IDs to ensure they match exactly as expected in the application
+  return data.map(color => ({
+    ...color,
+    // Ensure server_id is properly trimmed and consistent
+    server_id: color.server_id.trim(),
+  }));
 }
