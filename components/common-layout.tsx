@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Download, ClipboardList, MessageSquare, Menu, X } from 'lucide-react';
+import { ArrowLeft, Download, ClipboardList, MessageSquare, Menu, X, Heart } from 'lucide-react';
 import FeedbackForm from '@/components/feedback-form';
 import { CSVExport } from '@/components/csv-export';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -11,6 +11,7 @@ import { DataStartPopup } from '@/components/data-start-popup';
 import { DataRefreshPopup } from '@/components/data-refresh-popup';
 import { useFeatureGate, FEATURE_GATES } from '@/lib/statsig';
 import Image from 'next/image';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface CommonLayoutProps {
   children: React.ReactNode;
@@ -110,8 +111,8 @@ export function CommonLayout({
           {isFeedbackEnabled && (
             <FeedbackForm 
               trigger={
-                <button className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#004D61] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium">
-                  <MessageSquare className="h-3.5 w-3.5 text-[#004D61]" />
+                <button className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-white rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium">
+                  <MessageSquare className="h-3.5 w-3.5 text-white" />
                   Feedback
                 </button>
               }
@@ -134,6 +135,25 @@ export function CommonLayout({
               CSV Export
             </button>
           )}
+          
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a 
+                  href="https://streamelements.com/alantiix/tip" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+                >
+                  <Heart className="h-3.5 w-3.5 text-[#ff4545]" />
+                  <span className="text-[#EFEFF1]">Donate</span>
+                </a>
+              </TooltipTrigger>
+              <TooltipContent className="bg-[#18181b] text-white border-[#26262c]">
+                Buy me a cup of coffee :)
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
         
         {/* Mobile menu - Expanded */}
@@ -155,10 +175,10 @@ export function CommonLayout({
                 {isFeedbackEnabled && (
                   <Link 
                     href="/feedback" 
-                    className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-[#004D61] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+                    className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-white rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
                     onClick={() => setMobileMenuOpen(false)}
                   >
-                    <MessageSquare className="h-3.5 w-3.5 text-[#004D61]" />
+                    <MessageSquare className="h-3.5 w-3.5 text-white" />
                     Feedback
                   </Link>
                 )}
@@ -186,6 +206,25 @@ export function CommonLayout({
                     CSV Export
                   </button>
                 )}
+                
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <a 
+                        href="https://streamelements.com/alantiix/tip" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-white rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+                      >
+                        <Heart className="h-3.5 w-3.5 text-[#ff4545]" />
+                        <span className="text-[#EFEFF1]">Donate</span>
+                      </a>
+                    </TooltipTrigger>
+                    <TooltipContent className="bg-[#18181b] text-white border-[#26262c]">
+                      Buy me a cup of coffee :)
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             </div>
           </div>

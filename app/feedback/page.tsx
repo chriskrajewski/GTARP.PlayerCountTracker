@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Loader2, CheckCircle2, ArrowLeft, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Metadata } from "next";
 
 // Define types for feedback submission
 type FeedbackType = 'bug' | 'feature' | 'feedback';
