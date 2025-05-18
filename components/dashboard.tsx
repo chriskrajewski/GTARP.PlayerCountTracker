@@ -20,6 +20,7 @@ import {
 import PlayerCountChart from "./player-count-chart"
 import ServerStatsCards from "./server-stats-cards"
 import { MultiServerSelect } from "./multi-server-select"
+import { CSVExport } from "./csv-export"
 
 // Local storage key for saving server selection
 const SELECTED_SERVERS_KEY = "selectedServers"
@@ -34,6 +35,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [showExportPanel, setShowExportPanel] = useState(false)
 
   useEffect(() => {
     async function loadServers() {
@@ -130,6 +132,10 @@ export default function Dashboard() {
     loadPlayerData()
   }
 
+  const toggleExportPanel = () => {
+    setShowExportPanel(!showExportPanel)
+  }
+
   const chartData = aggregateDataForChart(playerData, selectedServers, timeRange)
 
   // Get server name by ID
@@ -158,24 +164,42 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
-        <MultiServerSelect
-          servers={servers}
-          selectedServers={selectedServers}
-          onChange={handleServerChange}
-          disabled={loading || servers.length === 0}
-        />
-          <Button 
-            variant="outline" 
-            size="icon" 
-            onClick={handleRefresh} 
-            disabled={loading || refreshing || selectedServers.length === 0}
-            title="Refresh data"
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            <span className="sr-only">Refresh data</span>
-          </Button>
+          <MultiServerSelect
+            servers={servers}
+            selectedServers={selectedServers}
+            onChange={handleServerChange}
+            disabled={loading || servers.length === 0}
+          />
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={handleRefresh} 
+              disabled={loading || refreshing || selectedServers.length === 0}
+              title="Refresh data"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              <span className="sr-only">Refresh data</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleExportPanel}
+              disabled={loading || selectedServers.length === 0}
+            >
+              {showExportPanel ? "Hide Export Options" : "Export CSV"}
+            </Button>
+          </div>
         </div>
       </div>
+
+      {/* CSV Export Component */}
+      {showExportPanel && (
+        <CSVExport
+          servers={servers}
+          selectedServers={selectedServers}
+        />
+      )}
 
       {selectedServers.length > 0 && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -193,23 +217,23 @@ export default function Dashboard() {
         </div>
       )}
 
-          <div className="w-full sm:w-auto overflow-x-auto">
-          <Tabs defaultValue="8h" value={timeRange} onValueChange={handleTimeRangeChange} className="w-full">
-            <TabsList className="grid grid-cols-4 md:grid-cols-11">
-              <TabsTrigger value="1h">1h</TabsTrigger>
-              <TabsTrigger value="2h">2h</TabsTrigger>
-              <TabsTrigger value="4h">4h</TabsTrigger>
-              <TabsTrigger value="6h">6h</TabsTrigger>
-              <TabsTrigger value="8h">8h</TabsTrigger>
-              <TabsTrigger value="24h">24h</TabsTrigger>
-              <TabsTrigger value="7d">7d</TabsTrigger>
-              <TabsTrigger value="30d">30d</TabsTrigger>
-              <TabsTrigger value="90d">3m</TabsTrigger>
-              <TabsTrigger value="180d">6m</TabsTrigger>
-              <TabsTrigger value="365d">1y</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
+      <div className="w-full sm:w-auto overflow-x-auto">
+      <Tabs defaultValue="8h" value={timeRange} onValueChange={handleTimeRangeChange} className="w-full">
+        <TabsList className="grid grid-cols-4 md:grid-cols-11">
+          <TabsTrigger value="1h">1h</TabsTrigger>
+          <TabsTrigger value="2h">2h</TabsTrigger>
+          <TabsTrigger value="4h">4h</TabsTrigger>
+          <TabsTrigger value="6h">6h</TabsTrigger>
+          <TabsTrigger value="8h">8h</TabsTrigger>
+          <TabsTrigger value="24h">24h</TabsTrigger>
+          <TabsTrigger value="7d">7d</TabsTrigger>
+          <TabsTrigger value="30d">30d</TabsTrigger>
+          <TabsTrigger value="90d">3m</TabsTrigger>
+          <TabsTrigger value="180d">6m</TabsTrigger>
+          <TabsTrigger value="365d">1y</TabsTrigger>
+        </TabsList>
+      </Tabs>
+    </div>
         
       <Card>
         <CardHeader>
