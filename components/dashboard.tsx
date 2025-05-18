@@ -20,6 +20,7 @@ import {
 import PlayerCountChart from "./player-count-chart"
 import ServerStatsCards from "./server-stats-cards"
 import { MultiServerSelect } from "./multi-server-select"
+import { supabase } from "@/lib/supabase"
 
 // Local storage key for saving server selection
 const SELECTED_SERVERS_KEY = "selectedServers"
@@ -34,11 +35,20 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [isLoadingServers, setIsLoadingServers] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+  const [isLoadingData, setIsLoadingData] = useState(true)
 
   useEffect(() => {
     async function loadServers() {
       try {
+        // Add loading indicator
+        setIsLoadingServers(true)
+        
+        // Fetch server data
         const serverData = await getServers()
+        
+        // Update state with fetched servers
         setServers(serverData)
         
         // Attempt to load saved server selection from localStorage
@@ -68,16 +78,19 @@ export default function Dashboard() {
           }
         } else {
           // No saved selection, default to first server
-        if (serverData.length > 0) {
-          setSelectedServers([serverData[0].server_id])
+          if (serverData.length > 0) {
+            setSelectedServers([serverData[0].server_id])
           }
         }
         
         setLoading(false)
       } catch (err) {
-        console.error("Error loading servers:", err)
-        setError("Failed to load servers. Please check your connection and try again.")
+        // Silent error in production
+        setFetchError("Failed to load servers. Please refresh the page.")
         setLoading(false)
+      } finally {
+        // Remove loading indicator
+        setIsLoadingServers(false)
       }
     }
 
@@ -86,26 +99,33 @@ export default function Dashboard() {
 
   // Extract loadPlayerData function to make it reusable
   const loadPlayerData = async () => {
+    try {
+      // Add loading indicator
+      setIsLoadingData(true)
+      
       if (selectedServers.length === 0) return
 
-      try {
-        setLoading(true)
-      setRefreshing(true)
-        const data = await getPlayerCounts(selectedServers, timeRange)
-        const streamData = await getStreamCounts(selectedServers, timeRange)
-        const viewData = await getViewerCounts(selectedServers, timeRange)
-        setPlayerData(data)
-        setStreamerData(streamData)
-        setViewerData(viewData)
-        setLoading(false)
-      setRefreshing(false)
-      } catch (err) {
-        console.error("Error loading player data:", err)
-        setError("Failed to load player data. Please check your connection and try again.")
-        setLoading(false)
-      setRefreshing(false)
-      }
+      // Fetch player data for selected date range and servers
+      const activeServers = selectedServers.includes('all') 
+        ? servers.map(server => server.server_id)
+        : selectedServers;
+        
+      const data = await getPlayerCounts(activeServers, timeRange)
+      const streamData = await getStreamCounts(activeServers, timeRange)
+      const viewData = await getViewerCounts(activeServers, timeRange)
+      setPlayerData(data)
+      setStreamerData(streamData)
+      setViewerData(viewData)
+      setLoading(false)
+    } catch (err) {
+      // Silent error in production
+      setFetchError("Failed to load player data. Please refresh the page.")
+      setLoading(false)
+    } finally {
+      // Remove loading indicator
+      setIsLoadingData(false)
     }
+  }
 
   useEffect(() => {
     loadPlayerData()
@@ -117,6 +137,21 @@ export default function Dashboard() {
       localStorage.setItem(SELECTED_SERVERS_KEY, JSON.stringify(selectedServers))
     }
   }, [selectedServers])
+
+  // Update parent component with servers and selected servers
+  useEffect(() => {
+    if (typeof window !== 'undefined' && servers.length > 0) {
+      // This makes the servers and selectedServers available to the CommonLayout
+      // Use a custom event to communicate with the parent component
+      const event = new CustomEvent('dashboardDataLoaded', { 
+        detail: { 
+          servers,
+          selectedServers
+        } 
+      });
+      window.dispatchEvent(event);
+    }
+  }, [servers, selectedServers]);
 
   const handleServerChange = (servers: string[]) => {
     setSelectedServers(servers)
@@ -144,11 +179,11 @@ export default function Dashboard() {
     return acc
   }, {} as Record<string, string>)
 
-  if (error) {
+  if (fetchError) {
     return (
-      <div className="p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
+      <div className="p-4 bg-gray-800 border border-gray-700 rounded-md text-red-400">
         <h3 className="font-bold">Error</h3>
-        <p>{error}</p>
+        <p>{fetchError}</p>
         <p className="mt-2 text-sm">Please check that your Supabase environment variables are correctly set up.</p>
       </div>
     )
@@ -158,22 +193,25 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
-        <MultiServerSelect
-          servers={servers}
-          selectedServers={selectedServers}
-          onChange={handleServerChange}
-          disabled={loading || servers.length === 0}
-        />
-          <Button 
-            variant="outline" 
-            size="icon" 
-            onClick={handleRefresh} 
-            disabled={loading || refreshing || selectedServers.length === 0}
-            title="Refresh data"
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            <span className="sr-only">Refresh data</span>
-          </Button>
+          <MultiServerSelect
+            servers={servers}
+            selectedServers={selectedServers}
+            onChange={handleServerChange}
+            disabled={loading || servers.length === 0}
+          />
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={handleRefresh} 
+              disabled={loading || refreshing || selectedServers.length === 0}
+              title="Refresh data"
+              className="bg-[#18181b] border-[#26262c] text-[#EFEFF1] hover:bg-[#26262c] hover:border-[#343438]"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              <span className="sr-only">Refresh data</span>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -193,27 +231,27 @@ export default function Dashboard() {
         </div>
       )}
 
-          <div className="w-full sm:w-auto overflow-x-auto">
-          <Tabs defaultValue="8h" value={timeRange} onValueChange={handleTimeRangeChange} className="w-full">
-            <TabsList className="grid grid-cols-4 md:grid-cols-11">
-              <TabsTrigger value="1h">1h</TabsTrigger>
-              <TabsTrigger value="2h">2h</TabsTrigger>
-              <TabsTrigger value="4h">4h</TabsTrigger>
-              <TabsTrigger value="6h">6h</TabsTrigger>
-              <TabsTrigger value="8h">8h</TabsTrigger>
-              <TabsTrigger value="24h">24h</TabsTrigger>
-              <TabsTrigger value="7d">7d</TabsTrigger>
-              <TabsTrigger value="30d">30d</TabsTrigger>
-              <TabsTrigger value="90d">3m</TabsTrigger>
-              <TabsTrigger value="180d">6m</TabsTrigger>
-              <TabsTrigger value="365d">1y</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
+      <div className="w-full sm:w-auto overflow-x-auto">
+      <Tabs defaultValue="8h" value={timeRange} onValueChange={handleTimeRangeChange} className="w-full">
+        <TabsList className="grid grid-cols-4 md:grid-cols-11 bg-[#18181b] border border-[#26262c] p-0.5 rounded-md">
+          <TabsTrigger value="1h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">1h</TabsTrigger>
+          <TabsTrigger value="2h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">2h</TabsTrigger>
+          <TabsTrigger value="4h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">4h</TabsTrigger>
+          <TabsTrigger value="6h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">6h</TabsTrigger>
+          <TabsTrigger value="8h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">8h</TabsTrigger>
+          <TabsTrigger value="24h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">24h</TabsTrigger>
+          <TabsTrigger value="7d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">7d</TabsTrigger>
+          <TabsTrigger value="30d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">30d</TabsTrigger>
+          <TabsTrigger value="90d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">3m</TabsTrigger>
+          <TabsTrigger value="180d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">6m</TabsTrigger>
+          <TabsTrigger value="365d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">1y</TabsTrigger>
+        </TabsList>
+      </Tabs>
+    </div>
         
-      <Card>
-        <CardHeader>
-          <CardTitle>Player Count Over Time</CardTitle>
+      <Card className="bg-[#0e0e10] border-[#26262c] rounded-md shadow-md">
+        <CardHeader className="border-b border-[#26262c]">
+          <CardTitle className="text-[#EFEFF1]">Player Count Over Time</CardTitle>
         </CardHeader>
         <CardContent>
           <PlayerCountChart 

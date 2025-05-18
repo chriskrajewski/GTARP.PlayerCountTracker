@@ -52,7 +52,7 @@ export default function Changelog() {
         });
         
         if (!response.ok) {
-          throw new Error(`Failed to fetch changelog: ${response.status}`);
+          throw new Error(`Failed to fetch changelog: ${response.status} ${response.statusText}`);
         }
         
         const data = await response.json() as CommitResponse;
@@ -81,23 +81,8 @@ export default function Changelog() {
         
         setCommits(sanitizedCommits);
       } catch (err: any) {
-        console.error("Error loading changelog:", err);
-        
-        // Provide a user-friendly error message
-        if (err.name === 'AbortError') {
-          setError("Request timed out. Please try again later.");
-        } else if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
-          setError("Network error. Please check your connection.");
-        } else {
-          setError("Failed to load changelog. Please try again later.");
-        }
-        
-        // Retry logic for transient errors
-        if (retryCount < maxRetries) {
-          setRetryCount(prev => prev + 1);
-          setTimeout(fetchChangelog, 1000 * retryCount);
-        }
-      } finally {
+        // Silent error in production
+        setError('Failed to load changelog data. Please try again later.');
         setIsLoading(false);
       }
     }
@@ -106,37 +91,46 @@ export default function Changelog() {
   }, [retryCount]);
 
   // Format date to be more readable
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string): string => {
     try {
       const date = new Date(dateString);
-      
-      // Check if the date is valid
-      if (isNaN(date.getTime())) {
-        return "Invalid date";
-      }
-      
-      return date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      });
+      return new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }).format(date);
     } catch (err) {
-      console.error("Error formatting date:", err);
-      return "Date error";
+      // Silent error in production
+      return dateString;
     }
   };
 
   // Format commit message to handle multiline commits
-  const formatMessage = (message: string) => {
-    // Security: Ensure the message is treated as plain text
+  const formatMessage = (message: string): string => {
     try {
-      // Split by new lines and take only the first line (the subject)
-      const firstLine = (message || "").split("\n")[0];
-      // Truncate if too long
-      return firstLine.length > 200 ? `${firstLine.substring(0, 200)}...` : firstLine;
+      // Extract the main part before any links or references
+      let formatted = message.split(/\n/)[0].trim();
+      
+      // Remove references to issue numbers
+      formatted = formatted.replace(/#\d+/g, '').trim();
+      
+      // Remove references to users
+      formatted = formatted.replace(/@\w+/g, '').trim();
+      
+      // Remove common prefixes
+      const prefixes = ['feat:', 'fix:', 'chore:', 'docs:', 'style:', 'refactor:', 'perf:', 'test:'];
+      for (const prefix of prefixes) {
+        if (formatted.toLowerCase().startsWith(prefix)) {
+          formatted = formatted.substring(prefix.length).trim();
+          break;
+        }
+      }
+      
+      // Capitalize first letter
+      return formatted.charAt(0).toUpperCase() + formatted.slice(1);
     } catch (err) {
-      console.error("Error formatting message:", err);
-      return "Error displaying message";
+      // Silent error in production
+      return message;
     }
   };
 

@@ -1,273 +1,296 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Line, LineChart, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer, Tooltip } from "recharts"
+import { useState, useEffect, useMemo } from "react"
 import { ChartContainer } from "@/components/ui/chart"
-import type { AggregatedData, ServerColor } from "@/lib/data"
-import { getServerColors } from "@/lib/data"
 import type { TimeRange } from "@/lib/data"
 import "../app/globals.css"
+import { ApexOptions } from "apexcharts"
+import dynamic from 'next/dynamic'
+
+// Dynamically import ApexCharts to prevent SSR issues
+const Chart = dynamic(() => import('react-apexcharts'), { ssr: false })
 
 interface PlayerCountChartProps {
-  data: AggregatedData[]
+  data: Array<Record<string, any>>
   serverIds: string[]
   serverNames: Record<string, string>
   loading: boolean
   timeRange: TimeRange
 }
 
-// Generate a random HSL color with good visibility
-function generateRandomColor(serverId: string): string {
-  // Use the server ID as a seed for consistent randomness per server
-  // This ensures the same server gets the same "random" color each time
-  const hash = serverId.split('').reduce((acc, char) => {
-    return char.charCodeAt(0) + ((acc << 5) - acc);
-  }, 0);
-  
-  // Generate HSL values with high saturation and medium lightness for good visibility
-  const h = Math.abs(hash % 360); // Hue: 0-359
-  const s = 65 + (hash % 25); // Saturation: 65-89%
-  const l = 45 + (hash % 15); // Lightness: 45-59%
-  
-  return `hsl(${h}, ${s}%, ${l}%)`;
+type ChartConfigItem = {
+  color: string
 }
 
-export default function PlayerCountChart({ data, serverIds, serverNames, loading, timeRange }: PlayerCountChartProps) {
-  const [serverColors, setServerColors] = useState<Record<string, string>>({});
+type ChartConfig = Record<string, ChartConfigItem>
+
+export default function PlayerCountChart({ 
+  data, 
+  serverIds, 
+  serverNames, 
+  loading, 
+  timeRange
+}: PlayerCountChartProps) {
+  
+  // Initialize color cache
   const [randomColorCache, setRandomColorCache] = useState<Record<string, string>>({});
   
-  // Fetch server colors from Supabase
-  useEffect(() => {
-    async function loadServerColors() {
-      try {
-        const colors = await getServerColors();
-        const colorMap: Record<string, string> = {};
-        
-        // Create a mapping of server_id to color
-        colors.forEach(color => {
-          colorMap[color.server_id] = color.color_hsl;
-        });
-        
-        setServerColors(colorMap);
-      } catch (error) {
-        console.error("Error loading server colors:", error);
-      }
+  // Server colors configuration for the chart
+  const serverColors: Record<string, string> = {
+    "nopixel": "hsla(var(--nopixel), 1)",
+    "eclipserpna": "hsla(var(--prodigy), 1)",
+    "prodigy": "hsla(var(--prodigy), 1)",
+    "onx": "hsla(var(--onx), 1)", 
+    "unscripted": "hsla(var(--unscripted), 1)",
+  };
+
+  // Generate static random colors but consistent for each server
+  const getRandomColor = (id: string) => {
+    if (randomColorCache[id]) {
+      return randomColorCache[id];
     }
     
-    loadServerColors();
-  }, []);
-
-  // Generate and cache random colors for servers not in the database
-  useEffect(() => {
-    const newRandomColors: Record<string, string> = { ...randomColorCache };
-    let hasNewColors = false;
+    const hue = Math.floor(Math.random() * 360);
+    const saturation = 70 + Math.floor(Math.random() * 30);
+    const lightness = 45 + Math.floor(Math.random() * 10);
     
-    serverIds.forEach(serverId => {
-      // Skip if the server has a color in the database
-      if (serverColors[serverId]) return;
+    const color = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    
+    setRandomColorCache(prev => ({
+      ...prev,
+      [id]: color
+    }));
+    
+    return color;
+  };
       
-      // Skip if we've already generated a random color for this server
-      if (randomColorCache[serverId]) return;
+  // Prepare chart configuration
+  const chartConfig = useMemo(() => {
+    const config: ChartConfig = {};
+    
+    serverIds.forEach((serverId) => {
+      // Use predefined color if available, otherwise generate random
+      const color = serverColors[serverId.toLowerCase()] || getRandomColor(serverId);
       
-      // Generate and cache a new random color
-      newRandomColors[serverId] = generateRandomColor(serverId);
-      hasNewColors = true;
+      config[serverId] = {
+        color
+      };
     });
     
-    if (hasNewColors) {
-      setRandomColorCache(newRandomColors);
-    }
+    return config;
   }, [serverIds, serverColors, randomColorCache]);
+
+  const chartColors = {
+    grid: "rgba(75, 85, 99, 0.1)",
+    text: "rgba(255, 255, 255, 0.6)",
+    tooltip: {
+      background: "#1F2937",
+      border: "#4B5563",
+      text: "#F9FAFB"
+    }
+  }
+  
+  // Configure the chart options
+  const options: ApexOptions = {
+    chart: {
+      type: 'line',
+      height: 400,
+      fontFamily: 'Inter, sans-serif',
+      background: 'transparent',
+      toolbar: {
+        show: false
+      },
+      zoom: {
+        enabled: true,
+        type: 'x',
+        autoScaleYaxis: true
+      }
+    },
+    theme: {
+      mode: 'dark',
+    },
+    stroke: {
+      curve: 'smooth',
+      width: 3,
+    },
+    colors: [
+      '#60A5FA',  // blue
+      '#34D399',  // green
+      '#F87171',  // red
+      '#C084FC',  // purple
+      '#FBBF24',  // yellow
+    ],
+    fill: {
+      type: 'gradient',
+      gradient: {
+        opacityFrom: 0.3,
+        opacityTo: 0.1,
+      }
+    },
+    dataLabels: {
+      enabled: false
+    },
+    grid: {
+      show: true,
+      borderColor: chartColors.grid,
+      strokeDashArray: 2,
+      position: 'back',
+    },
+    tooltip: {
+      theme: 'dark',
+      style: {
+        fontSize: '12px',
+        fontFamily: 'Inter, sans-serif',
+      },
+      x: {
+        format: timeRange === '1h' || timeRange === '2h' || timeRange === '4h' || timeRange === '6h' || timeRange === '8h' || timeRange === '24h' 
+          ? 'HH:mm' 
+          : 'MMM dd',
+      },
+      y: {
+        formatter: function(value: number) {
+          return Math.round(value).toString()
+        }
+      },
+      marker: {
+        show: true,
+      },
+    },
+    xaxis: {
+      type: 'datetime',
+      labels: {
+        style: {
+          colors: chartColors.text,
+          fontSize: '12px',
+          fontFamily: 'Inter, sans-serif',
+        },
+        format: 
+          timeRange === '1h' || timeRange === '2h' || timeRange === '4h' || timeRange === '6h' || timeRange === '8h' ? 'HH:mm' :
+          timeRange === '24h' ? 'HH:mm' :
+          timeRange === '7d' ? 'dd MMM' :
+          'MMM yyyy',
+      },
+      axisBorder: {
+        show: false
+      },
+      axisTicks: {
+        show: false
+      },
+      tooltip: {
+        enabled: false
+      }
+    },
+    yaxis: {
+      labels: {
+        style: {
+          colors: chartColors.text,
+          fontSize: '12px',
+          fontFamily: 'Inter, sans-serif',
+        },
+        formatter: function(value: number) {
+          return Math.round(value).toString()
+        }
+      },
+      min: function(min: number) {
+        // Get max value from all series
+        const maxVal = data.reduce((max, item) => {
+          const values = serverIds.map(id => item[id] || 0);
+          const itemMax = Math.max(...values);
+          return itemMax > max ? itemMax : max;
+        }, 0);
+        
+        // Start from zero if min value is closer to zero than 20% of the range
+        return min < (maxVal - min) * 0.2 ? 0 : min - (maxVal - min) * 0.1;
+      },
+      max: function(max: number) {
+        // Get min value from all series
+        const minVal = data.reduce((minValue, item) => {
+          const values = serverIds.map(id => item[id] || 0);
+          const itemMin = Math.min(...values);
+          return itemMin < minValue ? itemMin : minValue;
+        }, Infinity);
+        
+        // Add a little padding on top
+        return max + (max - minVal) * 0.1;
+      }
+    },
+    legend: {
+      show: true,
+      position: 'top',
+      horizontalAlign: 'left',
+      fontSize: '14px',
+      fontFamily: 'Inter, sans-serif',
+      labels: {
+        colors: chartColors.text
+      },
+      markers: {
+        size: 10,
+        strokeWidth: 0,
+        shape: 'circle',
+        offsetX: 0,
+        offsetY: 0
+      },
+      itemMargin: {
+        horizontal: 10,
+        vertical: 8
+      }
+    },
+    responsive: [
+      {
+        breakpoint: 640,
+        options: {
+          chart: {
+            height: 300
+          },
+          legend: {
+            position: 'bottom',
+            horizontalAlign: 'center'
+          }
+        }
+      }
+    ]
+  };
 
   if (loading) {
     return (
-      <div className="flex h-[350px] items-center justify-center">
-        <p className="text-muted-foreground">Loading chart data...</p>
+      <div className="h-[400px] w-full">
+        <div className="flex h-full items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600"></div>
+        </div>
       </div>
     )
   }
 
   if (data.length === 0) {
     return (
-      <div className="flex h-[350px] items-center justify-center">
-        <p className="text-muted-foreground">No data available for the selected time range</p>
+      <div className="h-[400px] w-full">
+        <div className="flex h-full items-center justify-center">
+          <p className="text-center text-gray-400">No data available for the selected time range</p>
+        </div>
       </div>
     )
   }
 
-  // Create a config object for the chart
-  const chartConfig: Record<string, { label: string; color: string }> = {}
+  // Format series data for ApexCharts
+  const series = serverIds.map(serverId => ({
+    name: serverNames[serverId] || `Server ${serverId}`,
+    data: data.map(d => ({
+      x: d.timestamp,
+      y: d[serverId] || 0
+    }))
+  }));
 
-  serverIds.forEach((serverId) => {
-    const originalLabel = serverNames[serverId] || `Server ${serverId}`;
-    
-    // First check if we have a color from Supabase
-    if (serverColors[serverId]) {
-      chartConfig[serverId] = {
-        label: originalLabel,
-        color: serverColors[serverId], // Use the Supabase color
-      };
-    } else {
-      // Use random color from cache or generate a new one
-      const randomColor = randomColorCache[serverId] || generateRandomColor(serverId);
-      
-      chartConfig[serverId] = {
-        label: originalLabel,
-        color: randomColor,
-      };
-    }
-  });
-
-  // Format the timestamp for display based on time range
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp)
-    
-    // Use local timezone instead of UTC for all formats
-    switch (timeRange) {
-      case "1h":
-      case "2h":
-      case "4h":
-      case "6h":
-        // Format: 12:30
-        return date.toLocaleTimeString(undefined, {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true
-        })
-      case "8h":
-      case "24h":
-        // Format: 12:00
-        return date.toLocaleTimeString(undefined, {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true
-        })
-      case "7d":
-      case "30d":
-        // Format: Jan 1
-        return date.toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric"
-        })
-      case "90d":
-      case "180d":
-        // Format: Jan 1 - Jan 7 (for week)
-        if (timestamp.includes("W")) {
-          const [year, week] = timestamp.split("-W").map((part) => Number.parseInt(part))
-          return `Week ${week}, ${year}`
-        }
-        // Format: Jan 1
-        return date.toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric"
-        })
-      case "365d":
-      case "all":
-        // Format: Jan 2023
-        return date.toLocaleDateString(undefined, {
-          month: "short",
-          year: "numeric"
-        })
-      default:
-        return timestamp
-    }
-  }
-
-  // Format for tooltip
-  const formatTooltipTimestamp = (timestamp: string) => {
-    // If it's a week format like "2023-W01"
-    if (timestamp.includes("W")) {
-      const [year, week] = timestamp.split("-W").map((part) => Number.parseInt(part))
-      return `Week ${week}, ${year}`
-    }
-
-    const date = new Date(timestamp)
-
-    // Use local timezone instead of UTC for all formats
-    switch (timeRange) {
-      case "1h":
-      case "2h":
-      case "4h":
-      case "6h":
-      case "8h":
-      case "24h":
-        // Format: Jan 1, 2023 12:30 PM
-        return date.toLocaleString(undefined, {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          timeZoneName: "short"
-        })
-      case "7d":
-        return date.toLocaleString(undefined, {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          timeZoneName: "short"
-        })
-      case "30d":
-        // Format: Jan 1, 2023
-        return date.toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-          year: "numeric"
-        })
-      case "90d":
-      case "180d":
-        // Format: Jan 1 - Jan 7, 2023 (for week)
-        if (timestamp.includes("W")) {
-          return `Week ${timestamp.split("-W")[1]}, ${timestamp.split("-W")[0]}`
-        }
-        // Format: Jan 1, 2023
-        return date.toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-          year: "numeric"
-        })
-      case "365d":
-      case "all":
-        // Format: January 2023
-        return date.toLocaleDateString(undefined, {
-          month: "long",
-          year: "numeric"
-        })
-      default:
-        return timestamp
-    }
-  }
-
+  // Return the chart component
   return (
-    <ChartContainer config={chartConfig} className="text-muted-foreground">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="4 4" />
-          <XAxis
-            dataKey="timestamp"
-            tickFormatter={formatTimestamp}
-            tick={{ fontSize: 12 }}
-            interval="preserveStartEnd"
-          />
-          <YAxis />
-          <Tooltip labelFormatter={formatTooltipTimestamp}  />
-          <Legend />
-          {serverIds.map((serverId) => (
-            <Line
-              key={serverId}
-              type="monotone"
-              dataKey={serverId}
-              stroke={chartConfig[serverId]?.color || "hsl(var(--chart-5))"}
-              name={serverNames[serverId] || `Server ${serverId}`}
-              strokeWidth={2}
-              dot={data.length < 30}
-              activeDot={{ r: 6 }}
-            />
-          ))}
-        </LineChart>
-      </ResponsiveContainer>
-    </ChartContainer>
+    <div className="h-[400px] w-full">
+      {typeof window !== 'undefined' && (
+        <Chart
+          options={options}
+          series={series}
+          type="area"
+          height="400"
+        />
+      )}
+    </div>
   )
 }

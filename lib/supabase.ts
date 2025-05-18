@@ -32,6 +32,25 @@ export type Database = {
           created_at?: string
         }
       }
+      twitch_streams: {
+        Row: {
+          id: number
+          created_at: string | null
+          streamer_name: string
+          stream_title: string
+          viewer_count: number
+          game_name: string
+          serverId: string
+        }
+        Insert: {
+          created_at?: string | null
+          streamer_name: string
+          stream_title: string
+          viewer_count: number
+          game_name: string
+          serverId: string
+        }
+      }
     }
   }
 }

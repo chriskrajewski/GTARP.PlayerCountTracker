@@ -9,9 +9,14 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "rounded-lg border bg-card text-card-foreground shadow-sm",
+      "rounded-lg border shadow-sm",
       className
     )}
+    style={{ 
+      backgroundColor: '#0e0e10',
+      borderColor: '#26262c',
+      color: '#FFFFFF'
+    }}
     {...props}
   />
 ))
@@ -23,7 +28,8 @@ const CardHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("flex flex-col space-y-1.5 p-6", className)}
+    className={cn("flex flex-col space-y-1.5 p-6 border-b", className)}
+    style={{ borderColor: '#26262c' }}
     {...props}
   />
 ))
@@ -39,6 +45,7 @@ const CardTitle = React.forwardRef<
       "text-2xl font-semibold leading-none tracking-tight",
       className
     )}
+    style={{ color: '#FFFFFF' }}
     {...props}
   />
 ))
@@ -50,7 +57,8 @@ const CardDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
+    className={cn("text-sm", className)}
+    style={{ color: '#ADADB8' }}
     {...props}
   />
 ))
@@ -70,7 +78,8 @@ const CardFooter = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("flex items-center p-6 pt-0", className)}
+    className={cn("flex items-center p-6 pt-0 border-t", className)}
+    style={{ borderColor: '#26262c' }}
     {...props}
   />
 ))
