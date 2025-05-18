@@ -1,6 +1,8 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { type PlayerCountData, StreamCountData, ViewerCountData, getServerStats, getStreamerStats, getViewerStats } from "@/lib/data"
-import { Users } from 'lucide-react'
+import { Users, Twitch } from 'lucide-react'
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
 
 interface ServerStatsCardsProps {
   playerData: PlayerCountData[]
@@ -72,6 +74,17 @@ export default function ServerStatsCards({ playerData, streamerData, viewerData,
           <span className="text-xl font-bold">{loading ? "-" : viewerAverage}</span>
         </div>
       </CardContent>
+      <CardFooter className="pt-2 pb-4">
+        <Link href={`/streams/${serverId}`} className="w-full">
+          <Button variant="outline" className="w-full flex items-center gap-2">
+            <Twitch className="h-4 w-4 text-purple-500" />
+            <span>View Live Streams</span>
+            <span className="inline-flex items-center justify-center bg-primary/10 rounded-full h-5 w-5 text-xs ml-1">
+              {streamCurrent}
+            </span>
+          </Button>
+        </Link>
+      </CardFooter>
     </Card>
   )
 }
