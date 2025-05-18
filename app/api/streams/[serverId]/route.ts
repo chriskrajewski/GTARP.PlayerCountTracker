@@ -97,10 +97,32 @@ async function fetchStreamsByUsernames(accessToken: string, usernames: string[])
   
   console.log(`Checking live status for ${usernames.length} streamers...`);
   
+  // Filter out any empty or invalid usernames
+  const validUsernames = usernames
+    .map(name => name?.trim())
+    .filter(name => name && name.length > 0 && name.length <= 25); // Twitch usernames have max length
+  
+  // Filter out usernames with Unicode/non-ASCII characters that Twitch API can't handle
+  const asciiOnlyUsernames = validUsernames.filter(name => {
+    // Check if username contains only ASCII characters (codes 0-127)
+    const isAsciiOnly = /^[\x00-\x7F]*$/.test(name);
+    if (!isAsciiOnly) {
+      console.log(`Filtering out username with Unicode characters: ${name}`);
+    }
+    return isAsciiOnly;
+  });
+  
+  console.log(`Valid ASCII-only usernames: ${asciiOnlyUsernames.length}/${usernames.length}`);
+  
+  if (asciiOnlyUsernames.length === 0) {
+    console.log('No valid usernames found after filtering');
+    return [];
+  }
+  
   // Split into batches of 100 as per Twitch API limits
   const batches = [];
-  for (let i = 0; i < usernames.length; i += 100) {
-    batches.push(usernames.slice(i, i + 100));
+  for (let i = 0; i < asciiOnlyUsernames.length; i += 100) {
+    batches.push(asciiOnlyUsernames.slice(i, i + 100));
   }
   
   let allStreams: TwitchStream[] = [];
@@ -110,8 +132,21 @@ async function fetchStreamsByUsernames(accessToken: string, usernames: string[])
     console.log(`Processing batch ${i+1}/${batches.length} with ${batch.length} streamers`);
     
     try {
-      // Create the query parameters string
-      const usernameParams = batch.map(username => `user_login=${encodeURIComponent(username.trim())}`).join('&');
+      // Create the query parameters string, handling each username individually
+      const usernameParams = batch.map(username => {
+        try {
+          return `user_login=${encodeURIComponent(username)}`;
+        } catch (e) {
+          console.error(`Failed to encode username: ${username}`, e);
+          return null;
+        }
+      }).filter(Boolean).join('&');
+      
+      if (!usernameParams) {
+        console.log(`Skipping batch ${i+1} as all usernames failed encoding`);
+        continue;
+      }
+      
       const url = `https://api.twitch.tv/helix/streams?${usernameParams}`;
       console.log(`Fetching from Twitch API: ${url.substring(0, 100)}...`);
       
@@ -130,8 +165,60 @@ async function fetchStreamsByUsernames(accessToken: string, usernames: string[])
           throw new Error('Twitch authentication failed. Check your credentials.');
         } else if (response.status === 429) {
           throw new Error('Twitch API rate limit exceeded. Try again later.');
+        } else if (response.status === 400) {
+          console.error('Bad Request error. Query params used:', usernameParams.substring(0, 200) + '...');
+          
+          // Instead of failing completely, try to process in smaller batches if this is a large batch
+          if (batch.length > 10) {
+            console.log(`Attempting to process batch ${i+1} in smaller chunks due to 400 error`);
+            
+            // Process in smaller chunks of 10 usernames each
+            const smallerBatches = [];
+            for (let j = 0; j < batch.length; j += 10) {
+              smallerBatches.push(batch.slice(j, j + 10));
+            }
+            
+            // Process each smaller batch
+            for (let k = 0; k < smallerBatches.length; k++) {
+              const smallBatch = smallerBatches[k];
+              try {
+                const smallBatchParams = smallBatch.map(name => 
+                  `user_login=${encodeURIComponent(name)}`
+                ).join('&');
+                
+                const smallBatchUrl = `https://api.twitch.tv/helix/streams?${smallBatchParams}`;
+                console.log(`Fetching smaller batch ${k+1}/${smallerBatches.length}: ${smallBatchUrl.substring(0, 100)}...`);
+                
+                const smallBatchResponse = await fetch(smallBatchUrl, {
+                  headers: {
+                    'Client-ID': clientId,
+                    'Authorization': `Bearer ${accessToken}`,
+                  },
+                });
+                
+                if (smallBatchResponse.ok) {
+                  const smallBatchData = await smallBatchResponse.json();
+                  if (smallBatchData.data && Array.isArray(smallBatchData.data)) {
+                    console.log(`Small batch ${k+1} successful, found ${smallBatchData.data.length} streams`);
+                    allStreams = [...allStreams, ...(smallBatchData.data as TwitchStream[])];
+                  }
+                } else {
+                  console.log(`Small batch ${k+1} failed: ${smallBatchResponse.status}`);
+                }
+              } catch (smallBatchError) {
+                console.error(`Error processing small batch ${k+1}:`, smallBatchError);
+              }
+            }
+            
+            // Continue to the next main batch
+            continue;
+          }
+          
+          console.error(`Failed batch ${i+1} due to malformed query params`);
+          continue; // Skip this batch but continue processing others
         } else {
-          throw new Error(`Failed to fetch streams from Twitch: ${response.status} ${response.statusText}`);
+          console.error(`Failed batch ${i+1} with status ${response.status}`);
+          continue; // Skip this batch but continue processing others
         }
       }
       
@@ -139,7 +226,7 @@ async function fetchStreamsByUsernames(accessToken: string, usernames: string[])
       
       if (!data.data || !Array.isArray(data.data)) {
         console.error('Unexpected response format from Twitch API:', JSON.stringify(data).slice(0, 200) + '...');
-        throw new Error('Unexpected response format from Twitch API');
+        continue; // Skip this batch but continue with others
       }
       
       console.log(`Batch ${i+1}: Found ${data.data.length} live streams`);

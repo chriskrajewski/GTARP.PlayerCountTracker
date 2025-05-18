@@ -31,7 +31,7 @@ export default async function ServerStreamsPage(props: ServerStreamsPageProps) {
         </div>
 
         <p className="text-muted-foreground mb-6">
-          Watch live streamers currently playing on {serverName}
+          Watch live streamers currently playing on {serverName} (beta)
         </p>
 
         <Suspense fallback={<div className="text-center py-20">Loading streams...</div>}>
