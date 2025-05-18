@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, Twitch, Maximize, Minimize, Grid3X3, Grid2X2, LayoutGrid, Copy, Check, ChevronDown, Users, PanelLeft, PanelRight, PanelBottom, RotateCcw, Lock, Unlock, LayoutPanelTop, MonitorUp, PictureInPicture, Rows3, Rows2, Columns, Table2, Layers, ClipboardList, MessageSquare } from 'lucide-react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { ArrowLeft, Twitch, Maximize, Minimize, Grid3X3, Grid2X2, LayoutGrid, Copy, Check, ChevronDown, Users, PanelLeft, PanelRight, PanelBottom, RotateCcw, Lock, Unlock, LayoutPanelTop, MonitorUp, PictureInPicture, Rows3, Rows2, Columns, Table2, Layers, ClipboardList, MessageSquare, Heart } from 'lucide-react';
 import Link from 'next/link';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import FeedbackForm from '@/components/feedback-form';
 import { createPortal } from 'react-dom';
+import { useFeatureGate, FEATURE_GATES } from '@/lib/statsig';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Create responsive grid layout with width provider
 const ResponsiveGridLayout = WidthProvider(Responsive);
@@ -23,6 +25,12 @@ type LayoutConfig = { [key: string]: { x: number, y: number, w: number, h: numbe
 type LayoutType = '2x2' | '1+2' | '1+3' | 'cascade' | 'horizontal' | 'vertical' | 'bigTop' | 'bigBottom' | 'pip' | '3+1' | 'pyramid';
 
 export default function MultiStreamPage() {
+  // Feature flag check
+  const isMultiStreamEnabled = useFeatureGate(FEATURE_GATES.MULTI_STREAM);
+  const isFeedbackEnabled = useFeatureGate(FEATURE_GATES.FEEDBACK_FORM);
+  const isChangelogEnabled = useFeatureGate(FEATURE_GATES.CHANGELOG);
+  
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [streams, setStreams] = useState<StreamInfo[]>([]);
   const [layout, setLayout] = useState<LayoutType>('2x2');
@@ -38,6 +46,18 @@ export default function MultiStreamPage() {
   // Refs for positioning modals
   const layoutButtonRef = useRef<HTMLButtonElement>(null);
   const chatButtonRef = useRef<HTMLButtonElement>(null);
+  
+  // Redirect if feature is disabled
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !isMultiStreamEnabled) {
+      router.push('/');
+    }
+  }, [isMultiStreamEnabled, router]);
+  
+  // If feature is disabled, show nothing during the redirect
+  if (!isMultiStreamEnabled) {
+    return null;
+  }
   
   // Modal position state
   const [layoutModalPosition, setLayoutModalPosition] = useState({ top: 0, left: 0 });
@@ -1134,6 +1154,26 @@ export default function MultiStreamPage() {
             <ClipboardList className="h-3.5 w-3.5 text-[#EFEFF1]" />
             <span className="text-[#EFEFF1]">Changelog</span>
           </Link>
+          
+          {/* Donate Button */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a 
+                  href="https://streamelements.com/alantiix/tip" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+                >
+                  <Heart className="h-3.5 w-3.5 text-[#ff4545]" />
+                  <span className="text-[#EFEFF1]">Donate</span>
+                </a>
+              </TooltipTrigger>
+              <TooltipContent className="bg-[#18181b] text-white border-[#26262c]">
+                Buy me a cup of coffee :)
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
       
