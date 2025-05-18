@@ -7,6 +7,7 @@ import { Analytics } from "@vercel/analytics/react"
 import { Suspense } from "react"
 import { SpeedInsights } from "@vercel/speed-insights/react"
 import Script from "next/script";
+import StatsigProvider from "@/components/statsig-provider";
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -30,6 +31,7 @@ export default function RootLayout({
         {/* Force dark mode */}
         <meta name="color-scheme" content="dark" />
         <meta name="theme-color" content="#000000" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
         <style dangerouslySetInnerHTML={{ __html: `
           body {
             background-color: #000000 !important;
@@ -57,11 +59,13 @@ export default function RootLayout({
         padding: 0
       }}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} forcedTheme="dark" disableTransitionOnChange>
-          <Suspense>
-            {children}
-            <Analytics />
-            <SpeedInsights />
-          </Suspense>
+          <StatsigProvider>
+            <Suspense>
+              {children}
+              <Analytics />
+              <SpeedInsights />
+            </Suspense>
+          </StatsigProvider>
         </ThemeProvider>
       </body>
     </html>

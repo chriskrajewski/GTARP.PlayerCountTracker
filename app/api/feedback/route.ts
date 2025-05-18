@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const data: FeedbackRequest = await request.json();
     
     // Validate required fields
-    if (!data.title || !data.description || !data.type) {
+    if (!data.title || !data.description) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -53,7 +53,7 @@ ${data.email ? `### Contact\n${data.email}` : ''}
 ${data.serverName ? `### Server\n${data.serverName}` : ''}
 
 ### Source
-Submitted via website feedback form
+Submitted via website feedback form (mobile)
     `.trim();
     
     // Create the issue
