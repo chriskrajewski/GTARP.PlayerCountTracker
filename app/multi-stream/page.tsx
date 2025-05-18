@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, Twitch, Maximize, Minimize, Grid3X3, Grid2X2, LayoutGrid, Copy, Check, ChevronDown, Users, PanelLeft, PanelRight, PanelBottom, RotateCcw, Lock, Unlock } from 'lucide-react';
+import { ArrowLeft, Twitch, Maximize, Minimize, Grid3X3, Grid2X2, LayoutGrid, Copy, Check, ChevronDown, Users, PanelLeft, PanelRight, PanelBottom, RotateCcw, Lock, Unlock, LayoutPanelTop, MonitorUp, PictureInPicture, Rows3, Rows2, Columns, Table2, Layers } from 'lucide-react';
 import Link from 'next/link';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
@@ -18,11 +18,12 @@ interface StreamInfo {
 
 type ChatPosition = 'right' | 'left' | 'bottom' | 'grid';
 type LayoutConfig = { [key: string]: { x: number, y: number, w: number, h: number, i: string, minW?: number, minH?: number } };
+type LayoutType = '2x2' | '1+2' | '1+3' | 'cascade' | 'horizontal' | 'vertical' | 'bigTop' | 'bigBottom' | 'pip' | '3+1' | 'pyramid';
 
 export default function MultiStreamPage() {
   const searchParams = useSearchParams();
   const [streams, setStreams] = useState<StreamInfo[]>([]);
-  const [layout, setLayout] = useState<'2x2' | '1+2' | '1+3'>('2x2');
+  const [layout, setLayout] = useState<LayoutType>('2x2');
   const [activeChatIndex, setActiveChatIndex] = useState(0);
   const [isCopied, setIsCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -30,6 +31,7 @@ export default function MultiStreamPage() {
   const [chatPosition, setChatPosition] = useState<ChatPosition>('grid');
   const [showTips, setShowTips] = useState(true);
   const [compactType, setCompactType] = useState<'vertical' | null>('vertical');
+  const [isLayoutSelectorOpen, setIsLayoutSelectorOpen] = useState(false);
   
   // Layouts for the grid - each stream gets an ID like s0, s1, etc., and the chat is 'chat'
   const [gridLayout, setGridLayout] = useState<LayoutConfig>({});
@@ -185,47 +187,56 @@ export default function MultiStreamPage() {
   };
   
   // Generate layout based on selected preset
-  const generateLayout = (streamInfos: StreamInfo[], layoutType: '2x2' | '1+2' | '1+3') => {
+  const generateLayout = (streamInfos: StreamInfo[], layoutType: LayoutType) => {
     setLayout(layoutType);
     const newGridLayout: LayoutConfig = {};
     const streamCount = streamInfos.length;
     
-    // Add the chat panel
-    newGridLayout['chat'] = { x: 9, y: 0, w: 3, h: 12, i: 'chat' };
+    // Calculate total available rows (maxRows is set to 30 in the ResponsiveGridLayout)
+    const totalRows = 24; // Use 24 rows to leave some spacing
+    
+    // For predefined layouts, always keep chat small and docked to the right
+    const chatWidth = 3; // Fixed small width for chat
     
     // Different layouts
     if (layoutType === '2x2') {
-      // Grid layout
+      // Grid layout - evenly distribute streams in a grid
       const cols = Math.min(3, streamCount);
-      const rows = Math.ceil(streamCount / 3);
+      const rows = Math.ceil(streamCount / cols);
+      
+      // Calculate row height to fill the space
+      const rowHeight = Math.floor(totalRows / rows);
       
       streamInfos.forEach((stream, index) => {
         const row = Math.floor(index / cols);
         const col = index % cols;
         newGridLayout[`s${index}`] = { 
           x: col * 3, 
-          y: row * 6, 
+          y: row * rowHeight, 
           w: 3, 
-          h: 6, 
+          h: rowHeight, 
           i: `s${index}`,
-          minW: 2,  // Minimum width of 2 columns
-          minH: 4   // Minimum height of 4 rows
+          minW: 2,
+          minH: 4
         };
       });
     } 
     else if (layoutType === '1+2') {
       // Feature layout - first stream is large
-      newGridLayout[`s0`] = { x: 0, y: 0, w: 6, h: 12, i: `s0`, minW: 3, minH: 6 };
+      newGridLayout[`s0`] = { x: 0, y: 0, w: 9 - chatWidth, h: totalRows, i: `s0`, minW: 3, minH: 6 };
+      
+      // Calculate height for smaller streams
+      const smallStreamHeight = Math.floor(totalRows / Math.ceil((streamCount - 1) / 2));
       
       // Layout the rest
       for (let i = 1; i < streamCount; i++) {
-        const row = Math.floor((i - 1) / 3);
-        const col = (i - 1) % 3;
+        const row = Math.floor((i - 1) / 2);
+        const col = (i - 1) % 2;
         newGridLayout[`s${i}`] = { 
-          x: 6 + col, 
-          y: row * 4, 
-          w: 3, 
-          h: 4, 
+          x: 4.5 + (col * 2.25), 
+          y: row * smallStreamHeight, 
+          w: 2.25, 
+          h: smallStreamHeight, 
           i: `s${i}`,
           minW: 2,
           minH: 3
@@ -234,28 +245,223 @@ export default function MultiStreamPage() {
     }
     else if (layoutType === '1+3') {
       // Theater layout - first stream is on top
-      newGridLayout[`s0`] = { x: 0, y: 0, w: 9, h: 6, i: `s0`, minW: 4, minH: 4 };
+      const topHeight = Math.floor(totalRows / 2);
+      newGridLayout[`s0`] = { x: 0, y: 0, w: 12 - chatWidth, h: topHeight, i: `s0`, minW: 4, minH: 4 };
+      
+      // Calculate width for bottom streams
+      const bottomStreamWidth = Math.floor((12 - chatWidth) / Math.min(3, streamCount - 1));
       
       // Layout the rest
       for (let i = 1; i < streamCount; i++) {
         const col = (i - 1) % 3;
         newGridLayout[`s${i}`] = { 
-          x: col * 3, 
-          y: 6, 
-          w: 3, 
-          h: 6, 
+          x: col * bottomStreamWidth, 
+          y: topHeight, 
+          w: bottomStreamWidth, 
+          h: totalRows - topHeight, 
           i: `s${i}`,
           minW: 2,
           minH: 4
         };
       }
     }
+    else if (layoutType === 'cascade') {
+      // Cascade layout - staggered streams with better vertical distribution
+      const streamHeight = Math.floor(totalRows / streamCount) + 2; // Add overlap
+      
+      streamInfos.forEach((stream, index) => {
+        const offset = index * 1; // Horizontal stagger
+        const verticalOffset = index * Math.floor((totalRows - streamHeight) / (streamCount - 1 || 1)); // Vertical stagger
+        
+        newGridLayout[`s${index}`] = { 
+          x: offset, 
+          y: verticalOffset, 
+          w: 4, 
+          h: streamHeight, 
+          i: `s${index}`,
+          minW: 2,
+          minH: 4
+        };
+      });
+    }
+    else if (layoutType === 'horizontal') {
+      // Horizontal ribbon layout - evenly distributed vertically
+      const streamHeight = Math.floor(totalRows / streamCount);
+      
+      streamInfos.forEach((stream, index) => {
+        newGridLayout[`s${index}`] = { 
+          x: 0, 
+          y: index * streamHeight, 
+          w: 12 - chatWidth, 
+          h: streamHeight, 
+          i: `s${index}`,
+          minW: 3,
+          minH: 2
+        };
+      });
+    }
+    else if (layoutType === 'vertical') {
+      // Vertical ribbon layout - full height columns
+      const streamWidth = Math.floor((12 - chatWidth) / streamCount);
+      
+      streamInfos.forEach((stream, index) => {
+        newGridLayout[`s${index}`] = { 
+          x: index * streamWidth, 
+          y: 0, 
+          w: streamWidth, 
+          h: totalRows, 
+          i: `s${index}`,
+          minW: 2,
+          minH: 4
+        };
+      });
+    }
+    else if (layoutType === 'bigTop') {
+      // Focus stream at top, others at bottom
+      const topHeight = Math.floor(totalRows * 0.6); // Top stream takes 60% of space
+      newGridLayout[`s0`] = { x: 0, y: 0, w: 12 - chatWidth, h: topHeight, i: `s0`, minW: 4, minH: 4 };
+      
+      // Small streams at bottom
+      const bottomStreamCount = streamCount - 1;
+      const streamWidth = Math.floor((12 - chatWidth) / bottomStreamCount);
+      
+      for (let i = 1; i < streamCount; i++) {
+        newGridLayout[`s${i}`] = { 
+          x: (i - 1) * streamWidth, 
+          y: topHeight, 
+          w: streamWidth, 
+          h: totalRows - topHeight, 
+          i: `s${i}`,
+          minW: 2,
+          minH: 3
+        };
+      }
+    }
+    else if (layoutType === 'bigBottom') {
+      // Small streams at top, focus stream at bottom
+      const topHeight = Math.floor(totalRows * 0.3); // Top streams take 30% of space
+      const topStreamCount = streamCount - 1;
+      const streamWidth = Math.floor((12 - chatWidth) / topStreamCount);
+      
+      // Small streams at top
+      for (let i = 1; i < streamCount; i++) {
+        newGridLayout[`s${i}`] = { 
+          x: (i - 1) * streamWidth, 
+          y: 0, 
+          w: streamWidth, 
+          h: topHeight, 
+          i: `s${i}`,
+          minW: 2,
+          minH: 2
+        };
+      }
+      
+      // Focus stream at bottom
+      newGridLayout[`s0`] = { x: 0, y: topHeight, w: 12 - chatWidth, h: totalRows - topHeight, i: `s0`, minW: 4, minH: 4 };
+    }
+    else if (layoutType === 'pip') {
+      // Picture-in-picture layout
+      // Main stream fills most of the screen
+      newGridLayout[`s0`] = { x: 0, y: 0, w: 12 - chatWidth, h: totalRows, i: `s0`, minW: 4, minH: 4 };
+      
+      // PiP streams are small and overlaid - positioned in corners
+      const pipSize = 3; // Size of PiP windows
+      const positions = [
+        { x: (12 - chatWidth) - pipSize, y: 0 },             // Top right
+        { x: 0, y: 0 },                        // Top left
+        { x: 0, y: totalRows - pipSize },      // Bottom left
+        { x: (12 - chatWidth) - pipSize, y: totalRows - pipSize }  // Bottom right
+      ];
+      
+      for (let i = 1; i < streamCount && i <= 4; i++) {
+        const pos = positions[i-1];
+        newGridLayout[`s${i}`] = { 
+          x: pos.x, 
+          y: pos.y, 
+          w: pipSize, 
+          h: pipSize, 
+          i: `s${i}`,
+          minW: 2,
+          minH: 2
+        };
+      }
+    }
+    else if (layoutType === '3+1') {
+      // 3 small streams on left, 1 larger stream on right
+      // Larger stream on right
+      newGridLayout[`s0`] = { x: 6, y: 0, w: 3, h: totalRows, i: `s0`, minW: 3, minH: 6 };
+      
+      // Three smaller streams on left - evenly distributed
+      const smallStreamCount = Math.min(3, streamCount - 1);
+      const smallStreamHeight = Math.floor(totalRows / smallStreamCount);
+      
+      for (let i = 1; i < streamCount && i <= 3; i++) {
+        newGridLayout[`s${i}`] = { 
+          x: 0, 
+          y: (i - 1) * smallStreamHeight, 
+          w: 6, 
+          h: smallStreamHeight, 
+          i: `s${i}`,
+          minW: 3,
+          minH: 3
+        };
+      }
+    }
+    else if (layoutType === 'pyramid') {
+      // Pyramid layout
+      if (streamCount >= 3) {
+        // Top row: single stream
+        const topHeight = Math.floor(totalRows / 2);
+        newGridLayout[`s0`] = { x: 3, y: 0, w: 6, h: topHeight, i: `s0`, minW: 3, minH: 3 };
+        
+        // Bottom row: Two streams
+        newGridLayout[`s1`] = { x: 0, y: topHeight, w: 6, h: totalRows - topHeight, i: `s1`, minW: 3, minH: 3 };
+        newGridLayout[`s2`] = { x: 6, y: topHeight, w: 3, h: totalRows - topHeight, i: `s2`, minW: 3, minH: 3 };
+        
+        // If more streams, add them in another row
+        if (streamCount > 3) {
+          const extraRowHeight = Math.floor(totalRows * 0.25);
+          const extraStreamWidth = Math.floor((12 - chatWidth) / (streamCount - 3));
+          
+          for (let i = 3; i < streamCount; i++) {
+            const col = (i - 3);
+            newGridLayout[`s${i}`] = { 
+              x: col * extraStreamWidth, 
+              y: totalRows - extraRowHeight, 
+              w: extraStreamWidth, 
+              h: extraRowHeight, 
+              i: `s${i}`,
+              minW: 2,
+              minH: 2
+            };
+          }
+        }
+      } else {
+        // Fallback for less than 3 streams
+        generateLayout(streamInfos, '2x2');
+        return;
+      }
+    }
+    
+    // Always place chat on the right side with a fixed small width
+    newGridLayout['chat'] = { 
+      x: 12 - chatWidth, 
+      y: 0, 
+      w: chatWidth, 
+      h: totalRows, 
+      i: 'chat', 
+      minW: 2, 
+      minH: 4 
+    };
     
     // Update chat panel with minimum dimensions
     newGridLayout['chat'].minW = 2;
     newGridLayout['chat'].minH = 4;
     
     setGridLayout(newGridLayout);
+    
+    // Also update the chat position state to 'right' to match the layout
+    setChatPosition('right');
   };
   
   const onLayoutChange = (layout: any) => {
@@ -377,11 +583,14 @@ export default function MultiStreamPage() {
     // Create a new layout to reposition the chat
     const newLayout = { ...gridLayout };
     
+    // Calculate total available rows (same as in generateLayout)
+    const totalRows = 24;
+    
     if (position === 'right') {
       // Move chat to the right side
       Object.keys(newLayout).forEach(key => {
         if (key === 'chat') {
-          newLayout[key] = { ...newLayout[key], x: 9, y: 0, w: 3, h: 12 };
+          newLayout[key] = { ...newLayout[key], x: 9, y: 0, w: 3, h: totalRows };
         } else {
           // Ensure streams don't overlap with chat
           if (newLayout[key].x >= 9) {
@@ -393,7 +602,7 @@ export default function MultiStreamPage() {
       // Move chat to the left side
       Object.keys(newLayout).forEach(key => {
         if (key === 'chat') {
-          newLayout[key] = { ...newLayout[key], x: 0, y: 0, w: 3, h: 12 };
+          newLayout[key] = { ...newLayout[key], x: 0, y: 0, w: 3, h: totalRows };
         } else {
           // Shift streams to the right
           newLayout[key] = { ...newLayout[key], x: newLayout[key].x + 3 };
@@ -401,9 +610,14 @@ export default function MultiStreamPage() {
       });
     } else if (position === 'bottom') {
       // Move chat to the bottom
+      const chatHeight = Math.floor(totalRows * 0.2); // 20% height for bottom chat
       Object.keys(newLayout).forEach(key => {
         if (key === 'chat') {
-          newLayout[key] = { ...newLayout[key], x: 0, y: 12, w: 12, h: 4 };
+          newLayout[key] = { ...newLayout[key], x: 0, y: totalRows - chatHeight, w: 12, h: chatHeight };
+        }
+        // Adjust heights of any streams that extend into chat area
+        else if (newLayout[key].y + newLayout[key].h > totalRows - chatHeight) {
+          newLayout[key].h = Math.max(2, (totalRows - chatHeight) - newLayout[key].y);
         }
       });
     } else {
@@ -522,29 +736,140 @@ export default function MultiStreamPage() {
         </div>
         
         <div className="flex items-center gap-4">
-          {/* Layout controls */}
-          <div className="flex bg-black/40 rounded overflow-hidden">
-            <button 
-              onClick={() => generateLayout(streams, '2x2')}
-              className={`p-2 ${layout === '2x2' ? 'bg-[#9146FF]' : 'hover:bg-black/60'}`}
-              title="Grid layout"
-            >
-              <Grid3X3 className="h-5 w-5" />
-            </button>
-            <button 
-              onClick={() => generateLayout(streams, '1+2')}
-              className={`p-2 ${layout === '1+2' ? 'bg-[#9146FF]' : 'hover:bg-black/60'}`}
-              title="Feature layout"
-            >
-              <LayoutGrid className="h-5 w-5" />
-            </button>
-            <button 
-              onClick={() => generateLayout(streams, '1+3')}
-              className={`p-2 ${layout === '1+3' ? 'bg-[#9146FF]' : 'hover:bg-black/60'}`}
-              title="Theater layout"
-            >
-              <Grid2X2 className="h-5 w-5" />
-            </button>
+          {/* Layout controls with dropdown for more options */}
+          <div className="relative group">
+            <div className="flex bg-black/40 rounded overflow-hidden">
+              <button 
+                onClick={() => generateLayout(streams, '2x2')}
+                className={`p-2 ${layout === '2x2' ? 'bg-[#9146FF]' : 'hover:bg-black/60'}`}
+                title="Grid layout"
+              >
+                <Grid3X3 className="h-5 w-5" />
+              </button>
+              <button 
+                onClick={() => generateLayout(streams, '1+2')}
+                className={`p-2 ${layout === '1+2' ? 'bg-[#9146FF]' : 'hover:bg-black/60'}`}
+                title="Feature layout"
+              >
+                <LayoutGrid className="h-5 w-5" />
+              </button>
+              <button 
+                onClick={() => generateLayout(streams, '1+3')}
+                className={`p-2 ${layout === '1+3' ? 'bg-[#9146FF]' : 'hover:bg-black/60'}`}
+                title="Theater layout"
+              >
+                <Grid2X2 className="h-5 w-5" />
+              </button>
+              <button
+                onClick={() => setIsLayoutSelectorOpen(!isLayoutSelectorOpen)}
+                className="p-2 hover:bg-black/60"
+                title="More layouts"
+              >
+                <ChevronDown className="h-5 w-5" />
+              </button>
+            </div>
+            
+            {/* Layout selector dropdown */}
+            {isLayoutSelectorOpen && (
+              <div className="absolute top-full left-0 mt-1 bg-[#18181b] rounded shadow-lg z-50 w-[320px] grid grid-cols-2 gap-1 p-2">
+                <button
+                  onClick={() => {
+                    generateLayout(streams, 'bigTop');
+                    setIsLayoutSelectorOpen(false);
+                  }}
+                  className={`text-left px-3 py-2 rounded text-sm flex items-center ${
+                    layout === 'bigTop' ? 'bg-[#9146FF] text-white' : 'hover:bg-black/40'
+                  }`}
+                >
+                  <LayoutPanelTop className="h-4 w-4 mr-2" />
+                  Focus Top
+                </button>
+                <button
+                  onClick={() => {
+                    generateLayout(streams, 'bigBottom');
+                    setIsLayoutSelectorOpen(false);
+                  }}
+                  className={`text-left px-3 py-2 rounded text-sm flex items-center ${
+                    layout === 'bigBottom' ? 'bg-[#9146FF] text-white' : 'hover:bg-black/40'
+                  }`}
+                >
+                  <MonitorUp className="h-4 w-4 mr-2" />
+                  Focus Bottom
+                </button>
+                <button
+                  onClick={() => {
+                    generateLayout(streams, 'horizontal');
+                    setIsLayoutSelectorOpen(false);
+                  }}
+                  className={`text-left px-3 py-2 rounded text-sm flex items-center ${
+                    layout === 'horizontal' ? 'bg-[#9146FF] text-white' : 'hover:bg-black/40'
+                  }`}
+                >
+                  <Rows3 className="h-4 w-4 mr-2" />
+                  Horizontal Rows
+                </button>
+                <button
+                  onClick={() => {
+                    generateLayout(streams, 'vertical');
+                    setIsLayoutSelectorOpen(false);
+                  }}
+                  className={`text-left px-3 py-2 rounded text-sm flex items-center ${
+                    layout === 'vertical' ? 'bg-[#9146FF] text-white' : 'hover:bg-black/40'
+                  }`}
+                >
+                  <Columns className="h-4 w-4 mr-2" />
+                  Vertical Columns
+                </button>
+                <button
+                  onClick={() => {
+                    generateLayout(streams, 'pip');
+                    setIsLayoutSelectorOpen(false);
+                  }}
+                  className={`text-left px-3 py-2 rounded text-sm flex items-center ${
+                    layout === 'pip' ? 'bg-[#9146FF] text-white' : 'hover:bg-black/40'
+                  }`}
+                >
+                  <PictureInPicture className="h-4 w-4 mr-2" />
+                  Picture-in-Picture
+                </button>
+                <button
+                  onClick={() => {
+                    generateLayout(streams, '3+1');
+                    setIsLayoutSelectorOpen(false);
+                  }}
+                  className={`text-left px-3 py-2 rounded text-sm flex items-center ${
+                    layout === '3+1' ? 'bg-[#9146FF] text-white' : 'hover:bg-black/40'
+                  }`}
+                >
+                  <Table2 className="h-4 w-4 mr-2" />
+                  3 Small + 1 Large
+                </button>
+                <button
+                  onClick={() => {
+                    generateLayout(streams, 'pyramid');
+                    setIsLayoutSelectorOpen(false);
+                  }}
+                  className={`text-left px-3 py-2 rounded text-sm flex items-center ${
+                    layout === 'pyramid' ? 'bg-[#9146FF] text-white' : 'hover:bg-black/40'
+                  }`}
+                >
+                  <Rows2 className="h-4 w-4 mr-2" />
+                  Pyramid
+                </button>
+                <button
+                  onClick={() => {
+                    generateLayout(streams, 'cascade');
+                    setIsLayoutSelectorOpen(false);
+                  }}
+                  className={`text-left px-3 py-2 rounded text-sm flex items-center ${
+                    layout === 'cascade' ? 'bg-[#9146FF] text-white' : 'hover:bg-black/40'
+                  }`}
+                >
+                  <Layers className="h-4 w-4 mr-2" />
+                  Cascade
+                </button>
+              </div>
+            )}
           </div>
           
           {/* Chat controls */}
