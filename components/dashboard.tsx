@@ -27,7 +27,7 @@ const SELECTED_SERVERS_KEY = "selectedServers"
 export default function Dashboard() {
   const [servers, setServers] = useState<ServerData[]>([])
   const [selectedServers, setSelectedServers] = useState<string[]>([])
-  const [timeRange, setTimeRange] = useState<TimeRange>("24h")
+  const [timeRange, setTimeRange] = useState<TimeRange>("8h")
   const [playerData, setPlayerData] = useState<PlayerCountData[]>([])
   const [streamData, setStreamerData] = useState<StreamCountData[]>([])
   const [viewData, setViewerData] = useState<ViewerCountData[]>([])
@@ -68,8 +68,8 @@ export default function Dashboard() {
           }
         } else {
           // No saved selection, default to first server
-          if (serverData.length > 0) {
-            setSelectedServers([serverData[0].server_id])
+        if (serverData.length > 0) {
+          setSelectedServers([serverData[0].server_id])
           }
         }
         
@@ -86,26 +86,26 @@ export default function Dashboard() {
 
   // Extract loadPlayerData function to make it reusable
   const loadPlayerData = async () => {
-    if (selectedServers.length === 0) return
+      if (selectedServers.length === 0) return
 
-    try {
-      setLoading(true)
+      try {
+        setLoading(true)
       setRefreshing(true)
-      const data = await getPlayerCounts(selectedServers, timeRange)
-      const streamData = await getStreamCounts(selectedServers, timeRange)
-      const viewData = await getViewerCounts(selectedServers, timeRange)
-      setPlayerData(data)
-      setStreamerData(streamData)
-      setViewerData(viewData)
-      setLoading(false)
+        const data = await getPlayerCounts(selectedServers, timeRange)
+        const streamData = await getStreamCounts(selectedServers, timeRange)
+        const viewData = await getViewerCounts(selectedServers, timeRange)
+        setPlayerData(data)
+        setStreamerData(streamData)
+        setViewerData(viewData)
+        setLoading(false)
       setRefreshing(false)
-    } catch (err) {
-      console.error("Error loading player data:", err)
-      setError("Failed to load player data. Please check your connection and try again.")
-      setLoading(false)
+      } catch (err) {
+        console.error("Error loading player data:", err)
+        setError("Failed to load player data. Please check your connection and try again.")
+        setLoading(false)
       setRefreshing(false)
+      }
     }
-  }
 
   useEffect(() => {
     loadPlayerData()
@@ -158,12 +158,12 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
-          <MultiServerSelect
-            servers={servers}
-            selectedServers={selectedServers}
-            onChange={handleServerChange}
-            disabled={loading || servers.length === 0}
-          />
+        <MultiServerSelect
+          servers={servers}
+          selectedServers={selectedServers}
+          onChange={handleServerChange}
+          disabled={loading || servers.length === 0}
+        />
           <Button 
             variant="outline" 
             size="icon" 
@@ -194,7 +194,7 @@ export default function Dashboard() {
       )}
 
           <div className="w-full sm:w-auto overflow-x-auto">
-          <Tabs defaultValue="24h" value={timeRange} onValueChange={handleTimeRangeChange} className="w-full">
+          <Tabs defaultValue="8h" value={timeRange} onValueChange={handleTimeRangeChange} className="w-full">
             <TabsList className="grid grid-cols-4 md:grid-cols-11">
               <TabsTrigger value="1h">1h</TabsTrigger>
               <TabsTrigger value="2h">2h</TabsTrigger>
