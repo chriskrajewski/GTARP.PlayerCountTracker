@@ -122,8 +122,7 @@ export default function PlayerCountChart({ data, serverIds, serverNames, loading
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp)
     
-    // Ensure we're using the user's local timezone
-    // Different format based on time range
+    // Use local timezone instead of UTC for all formats
     switch (timeRange) {
       case "1h":
       case "2h":
@@ -133,8 +132,6 @@ export default function PlayerCountChart({ data, serverIds, serverNames, loading
         return date.toLocaleTimeString(undefined, {
           hour: "2-digit",
           minute: "2-digit",
-          timeZone: "UTC",
-          timeZoneName: undefined,
           hour12: true
         })
       case "8h":
@@ -143,8 +140,6 @@ export default function PlayerCountChart({ data, serverIds, serverNames, loading
         return date.toLocaleTimeString(undefined, {
           hour: "2-digit",
           minute: "2-digit",
-          timeZone: "UTC",
-          timeZoneName: undefined,
           hour12: true
         })
       case "7d":
@@ -152,8 +147,7 @@ export default function PlayerCountChart({ data, serverIds, serverNames, loading
         // Format: Jan 1
         return date.toLocaleDateString(undefined, {
           month: "short",
-          day: "numeric",
-          timeZone: "UTC"
+          day: "numeric"
         })
       case "90d":
       case "180d":
@@ -165,16 +159,14 @@ export default function PlayerCountChart({ data, serverIds, serverNames, loading
         // Format: Jan 1
         return date.toLocaleDateString(undefined, {
           month: "short",
-          day: "numeric",
-          timeZone: "UTC"
+          day: "numeric"
         })
       case "365d":
       case "all":
         // Format: Jan 2023
         return date.toLocaleDateString(undefined, {
           month: "short",
-          year: "numeric",
-          timeZone: "UTC"
+          year: "numeric"
         })
       default:
         return timestamp
@@ -191,7 +183,7 @@ export default function PlayerCountChart({ data, serverIds, serverNames, loading
 
     const date = new Date(timestamp)
 
-    // Different format based on time range
+    // Use local timezone instead of UTC for all formats
     switch (timeRange) {
       case "1h":
       case "2h":
@@ -206,7 +198,6 @@ export default function PlayerCountChart({ data, serverIds, serverNames, loading
           year: "numeric",
           hour: "2-digit",
           minute: "2-digit",
-          timeZone: "UTC",
           timeZoneName: "short"
         })
       case "7d":
@@ -216,7 +207,6 @@ export default function PlayerCountChart({ data, serverIds, serverNames, loading
           year: "numeric",
           hour: "2-digit",
           minute: "2-digit",
-          timeZone: "UTC",
           timeZoneName: "short"
         })
       case "30d":
@@ -224,8 +214,7 @@ export default function PlayerCountChart({ data, serverIds, serverNames, loading
         return date.toLocaleDateString(undefined, {
           month: "short",
           day: "numeric",
-          year: "numeric",
-          timeZone: "UTC"
+          year: "numeric"
         })
       case "90d":
       case "180d":
@@ -237,16 +226,14 @@ export default function PlayerCountChart({ data, serverIds, serverNames, loading
         return date.toLocaleDateString(undefined, {
           month: "short",
           day: "numeric",
-          year: "numeric",
-          timeZone: "UTC"
+          year: "numeric"
         })
       case "365d":
       case "all":
         // Format: January 2023
         return date.toLocaleDateString(undefined, {
           month: "long",
-          year: "numeric",
-          timeZone: "UTC"
+          year: "numeric"
         })
       default:
         return timestamp
