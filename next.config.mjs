@@ -43,6 +43,16 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'media.discordapp.net',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'featureassets.org',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'featureassets.org/v1',
+        pathname: '/**',
       }
     ],
   },

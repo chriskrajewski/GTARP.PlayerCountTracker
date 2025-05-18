@@ -26,28 +26,39 @@ const SEARCH_CONFIG = [
     keyword: "prodigy"
   }
 ];
-async function getTwitchOAuthToken(clientId, clientSecret) {
-  console.log("Attempting to obtain Twitch OAuth token");
-  const url = "https://id.twitch.tv/oauth2/token";
-  const params = new URLSearchParams({
-    client_id: clientId,
-    client_secret: clientSecret,
-    grant_type: "client_credentials"
-  });
-  const response = await fetch(`${url}?${params}`, {
-    method: "POST"
-  });
-  if (!response.ok) {
-    const errorMessage = `Failed to obtain Twitch OAuth token: ${response.statusText}`;
+async function getToken() {
+  const tokenUrl = 'https://id.twitch.tv/oauth2/token';
+  
+  // Validate environment variables
+  if (!process.env.TWITCH_CLIENT_ID || !process.env.TWITCH_CLIENT_SECRET) {
+    const errorMessage = "Twitch credentials not set in environment variables";
     console.error(errorMessage);
     throw new Error(errorMessage);
   }
-  const data = await response.json();
-  console.log("Successfully obtained Twitch OAuth token");
-  return data.access_token;
+  
+  try {
+    const response = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: `client_id=${process.env.TWITCH_CLIENT_ID}&client_secret=${process.env.TWITCH_CLIENT_SECRET}&grant_type=client_credentials`,
+    });
+    
+    if (!response.ok) {
+      const errorMessage = `Twitch OAuth token request failed: ${response.status} ${response.statusText}`;
+      console.error(errorMessage);
+      throw new Error(errorMessage);
+    }
+    
+    const data = await response.json();
+    return data.access_token;
+  } catch (error) {
+    console.error("Error fetching Twitch token:", error);
+    throw error;
+  }
 }
 async function getGameId(clientId, token, gameName) {
-  console.log(`Fetching game ID for ${gameName}`);
   const url = "https://api.twitch.tv/helix/games";
   const headers = {
     "Client-ID": clientId,
@@ -67,7 +78,6 @@ async function getGameId(clientId, token, gameName) {
   const data = await response.json();
   const games = data.data || [];
   if (games.length > 0) {
-    console.log(`Found game ID ${games[0].id} for ${gameName}`);
     return games[0].id;
   } else {
     console.warn(`No game ID found for ${gameName}`);
@@ -75,7 +85,6 @@ async function getGameId(clientId, token, gameName) {
   }
 }
 async function getStreams(clientId, token, gameId, config) {
-  console.log(`Fetching streams for keyword "${config.keyword}" and serverId "${config.serverId}"`);
   const url = "https://api.twitch.tv/helix/streams";
   const headers = {
     "Client-ID": clientId,
@@ -109,22 +118,19 @@ async function getStreams(clientId, token, gameId, config) {
           serverId: config.serverId
         };
         streams.push(streamData);
-      //console.log(`Found stream: ${stream.user_name} - "${stream.title}" (Viewers: ${stream.viewer_count}, ServerId: ${config.serverId})`);
       }
     }
     cursor = data.pagination?.cursor || null;
     if (!cursor) break;
     await new Promise((resolve)=>setTimeout(resolve, 500)); // Avoid rate limits
   }
-  console.log(`Fetched ${streams.length} streams for keyword "${config.keyword}"`);
   return streams;
 }
 async function logToSupabase(supabase, streams) {
   if (!streams.length) {
-    console.log("No streams to log to Supabase");
     return;
   }
-  console.log(`Attempting to log ${streams.length} streams to Supabase`);
+  
   for (const stream of streams){
     const { error } = await supabase.from("twitch_streams").insert({
       streamer_name: stream.streamer_name,
@@ -135,16 +141,11 @@ async function logToSupabase(supabase, streams) {
     });
     if (error) {
       console.error(`Supabase insert error for stream "${stream.stream_title}": ${error.message}`);
-    } else {
-      console.log(`Successfully logged stream to Supabase: ${stream.streamer_name} - "${stream.stream_title}"`);
     }
   }
-  console.log(`Completed logging ${streams.length} streams to Supabase`);
 }
 serve(async (req)=>{
-  console.log(`Received ${req.method} request to fetch Twitch streams`);
   if (req.method !== "GET") {
-    console.warn(`Invalid request method: ${req.method}. Only GET is allowed.`);
     return new Response("Method Not Allowed", {
       status: 405,
       headers: {
@@ -152,16 +153,18 @@ serve(async (req)=>{
       }
     });
   }
+  
   try {
     // Validate environment variables
-    console.log("Validating environment variables");
     if (!TWITCH_CLIENT_ID || !TWITCH_CLIENT_SECRET || !SUPABASE_URL || !SUPABASE_KEY) {
       const errorMessage = "Missing required environment variables";
       console.error(errorMessage);
       throw new Error(errorMessage);
     }
+    
     // Get Twitch OAuth token
-    const token = await getTwitchOAuthToken(TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET);
+    const token = await getToken();
+    
     // Get game ID for Grand Theft Auto V
     const gameId = await getGameId(TWITCH_CLIENT_ID, token, "Grand Theft Auto V");
     if (!gameId) {
@@ -169,16 +172,17 @@ serve(async (req)=>{
       console.error(errorMessage);
       throw new Error(errorMessage);
     }
+    
     // Fetch streams for each serverId/keyword pair
-    console.log("Fetching streams for all configured keywords");
     let allStreams = [];
     for (const config of SEARCH_CONFIG){
       const streams = await getStreams(TWITCH_CLIENT_ID, token, gameId, config);
       allStreams = allStreams.concat(streams);
     }
+    
     // Log to Supabase
     await logToSupabase(supabase, allStreams);
-    console.log(`Successfully processed and logged ${allStreams.length} streams`);
+    
     return new Response(`Successfully logged ${allStreams.length} streams`, {
       status: 200,
       headers: {

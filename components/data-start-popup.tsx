@@ -27,8 +27,8 @@ export function DataStartPopup() {
         setDataStartTimes(startTimes)
         setServers(serverData)
       } catch (err) {
-        // Silent error in production
-        setIsLoading(false)
+        console.error("Error loading data start times:", err)
+        setError("Failed to load data start information")
       } finally {
         setIsLoading(false)
       }
