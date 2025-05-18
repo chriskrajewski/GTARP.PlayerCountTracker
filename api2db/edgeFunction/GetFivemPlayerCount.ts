@@ -16,9 +16,7 @@ function sleep(ms) {
 }
 const BASE_API_URL = "https://servers-frontend.fivem.net/api/servers/single/";
 serve(async (req)=>{
-  console.log(`Received ${req.method} request to fetch FiveM server player counts`);
   if (req.method !== "GET") {
-    console.warn(`Invalid request method: ${req.method}. Only GET is allowed.`);
     return new Response("Method Not Allowed", {
       status: 405,
       headers: {
@@ -27,7 +25,6 @@ serve(async (req)=>{
     });
   }
   try {
-    console.log("Validating environment variables");
     if (!SUPABASE_URL || !SUPABASE_KEY) {
       const errorMessage = "Missing required environment variables: SUPABASE_URL or SUPABASE_KEY";
       console.error(errorMessage);
@@ -42,10 +39,9 @@ serve(async (req)=>{
     };
     const timestamp = new Date().toISOString();
     const results = [];
-    console.log(`Processing ${SERVER_IDS.length} servers`);
+    
     // Iterate through each server ID
     for (const server_id of SERVER_IDS){
-      console.log(`Fetching data for server ${server_id}`);
       const API_URL = `${BASE_API_URL}${server_id}`;
       try {
         const response = await fetch(API_URL, {
@@ -58,7 +54,7 @@ serve(async (req)=>{
         }
         const data = await response.json();
         const current_players = data?.Data?.selfReportedClients || 0;
-        console.log(`Server ${server_id}: Fetched player count: ${current_players}`);
+        
         const record = {
           timestamp,
           player_count: current_players,
@@ -70,7 +66,7 @@ serve(async (req)=>{
           console.error(errorMessage);
           throw new Error(errorMessage);
         }
-        console.log(`Server ${server_id}: Successfully saved player count: ${current_players}`);
+        
         results.push(`[${timestamp}] Server ${server_id}: Successfully saved player count: ${current_players}`);
       } catch (serverError) {
         const errorMessage = serverError instanceof Error ? serverError.message : String(serverError);
@@ -79,7 +75,7 @@ serve(async (req)=>{
       }
       await sleep(5000);
     }
-    console.log(`Completed processing ${SERVER_IDS.length} servers. ${results.length} results recorded.`);
+    
     return new Response(results.join("\n"), {
       status: 200,
       headers: {

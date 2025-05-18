@@ -95,7 +95,7 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
         const data = await response.json();
         setStreams(data);
       } catch (err) {
-        // Silent error in production
+        console.error("Error fetching streams:", err);
         if (err instanceof Error) {
           setError(err.message);
         } else {

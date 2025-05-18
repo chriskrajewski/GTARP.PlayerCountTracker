@@ -34,7 +34,6 @@ export function FeedbackForm({ trigger, className }: FeedbackFormProps) {
     serverName: ""
   });
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -64,9 +63,10 @@ export function FeedbackForm({ trigger, className }: FeedbackFormProps) {
         body: JSON.stringify(formData),
       });
       
+      const data = await response.json();
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to submit feedback");
+        throw new Error(data.error || "Failed to submit feedback");
       }
       
       setIsSuccess(true);
@@ -86,8 +86,8 @@ export function FeedbackForm({ trigger, className }: FeedbackFormProps) {
       }, 2000);
       
     } catch (error) {
-      // Silent error in production
-      setError("Failed to submit feedback. Please try again.");
+      console.error("Error submitting feedback:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to submit feedback");
     } finally {
       setIsSubmitting(false);
     }

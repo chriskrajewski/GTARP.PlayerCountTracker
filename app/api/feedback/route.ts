@@ -72,7 +72,10 @@ Submitted via website feedback form
     });
     
   } catch (error) {
-    // Silent error in production
-    return NextResponse.json({ error: 'Failed to submit feedback' }, { status: 500 });
+    console.error('Error creating GitHub issue:', error);
+    return NextResponse.json(
+      { error: 'Failed to submit feedback' },
+      { status: 500 }
+    );
   }
 } 

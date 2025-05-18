@@ -100,7 +100,7 @@ export function CSVExport({ servers, selectedServers }: CSVExportProps) {
         downloadCSV(csvContent, `viewer-counts-${serverNames}-${dateStr}.csv`)
       }
     } catch (error) {
-      // Silent error in production
+      console.error("Error exporting data:", error)
       alert("Failed to export data. Please try again.")
     } finally {
       setIsExporting(false)

@@ -35,20 +35,11 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
-  const [isLoadingServers, setIsLoadingServers] = useState(true)
-  const [fetchError, setFetchError] = useState<string | null>(null)
-  const [isLoadingData, setIsLoadingData] = useState(true)
 
   useEffect(() => {
     async function loadServers() {
       try {
-        // Add loading indicator
-        setIsLoadingServers(true)
-        
-        // Fetch server data
         const serverData = await getServers()
-        
-        // Update state with fetched servers
         setServers(serverData)
         
         // Attempt to load saved server selection from localStorage
@@ -78,19 +69,16 @@ export default function Dashboard() {
           }
         } else {
           // No saved selection, default to first server
-          if (serverData.length > 0) {
-            setSelectedServers([serverData[0].server_id])
+        if (serverData.length > 0) {
+          setSelectedServers([serverData[0].server_id])
           }
         }
         
         setLoading(false)
       } catch (err) {
-        // Silent error in production
-        setFetchError("Failed to load servers. Please refresh the page.")
+        console.error("Error loading servers:", err)
+        setError("Failed to load servers. Please check your connection and try again.")
         setLoading(false)
-      } finally {
-        // Remove loading indicator
-        setIsLoadingServers(false)
       }
     }
 
@@ -99,33 +87,26 @@ export default function Dashboard() {
 
   // Extract loadPlayerData function to make it reusable
   const loadPlayerData = async () => {
-    try {
-      // Add loading indicator
-      setIsLoadingData(true)
-      
       if (selectedServers.length === 0) return
 
-      // Fetch player data for selected date range and servers
-      const activeServers = selectedServers.includes('all') 
-        ? servers.map(server => server.server_id)
-        : selectedServers;
-        
-      const data = await getPlayerCounts(activeServers, timeRange)
-      const streamData = await getStreamCounts(activeServers, timeRange)
-      const viewData = await getViewerCounts(activeServers, timeRange)
-      setPlayerData(data)
-      setStreamerData(streamData)
-      setViewerData(viewData)
-      setLoading(false)
-    } catch (err) {
-      // Silent error in production
-      setFetchError("Failed to load player data. Please refresh the page.")
-      setLoading(false)
-    } finally {
-      // Remove loading indicator
-      setIsLoadingData(false)
+      try {
+        setLoading(true)
+      setRefreshing(true)
+        const data = await getPlayerCounts(selectedServers, timeRange)
+        const streamData = await getStreamCounts(selectedServers, timeRange)
+        const viewData = await getViewerCounts(selectedServers, timeRange)
+        setPlayerData(data)
+        setStreamerData(streamData)
+        setViewerData(viewData)
+        setLoading(false)
+      setRefreshing(false)
+      } catch (err) {
+        console.error("Error loading player data:", err)
+        setError("Failed to load player data. Please check your connection and try again.")
+        setLoading(false)
+      setRefreshing(false)
+      }
     }
-  }
 
   useEffect(() => {
     loadPlayerData()
@@ -179,11 +160,11 @@ export default function Dashboard() {
     return acc
   }, {} as Record<string, string>)
 
-  if (fetchError) {
+  if (error) {
     return (
       <div className="p-4 bg-gray-800 border border-gray-700 rounded-md text-red-400">
         <h3 className="font-bold">Error</h3>
-        <p>{fetchError}</p>
+        <p>{error}</p>
         <p className="mt-2 text-sm">Please check that your Supabase environment variables are correctly set up.</p>
       </div>
     )
