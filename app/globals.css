@@ -86,3 +86,192 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Custom styles for react-grid-layout */
+.react-resizable-handle {
+  position: absolute;
+  width: 20px !important;
+  height: 20px !important;
+  background-color: #9146FF !important;
+  opacity: 0 !important;
+  z-index: 30 !important;
+  border-radius: 3px;
+  transition: opacity 0.2s ease;
+}
+
+.react-grid-item:hover .react-resizable-handle {
+  opacity: 0.5 !important;
+}
+
+.react-resizable-handle:hover {
+  opacity: 0.8 !important;
+}
+
+/* Enhance all resize handles to be more visible */
+.react-resizable-handle::after {
+  border-color: #9146FF !important;
+  border-width: 3px !important;
+  width: 14px !important;
+  height: 14px !important;
+  right: 3px !important;
+  bottom: 3px !important;
+}
+
+/* Specific styling for each resize handle */
+.react-resizable-handle-se {
+  bottom: 0;
+  right: 0;
+  cursor: se-resize;
+}
+
+.react-resizable-handle-sw {
+  bottom: 0;
+  left: 0;
+  cursor: sw-resize;
+}
+
+.react-resizable-handle-nw {
+  top: 0;
+  left: 0;
+  cursor: nw-resize;
+}
+
+.react-resizable-handle-ne {
+  top: 0;
+  right: 0;
+  cursor: ne-resize;
+}
+
+.react-resizable-handle-n {
+  top: 0;
+  left: 50%;
+  margin-left: -20px;
+  cursor: n-resize;
+}
+
+.react-resizable-handle-s {
+  bottom: 0;
+  left: 50%;
+  margin-left: -20px;
+  cursor: s-resize;
+}
+
+.react-resizable-handle-e {
+  right: 0;
+  top: 50%;
+  margin-top: -20px;
+  cursor: e-resize;
+}
+
+.react-resizable-handle-w {
+  left: 0;
+  top: 50%;
+  margin-top: -20px;
+  cursor: w-resize;
+}
+
+/* Make grid items properly fill their container */
+.react-grid-item {
+  min-width: 200px !important;
+  min-height: 150px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.react-grid-item > div {
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Make sure iframes properly fill their containers */
+.react-grid-item iframe {
+  flex: 1 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Chat panel specific styling */
+.react-grid-item[class*="chat"] {
+  overflow: hidden !important;
+}
+
+.react-grid-item[class*="chat"] > div {
+  overflow: hidden !important;
+}
+
+.react-grid-item[class*="chat"] iframe {
+  position: absolute !important;
+  width: 100% !important;
+  height: 100% !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 1 !important;
+}
+
+/* Stream panel styles */
+.stream-panel {
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.stream-panel:hover {
+  z-index: 25 !important;
+}
+
+/* Remove hover glow effects to keep the UI clean */
+.stream-panel:hover::before {
+  display: none;
+}
+
+/* Visual indicator for drag handles */
+.drag-handle {
+  cursor: grab !important;
+  opacity: 0 !important;
+  transition: opacity 0.2s ease;
+}
+
+.react-grid-item:hover .drag-handle {
+  opacity: 1 !important;
+}
+
+.drag-handle:active {
+  cursor: grabbing !important;
+}
+
+/* Visual indicator for dragging and resizing */
+.react-grid-item.react-grid-placeholder {
+  background-color: #9146FF !important;
+  opacity: 0.3 !important;
+  border-radius: 8px;
+}
+
+/* Make minimum size for layout items */
+
+/* Show hint style - temporarily highlight drag and resize handles */
+.show-hint .drag-handle {
+  opacity: 1 !important;
+  animation: pulse-hint 2s infinite;
+}
+
+.show-hint .react-resizable-handle {
+  opacity: 0.8 !important;
+  animation: pulse-hint 2s infinite;
+}
+
+@keyframes pulse-hint {
+  0% {
+    box-shadow: 0 0 0 0 rgba(145, 70, 255, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(145, 70, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(145, 70, 255, 0);
+  }
+}

@@ -55,6 +55,10 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
   const [error, setError] = useState<string | null>(null);
   const [detailedError, setDetailedError] = useState<string | null>(null);
   const [activeStream, setActiveStream] = useState<StreamData | null>(null);
+  
+  // New state for multi-stream functionality
+  const [selectedStreams, setSelectedStreams] = useState<StreamData[]>([]);
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
 
   useEffect(() => {
     async function fetchStreams() {
@@ -126,6 +130,47 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
     };
   }, []);
 
+  // Function to toggle a stream selection
+  const toggleStreamSelection = (stream: StreamData) => {
+    setSelectedStreams(prev => {
+      // Check if stream is already selected
+      const isSelected = prev.some(s => s.id === stream.id);
+      
+      if (isSelected) {
+        // Remove from selected streams
+        return prev.filter(s => s.id !== stream.id);
+      } else {
+        // Add to selected streams (limit to 8 streams max)
+        if (prev.length >= 8) {
+          alert("You can select up to 8 streams at once");
+          return prev;
+        }
+        return [...prev, stream];
+      }
+    });
+  };
+
+  // Function to launch multi-stream view
+  const launchMultiStream = () => {
+    if (selectedStreams.length === 0) {
+      alert("Please select at least one stream");
+      return;
+    }
+    
+    // Encode the selected stream usernames as a URL parameter
+    const streamers = selectedStreams.map(stream => encodeURIComponent(stream.user_name.toLowerCase())).join(',');
+    window.open(`/multi-stream?streamers=${streamers}`, "_blank");
+  };
+
+  // Toggle multi-select mode
+  const toggleMultiSelectMode = () => {
+    if (isMultiSelectMode) {
+      // Clear selections when exiting multi-select mode
+      setSelectedStreams([]);
+    }
+    setIsMultiSelectMode(!isMultiSelectMode);
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -190,6 +235,37 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-medium">{streams.length} Live {streams.length === 1 ? 'Stream' : 'Streams'}</h2>
+        
+        {/* Multi-stream controls */}
+        <div className="flex items-center gap-3">
+          {isMultiSelectMode && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm">{selectedStreams.length} selected</span>
+              <button
+                onClick={launchMultiStream}
+                disabled={selectedStreams.length === 0}
+                className={`px-3 py-1.5 rounded text-sm font-medium ${
+                  selectedStreams.length === 0 
+                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                    : 'bg-[#9146FF] text-white hover:bg-[#7a30e0]'
+                }`}
+              >
+                <ExternalLink className="h-4 w-4 inline mr-1" />
+                Watch Multi-Stream
+              </button>
+            </div>
+          )}
+          <button
+            onClick={toggleMultiSelectMode}
+            className={`px-3 py-1.5 rounded text-sm font-medium ${
+              isMultiSelectMode 
+                ? 'bg-red-500 text-white hover:bg-red-600' 
+                : 'bg-muted hover:bg-muted/80'
+            }`}
+          >
+            {isMultiSelectMode ? 'Cancel Selection' : 'Select Streams to Mutli-Stream'}
+          </button>
+        </div>
       </div>
       
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -197,7 +273,10 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
           <StreamCard 
             key={stream.id} 
             stream={stream} 
-            onClick={() => setActiveStream(stream)}
+            isMultiSelectMode={isMultiSelectMode}
+            isSelected={selectedStreams.some(s => s.id === stream.id)}
+            onSelect={toggleStreamSelection}
+            onClick={() => !isMultiSelectMode && setActiveStream(stream)}
           />
         ))}
       </div>
@@ -213,7 +292,19 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
   );
 }
 
-function StreamCard({ stream, onClick }: { stream: StreamData; onClick: () => void }) {
+function StreamCard({ 
+  stream, 
+  onClick, 
+  isMultiSelectMode = false,
+  isSelected = false,
+  onSelect
+}: { 
+  stream: StreamData; 
+  onClick: () => void;
+  isMultiSelectMode?: boolean;
+  isSelected?: boolean;
+  onSelect?: (stream: StreamData) => void;
+}) {
   // Replace template variables in thumbnail URL with appropriate dimensions
   const thumbnailUrl = stream.thumbnail_url
     ? stream.thumbnail_url
@@ -229,11 +320,21 @@ function StreamCard({ stream, onClick }: { stream: StreamData; onClick: () => vo
     return count.toString();
   };
   
+  const handleCardClick = () => {
+    if (isMultiSelectMode && onSelect) {
+      onSelect(stream);
+    } else {
+      onClick();
+    }
+  };
+  
   return (
-    <Card className="overflow-hidden hover:shadow-md transition-shadow relative group">
+    <Card className={`overflow-hidden hover:shadow-md transition-shadow relative group ${
+      isSelected ? 'ring-2 ring-[#9146FF] ring-offset-2' : ''
+    }`}>
       <div 
         className="cursor-pointer"
-        onClick={onClick}
+        onClick={handleCardClick}
       >
         <div className="relative aspect-video">
           {/* Use regular img tag for thumbnail for better Safari compatibility */}
@@ -250,6 +351,21 @@ function StreamCard({ stream, onClick }: { stream: StreamData; onClick: () => vo
             <div className="w-2 h-2 bg-red-500 rounded-full mr-1.5"></div>
             {formatViewerCount(stream.viewer_count)} viewers
           </div>
+          
+          {/* Selection indicator for multi-select mode */}
+          {isMultiSelectMode && (
+            <div className="absolute top-2 left-2 bg-black/70 text-white p-1 rounded-full">
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                isSelected ? 'bg-[#9146FF]' : 'bg-white/20'
+              }`}>
+                {isSelected && (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                )}
+              </div>
+            </div>
+          )}
           
           {/* Play button overlay */}
           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -285,6 +401,7 @@ function StreamCard({ stream, onClick }: { stream: StreamData; onClick: () => vo
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="hover:underline flex items-center"
+                onClick={(e) => isMultiSelectMode && e.preventDefault()}
               >
                 {stream.user_name}
                 <Twitch className="h-3.5 w-3.5 ml-1.5 text-[#9146FF]" />
