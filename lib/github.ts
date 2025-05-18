@@ -1,108 +1,144 @@
-import { Octokit } from "octokit";
+// Define CommitInfo interface directly in this file
+interface CommitInfo {
+  id: string;
+  message: string;
+  date: string;
+  url: string;
+  author: {
+    name: string;
+    avatar: string;
+    url: string;
+  };
+}
 
-// Only keep safe information from commit data
-function sanitizeCommitData(commit: any) {
+// Utility function to sanitize commit data
+function sanitizeCommitData(commit: any): CommitInfo {
   try {
     return {
-      id: commit.sha.substring(0, 8),
-      message: commit.commit.message
-        ? commit.commit.message.substring(0, 200) // Limit message length for safety
-        : "No message",
-      date: new Date(commit.commit.author.date).toISOString(),
-      url: "#" // Remove actual URL to repository
+      id: commit.sha || 'unknown',
+      message: commit.commit?.message || 'No message provided',
+      date: commit.commit?.author?.date || new Date().toISOString(),
+      url: commit.html_url || '#',
+      author: {
+        name: commit.commit?.author?.name || 'Unknown',
+        avatar: commit.author?.avatar_url || '',
+        url: commit.author?.html_url || '#'
+      }
     };
   } catch (error) {
-    // Handle malformed data
-    console.error("Error sanitizing commit data:", error);
+    // Silent error in production
     return {
-      id: "unknown",
-      message: "Invalid commit data",
+      id: 'error',
+      message: 'Error parsing commit data',
       date: new Date().toISOString(),
-      url: "#"
+      url: '#',
+      author: {
+        name: 'Unknown',
+        avatar: '',
+        url: '#'
+      }
     };
   }
 }
 
-// Cache mechanism to avoid hitting rate limits
-let commitsCache: any[] = [];
-let lastFetchTime = 0;
-const CACHE_TTL = 3600 * 1000; // 1 hour in milliseconds
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000; // 1 second
-
-export async function getAnonymizedCommits() {
-  // Check if we have cached data that's still valid
-  const now = Date.now();
-  if (commitsCache.length > 0 && now - lastFetchTime < CACHE_TTL) {
-    return commitsCache;
-  }
-
-  // Repository information - preferably from environment variables with fallbacks
-  const repoOwner = process.env.GITHUB_REPO_OWNER || "chriskrajewski";
-  const repoName = process.env.GITHUB_REPO_NAME || "GTARP.PlayerCountTracker";
+// Main function to fetch and anonymize commits
+export async function getAnonymizedCommits(maxRetries = 3): Promise<CommitInfo[]> {
+  const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+  const REPO = process.env.GITHUB_REPO || 'GTARP.PlayerCountTracker';
+  const OWNER = process.env.GITHUB_OWNER || 'chriskrajewski';
+  const CACHE_TIME = 3600; // 1 hour cache
   
-  // Optional GitHub token for higher rate limits
-  const githubToken = process.env.GITHUB_TOKEN;
-  
-  let retries = 0;
-  
-  while (retries < MAX_RETRIES) {
-    try {
-      // Initialize Octokit with or without authentication
-      const octokit = githubToken 
-        ? new Octokit({ auth: githubToken }) 
-        : new Octokit();
+  // Check if cached data exists and is still valid
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const cached = localStorage.getItem('cached_commits');
+    const cacheTimestamp = localStorage.getItem('commits_cache_time');
+    
+    if (cached && cacheTimestamp) {
+      const timestamp = parseInt(cacheTimestamp, 10);
+      const now = Date.now();
       
-      const response = await octokit.request('GET /repos/{owner}/{repo}/commits', {
-        owner: repoOwner,
-        repo: repoName,
-        per_page: 15, // Reduced to 15 for better performance
-        headers: {
-          'X-GitHub-Api-Version': '2022-11-28'
+      // Use cached data if it's less than CACHE_TIME seconds old
+      if (now - timestamp < CACHE_TIME * 1000) {
+        try {
+          return JSON.parse(cached);
+        } catch {
+          // Silent error - if cache is corrupt, fetch fresh data
         }
-      });
-      
-      if (response.status !== 200) {
-        throw new Error(`GitHub API returned status ${response.status}`);
-      }
-      
-      // Sanitize and cache the commit data
-      const sanitizedCommits = Array.isArray(response.data) 
-        ? response.data.map(sanitizeCommitData)
-        : [];
-        
-      commitsCache = sanitizedCommits;
-      lastFetchTime = now;
-      
-      return sanitizedCommits;
-    } catch (error: any) {
-      retries++;
-      
-      // Check if we should retry based on the error
-      if (error.status === 403 && error.headers && error.headers['x-ratelimit-remaining'] === '0') {
-        console.error("GitHub API rate limit exceeded. Retrying later.");
-        
-        // If this is not our last retry, wait before trying again
-        if (retries < MAX_RETRIES) {
-          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * retries));
-        }
-      } else if (retries < MAX_RETRIES) {
-        // For other errors, retry with backoff
-        console.error(`Error fetching GitHub commits (attempt ${retries}):`, error);
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * retries));
-      } else {
-        // Last retry failed, log and return empty array
-        console.error("Failed to fetch GitHub commits after maximum retries:", error);
-        return [];
       }
     }
   }
   
-  // If all retries failed and we have cached data, return that even if expired
-  if (commitsCache.length > 0) {
-    console.warn("Returning stale commit data after failed retries");
-    return commitsCache;
+  let retries = 0;
+  let lastError: Error | null = null;
+  
+  while (retries < maxRetries) {
+    try {
+      // Fetch commits from GitHub API
+      const headers: Record<string, string> = {
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'GTA-RP-Player-Count-Tracker'
+      };
+      
+      // Add auth token if available
+      if (GITHUB_TOKEN) {
+        headers['Authorization'] = `token ${GITHUB_TOKEN}`;
+      }
+      
+      const response = await fetch(
+        `https://api.github.com/repos/${OWNER}/${REPO}/commits?per_page=50`,
+        { headers }
+      );
+      
+      // Handle rate limiting - retry with exponential backoff
+      if (response.status === 403 && response.headers.get('X-RateLimit-Remaining') === '0') {
+        // Silent error in production
+        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retries)));
+        retries++;
+        continue;
+      }
+      
+      if (!response.ok) {
+        throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+      }
+      
+      const commits = await response.json();
+      
+      // Transform and sanitize commit data
+      const sanitizedCommits = commits.map(sanitizeCommitData);
+      
+      // Cache the results
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          localStorage.setItem('cached_commits', JSON.stringify(sanitizedCommits));
+          localStorage.setItem('commits_cache_time', Date.now().toString());
+        } catch {
+          // Silent error - failing to cache isn't critical
+        }
+      }
+      
+      return sanitizedCommits;
+    } catch (error) {
+      // Store error for potential retry
+      lastError = error instanceof Error ? error : new Error(String(error));
+      retries++;
+      await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retries)));
+    }
   }
   
-  return [];
+  // After max retries, try to use stale data from cache
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const staleData = localStorage.getItem('cached_commits');
+    
+    if (staleData) {
+      // Silent warning in production
+      try {
+        return JSON.parse(staleData);
+      } catch {
+        // Silent error - corrupt cache
+      }
+    }
+  }
+  
+  // If all else fails, throw the last encountered error
+  throw lastError || new Error('Failed to fetch commit data');
 } 

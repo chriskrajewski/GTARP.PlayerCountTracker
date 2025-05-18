@@ -6,32 +6,27 @@ const MAX_RESPONSE_SIZE = 50 * 1024; // 50KB
 
 export async function GET() {
   try {
-    // Basic check to ensure we're in a safe environment
-    if (process.env.NODE_ENV === 'production' && !process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      console.error('Missing environment variables in production');
-      return NextResponse.json(
-        { error: 'Service configuration error' },
-        { status: 500 }
-      );
+    // Ensure required environment variables are set
+    if (!process.env.GITHUB_TOKEN && process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
     }
-    
+
+    // Fetch recent commits from GitHub
     const commits = await getAnonymizedCommits();
     
-    // Validate the response data for safety
+    // Validate the response format
     if (!Array.isArray(commits)) {
-      console.error('Invalid commits data format:', typeof commits);
-      return NextResponse.json(
-        { error: 'Invalid data format' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Invalid response format' }, { status: 500 });
     }
     
-    // Safety check: limit response size
-    const responseData = { commits };
-    const responseSize = JSON.stringify(responseData).length;
-    if (responseSize > MAX_RESPONSE_SIZE) {
-      console.warn(`Response size (${responseSize} bytes) exceeds limit, truncating to first 10 commits`);
-      responseData.commits = commits.slice(0, 10);
+    // Check response size and truncate if necessary to avoid large payloads
+    const responseSize = JSON.stringify(commits).length;
+    const MAX_SIZE = 100 * 1024; // 100KB limit
+    
+    let responseData = commits;
+    if (responseSize > MAX_SIZE) {
+      // Truncate to first 10 commits if response is too large
+      responseData = commits.slice(0, 10);
     }
     
     // Set appropriate cache controls and security headers
@@ -42,18 +37,10 @@ export async function GET() {
     
     return response;
   } catch (error) {
-    console.error('Error fetching changelog:', error);
-    
-    // Return a generic error message to avoid leaking sensitive information
+    // Return a generic error response
     return NextResponse.json(
-      { error: 'Failed to fetch changelog' },
-      { 
-        status: 500,
-        headers: {
-          // Don't cache errors
-          'Cache-Control': 'no-store, max-age=0'
-        }
-      }
+      { error: 'Failed to fetch changelog data' },
+      { status: 500 }
     );
   }
 }

@@ -85,168 +85,120 @@ async function fetchUserProfiles(accessToken: string, userIds: string[]): Promis
   return allUsers;
 }
 
-// Function to fetch stream details by username
-async function fetchStreamsByUsernames(accessToken: string, usernames: string[]): Promise<TwitchStream[]> {
-  if (usernames.length === 0) return [];
-  
-  const clientId = process.env.TWITCH_CLIENT_ID;
-  
-  if (!clientId) {
-    throw new Error('Twitch client ID is not configured');
-  }
-  
-  console.log(`Checking live status for ${usernames.length} streamers...`);
-  
-  // Filter out any empty or invalid usernames
-  const validUsernames = usernames
-    .map(name => name?.trim())
-    .filter(name => name && name.length > 0 && name.length <= 25); // Twitch usernames have max length
-  
-  // Filter out usernames with Unicode/non-ASCII characters that Twitch API can't handle
-  const asciiOnlyUsernames = validUsernames.filter(name => {
-    // Check if username contains only ASCII characters (codes 0-127)
-    const isAsciiOnly = /^[\x00-\x7F]*$/.test(name);
-    if (!isAsciiOnly) {
-      console.log(`Filtering out username with Unicode characters: ${name}`);
-    }
-    return isAsciiOnly;
-  });
-  
-  console.log(`Valid ASCII-only usernames: ${asciiOnlyUsernames.length}/${usernames.length}`);
-  
-  if (asciiOnlyUsernames.length === 0) {
-    console.log('No valid usernames found after filtering');
-    return [];
-  }
-  
-  // Split into batches of 100 as per Twitch API limits
-  const batches = [];
-  for (let i = 0; i < asciiOnlyUsernames.length; i += 100) {
-    batches.push(asciiOnlyUsernames.slice(i, i + 100));
-  }
-  
-  let allStreams: TwitchStream[] = [];
-  
-  for (let i = 0; i < batches.length; i++) {
-    const batch = batches[i];
-    console.log(`Processing batch ${i+1}/${batches.length} with ${batch.length} streamers`);
+// Function to check which streamers are currently live
+async function checkLiveStreamers(usernames: string[], accessToken: string) {
+  try {
+    // Filter out usernames with Unicode characters (Twitch API limitation)
+    const asciiOnlyUsernames = usernames.filter(name => {
+      const isAsciiOnly = /^[\x00-\x7F]*$/.test(name);
+      if (!isAsciiOnly) {
+        // Skip usernames with non-ASCII characters
+      }
+      return isAsciiOnly;
+    });
     
-    try {
-      // Create the query parameters string, handling each username individually
-      const usernameParams = batch.map(username => {
-        try {
-          return `user_login=${encodeURIComponent(username)}`;
-        } catch (e) {
-          console.error(`Failed to encode username: ${username}`, e);
-          return null;
-        }
-      }).filter(Boolean).join('&');
+    if (asciiOnlyUsernames.length === 0) {
+      return [];
+    }
+    
+    // Process in batches of 100 (Twitch API limit)
+    const batchSize = 100;
+    const batches = [];
+    
+    for (let i = 0; i < asciiOnlyUsernames.length; i += batchSize) {
+      batches.push(asciiOnlyUsernames.slice(i, i + batchSize));
+    }
+    
+    const allStreams = [];
+    
+    // Process each batch
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      
+      // Build the query parameters for this batch
+      let usernameParams = '';
+      
+      try {
+        // Properly encode each username
+        usernameParams = batch.map(username => `user_login=${encodeURIComponent(username.toLowerCase())}`).join('&');
+      } catch (e) {
+        // Skip this batch if encoding fails
+        continue;
+      }
       
       if (!usernameParams) {
-        console.log(`Skipping batch ${i+1} as all usernames failed encoding`);
         continue;
       }
       
       const url = `https://api.twitch.tv/helix/streams?${usernameParams}`;
-      console.log(`Fetching from Twitch API: ${url.substring(0, 100)}...`);
       
-      const response = await fetch(url, {
-        headers: {
-          'Client-ID': clientId,
-          'Authorization': `Bearer ${accessToken}`,
-        },
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Twitch API error (${response.status}): ${errorText}`);
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'Client-ID': process.env.TWITCH_CLIENT_ID || '',
+            'Authorization': `Bearer ${accessToken}`
+          }
+        });
         
-        if (response.status === 401) {
-          throw new Error('Twitch authentication failed. Check your credentials.');
-        } else if (response.status === 429) {
-          throw new Error('Twitch API rate limit exceeded. Try again later.');
-        } else if (response.status === 400) {
-          console.error('Bad Request error. Query params used:', usernameParams.substring(0, 200) + '...');
-          
-          // Instead of failing completely, try to process in smaller batches if this is a large batch
-          if (batch.length > 10) {
-            console.log(`Attempting to process batch ${i+1} in smaller chunks due to 400 error`);
-            
-            // Process in smaller chunks of 10 usernames each
+        if (!response.ok) {
+          // Handle specific error cases
+          if (response.status === 400) {
+            // Try breaking the batch into smaller chunks
+            const smallerBatchSize = Math.ceil(batch.length / 2);
             const smallerBatches = [];
-            for (let j = 0; j < batch.length; j += 10) {
-              smallerBatches.push(batch.slice(j, j + 10));
+            
+            for (let j = 0; j < batch.length; j += smallerBatchSize) {
+              smallerBatches.push(batch.slice(j, j + smallerBatchSize));
             }
             
             // Process each smaller batch
             for (let k = 0; k < smallerBatches.length; k++) {
               const smallBatch = smallerBatches[k];
+              const smallBatchParams = smallBatch.map(
+                username => `user_login=${encodeURIComponent(username.toLowerCase())}`
+              ).join('&');
+              
+              const smallBatchUrl = `https://api.twitch.tv/helix/streams?${smallBatchParams}`;
+              
               try {
-                const smallBatchParams = smallBatch.map(name => 
-                  `user_login=${encodeURIComponent(name)}`
-                ).join('&');
-                
-                const smallBatchUrl = `https://api.twitch.tv/helix/streams?${smallBatchParams}`;
-                console.log(`Fetching smaller batch ${k+1}/${smallerBatches.length}: ${smallBatchUrl.substring(0, 100)}...`);
-                
                 const smallBatchResponse = await fetch(smallBatchUrl, {
                   headers: {
-                    'Client-ID': clientId,
-                    'Authorization': `Bearer ${accessToken}`,
-                  },
+                    'Client-ID': process.env.TWITCH_CLIENT_ID || '',
+                    'Authorization': `Bearer ${accessToken}`
+                  }
                 });
                 
                 if (smallBatchResponse.ok) {
                   const smallBatchData = await smallBatchResponse.json();
-                  if (smallBatchData.data && Array.isArray(smallBatchData.data)) {
-                    console.log(`Small batch ${k+1} successful, found ${smallBatchData.data.length} streams`);
-                    allStreams = [...allStreams, ...(smallBatchData.data as TwitchStream[])];
-                  }
-                } else {
-                  console.log(`Small batch ${k+1} failed: ${smallBatchResponse.status}`);
+                  allStreams.push(...smallBatchData.data);
                 }
               } catch (smallBatchError) {
-                console.error(`Error processing small batch ${k+1}:`, smallBatchError);
+                // Skip this smaller batch
               }
             }
-            
-            // Continue to the next main batch
-            continue;
           }
-          
-          console.error(`Failed batch ${i+1} due to malformed query params`);
-          continue; // Skip this batch but continue processing others
-        } else {
-          console.error(`Failed batch ${i+1} with status ${response.status}`);
-          continue; // Skip this batch but continue processing others
+          continue;
         }
-      }
-      
-      const data = await response.json();
-      
-      if (!data.data || !Array.isArray(data.data)) {
-        console.error('Unexpected response format from Twitch API:', JSON.stringify(data).slice(0, 200) + '...');
-        continue; // Skip this batch but continue with others
-      }
-      
-      console.log(`Batch ${i+1}: Found ${data.data.length} live streams`);
-      
-      // Log the first few streams for debugging
-      if (data.data.length > 0) {
-        data.data.slice(0, 3).forEach((stream: TwitchStream, idx: number) => {
-          console.log(`Stream ${idx+1}: ${stream.user_name} - "${stream.title.substring(0, 50)}..."`);
+        
+        const data = await response.json();
+        
+        if (!data || !data.data) {
+          continue;
+        }
+        
+        // Add streams from this batch to our results
+        data.data.forEach((stream: any, idx: number) => {
+          allStreams.push(stream);
         });
+      } catch (error) {
+        // Skip this batch
       }
-      
-      allStreams = [...allStreams, ...(data.data as TwitchStream[])];
-    } catch (error) {
-      console.error(`Error processing batch ${i+1}:`, error);
-      // Continue with next batch rather than failing completely
     }
+    
+    return allStreams;
+  } catch (error) {
+    return [];
   }
-  
-  console.log(`Total live streams found: ${allStreams.length}`);
-  return allStreams;
 }
 
 export async function GET(
@@ -257,119 +209,110 @@ export async function GET(
     // Properly await params in Next.js 13+ API routes
     const params = await Promise.resolve(context.params);
     const serverId = params.serverId;
-    console.log(`Fetching streams for server ID: ${serverId}`);
-    
-    // Get server name for context
-    const serverName = await getServerName(serverId);
-    console.log(`Server name resolved to: ${serverName}`);
     
     // Initialize Supabase server client
     const supabase = createServerClient();
     
-    // Query Supabase for streamers on this server - get most recent records with limit
-    const { data: streamersData, error: supabaseError } = await supabase
-      .from('twitch_streams')
-      .select('streamer_name')
-      .eq('serverId', serverId)
-      .order('created_at', { ascending: false })
-      .limit(100);  // Limit to 100 streamers to avoid too many API calls
+    // Check for server in database
+    const { data: serverData, error: serverError } = await supabase
+      .from('servers')
+      .select('name')
+      .eq('id', serverId)
+      .single();
     
-    if (supabaseError) {
-      console.error('Supabase error:', supabaseError);
-      throw new Error(`Failed to fetch streamers from database: ${supabaseError.message}`);
+    if (serverError) {
+      return NextResponse.json({ error: 'Server not found' }, { status: 404 });
     }
     
-    console.log(`Found ${streamersData?.length || 0} streamers in Supabase for server: ${serverName}`);
+    const serverName = serverData?.name;
+    
+    // Fetch streamers associated with this server
+    const { data: streamersData, error: supabaseError } = await supabase
+      .from('streamers')
+      .select('name')
+      .eq('server_id', serverId);
+      
+    if (supabaseError) {
+      return NextResponse.json({ error: 'Database error' }, { status: 500 });
+    }
     
     if (!streamersData || streamersData.length === 0) {
       return NextResponse.json([]);
     }
     
-    // Extract unique streamer names
-    const streamerNames = [...new Set(streamersData.map(s => s.streamer_name))];
-    console.log(`Unique streamer names: ${streamerNames.slice(0, 20).join(', ')}${streamerNames.length > 20 ? '...' : ''}`);
+    // Extract streamer names from data
+    const streamerNames = [...new Set(streamersData.map(s => s.name.toLowerCase()))];
     
-    // Get Twitch token
-    const accessToken = await getTwitchToken();
-    console.log('Successfully obtained Twitch access token');
+    // Get access token for Twitch API
+    const tokenResponse = await fetch('https://id.twitch.tv/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: process.env.TWITCH_CLIENT_ID || '',
+        client_secret: process.env.TWITCH_CLIENT_SECRET || '',
+        grant_type: 'client_credentials'
+      })
+    });
     
-    // Fetch live stream data for these streamers
-    const streams = await fetchStreamsByUsernames(accessToken, streamerNames);
-    console.log(`Retrieved ${streams.length} live streams from Twitch API`);
+    if (!tokenResponse.ok) {
+      return NextResponse.json({ error: 'Failed to authenticate with Twitch' }, { status: 502 });
+    }
     
-    // If no streams found, log some additional debug info
+    const tokenData = await tokenResponse.json();
+    const accessToken = tokenData.access_token;
+    
+    // Check which streamers are currently live
+    const streams = await checkLiveStreamers(streamerNames, accessToken);
+    
     if (streams.length === 0) {
-      console.log('No live streams found. Sample streamer names:', streamerNames.slice(0, 5));
-      
-      // Check if at least one streamer is valid by getting their user info
-      try {
-        const sampleUser = streamerNames[0];
-        if (sampleUser) {
-          console.log(`Checking if user exists: ${sampleUser}`);
-          const response = await fetch(
-            `https://api.twitch.tv/helix/users?login=${sampleUser}`,
-            {
-              headers: {
-                'Client-ID': process.env.TWITCH_CLIENT_ID!,
-                'Authorization': `Bearer ${accessToken}`,
-              },
-            }
-          );
-          
-          if (response.ok) {
-            const userData = await response.json();
-            console.log(`User check response: ${JSON.stringify(userData)}`);
-          } else {
-            console.log(`User check failed: ${response.status} ${response.statusText}`);
-          }
-        }
-      } catch (e) {
-        console.error('Error checking sample user:', e);
-      }
-      
       return NextResponse.json([]);
     }
     
-    // Fetch profile images for streamers
-    const userIds = streams.map(stream => stream.user_id);
-    const userProfiles = await fetchUserProfiles(accessToken, userIds);
-    console.log(`Retrieved ${userProfiles.length} user profiles`);
-
-    // Log the first profile image URL for debugging
-    if (userProfiles.length > 0) {
-      console.log(`Sample profile image URL: ${userProfiles[0].profile_image_url}`);
+    // Get user profiles to retrieve profile images
+    const userIds = streams.map((stream: any) => stream.user_id);
+    const userIdChunks = [];
+    
+    for (let i = 0; i < userIds.length; i += 100) {
+      userIdChunks.push(userIds.slice(i, i + 100));
     }
     
-    // Merge profile images with stream data
-    const enhancedStreams = streams.map(stream => {
-      const profile = userProfiles.find(user => user.id === stream.user_id);
+    const userProfiles: any[] = [];
+    
+    for (const chunk of userIdChunks) {
+      const userParams = chunk.map(id => `id=${id}`).join('&');
       
-      // Log for debugging
-      if (profile) {
-        console.log(`Found profile for ${stream.user_name}`);
-      } else {
-        console.log(`No profile found for ${stream.user_name}`);
+      const usersResponse = await fetch(`https://api.twitch.tv/helix/users?${userParams}`, {
+        headers: {
+          'Client-ID': process.env.TWITCH_CLIENT_ID || '',
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+      
+      if (usersResponse.ok) {
+        const userData = await usersResponse.json();
+        userProfiles.push(...userData.data);
       }
+    }
+    
+    // Combine stream data with profile images
+    const enhancedStreams = streams.map((stream: any) => {
+      const profile = userProfiles.find((prof: any) => prof.id === stream.user_id);
       
-      // Make sure thumbnail_url exists
-      if (!stream.thumbnail_url) {
-        console.log(`No thumbnail URL for ${stream.user_name}`);
-      } else {
-        console.log(`Thumbnail URL for ${stream.user_name}: ${stream.thumbnail_url}`);
-      }
-      
-      return {
+      const result = {
         ...stream,
-        profile_image_url: profile ? profile.profile_image_url : null
+        profile_image_url: profile?.profile_image_url
       };
+      
+      // Handle potentially missing thumbnail
+      if (!result.thumbnail_url) {
+        result.thumbnail_url = 'https://static-cdn.jtvnw.net/ttv-static/404_preview-440x248.jpg';
+      }
+      
+      return result;
     });
     
     return NextResponse.json(enhancedStreams);
   } catch (error) {
-    console.error('Error in streams API:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to fetch streams' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 } 

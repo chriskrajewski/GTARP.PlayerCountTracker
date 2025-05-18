@@ -67,7 +67,6 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
         setError(null);
         setDetailedError(null);
         
-        console.log(`Fetching streams for server ID: ${serverId}`);
         const response = await fetch(`/api/streams/${serverId}`);
         
         // Handle different error cases
@@ -94,10 +93,9 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
         }
         
         const data = await response.json();
-        console.log(`Retrieved ${data.length} streams from API`);
         setStreams(data);
       } catch (err) {
-        console.error("Error fetching streams:", err);
+        // Silent error in production
         if (err instanceof Error) {
           setError(err.message);
         } else {
@@ -175,18 +173,18 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
     return (
       <div className="space-y-6">
         <div className="flex justify-center items-center py-10">
-          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          <Loader2 className="h-10 w-10 animate-spin text-purple-400" />
         </div>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {[...Array(6)].map((_, i) => (
-            <Card key={i} className="overflow-hidden">
-              <Skeleton className="h-[180px] w-full" />
+            <Card key={i} className="overflow-hidden bg-gray-800 border-gray-700">
+              <Skeleton className="h-[180px] w-full bg-gray-700" />
               <CardContent className="p-4">
-                <Skeleton className="h-4 w-3/4 mb-2" />
-                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4 mb-2 bg-gray-700" />
+                <Skeleton className="h-4 w-full bg-gray-700" />
                 <div className="flex justify-between items-center mt-4">
-                  <Skeleton className="h-8 w-8 rounded-full" />
-                  <Skeleton className="h-4 w-16" />
+                  <Skeleton className="h-8 w-8 rounded-full bg-gray-700" />
+                  <Skeleton className="h-4 w-16 bg-gray-700" />
                 </div>
               </CardContent>
             </Card>
@@ -198,34 +196,26 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
 
   if (error) {
     return (
-      <div className="p-8 text-center border rounded-lg bg-muted/20">
-        <div className="text-destructive mb-2 text-lg">Error</div>
-        <p className="mb-2">{error}</p>
+      <div className="p-6 bg-gray-800 border border-gray-700 rounded-md text-gray-100">
+        <h3 className="text-lg font-semibold mb-2">Could not load streams</h3>
+        <p className="text-gray-300 mb-4">{error}</p>
         {detailedError && (
-          <p className="text-sm text-muted-foreground mt-2 mb-4">
-            Details: {detailedError}
-          </p>
+          <div className="mt-2 p-4 bg-gray-900 border border-gray-700 rounded text-gray-400 text-sm overflow-x-auto">
+            <pre>{detailedError}</pre>
+          </div>
         )}
-        <p className="text-sm text-muted-foreground mt-4">
-          Make sure you have the correct Twitch API credentials in your environment variables.
-        </p>
       </div>
     );
   }
 
   if (streams.length === 0) {
     return (
-      <div className="p-10 text-center border rounded-lg bg-muted/20">
-        <h2 className="text-xl font-semibold mb-2">No Live Streams</h2>
-        <p className="text-muted-foreground">
-          There are currently no live streamers broadcasting from {serverName}.
-        </p>
-        <p className="text-muted-foreground mt-2">
-          Streamers from this server may be offline right now. Check back later or try another server.
-        </p>
-        <p className="text-muted-foreground mt-4 text-sm">
-          <Twitch className="h-4 w-4 inline mr-2 text-[#9146FF]" />
-          Twitch stream status is updated in real-time
+      <div className="py-12 px-6 bg-gray-800 border border-gray-700 rounded-md text-center">
+        <Twitch className="h-10 w-10 mx-auto mb-4 text-purple-400 opacity-50" />
+        <h3 className="text-lg font-semibold mb-2 text-gray-100">No Active Streams</h3>
+        <p className="text-gray-400 max-w-md mx-auto">
+          There are currently no streamers broadcasting live content for {serverName}.
+          Check back later or explore other servers!
         </p>
       </div>
     );
@@ -233,61 +223,67 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-lg font-medium">{streams.length} Live {streams.length === 1 ? 'Stream' : 'Streams'}</h2>
-        
-        {/* Multi-stream controls */}
-        <div className="flex items-center gap-3">
-          {isMultiSelectMode && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm">{selectedStreams.length} selected</span>
-              <button
-                onClick={launchMultiStream}
-                disabled={selectedStreams.length === 0}
-                className={`px-3 py-1.5 rounded text-sm font-medium ${
-                  selectedStreams.length === 0 
-                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
-                    : 'bg-[#9146FF] text-white hover:bg-[#7a30e0]'
-                }`}
-              >
-                <ExternalLink className="h-4 w-4 inline mr-1" />
-                Watch Multi-Stream
-              </button>
-            </div>
-          )}
+      {/* Multi-stream controls */}
+      <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
+        <div className="flex gap-2 items-center">
           <button
             onClick={toggleMultiSelectMode}
-            className={`px-3 py-1.5 rounded text-sm font-medium ${
-              isMultiSelectMode 
-                ? 'bg-red-500 text-white hover:bg-red-600' 
-                : 'bg-muted hover:bg-muted/80'
-            }`}
+            className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
+            style={{
+              backgroundColor: isMultiSelectMode ? '#004D61' : '#18181b',
+              color: '#FFFFFF',
+              border: isMultiSelectMode ? '1px solid #004D61' : '1px solid #26262c',
+              borderRadius: '4px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'background-color 0.2s ease'
+            }}
           >
-            {isMultiSelectMode ? 'Cancel Selection' : 'Select Streams to Mutli-Stream'}
+            {isMultiSelectMode 
+              ? <span className="flex items-center gap-1"><X className="h-4 w-4" /> Cancel</span> 
+              : "Select Multiple Streams"}
           </button>
+          
+          {isMultiSelectMode && (
+            <button
+              onClick={launchMultiStream}
+              disabled={selectedStreams.length === 0}
+              className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
+              style={{
+                backgroundColor: selectedStreams.length === 0 ? '#26262c' : '#004D61',
+                color: selectedStreams.length === 0 ? '#ADADB8' : '#FFFFFF',
+                border: selectedStreams.length === 0 ? '1px solid #26262c' : '1px solid #004D61',
+                borderRadius: '4px',
+                fontWeight: 600,
+                cursor: selectedStreams.length === 0 ? 'not-allowed' : 'pointer',
+                opacity: selectedStreams.length === 0 ? 0.7 : 1,
+                transition: 'background-color 0.2s ease'
+              }}
+            >
+              Launch Multi-Stream ({selectedStreams.length})
+            </button>
+          )}
         </div>
+        
+        <p className="text-sm text-gray-400">
+          {streams.length} {streams.length === 1 ? "stream" : "streams"} live
+        </p>
       </div>
       
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {streams.map((stream) => (
-          <StreamCard 
-            key={stream.id} 
-            stream={stream} 
+          <StreamCard
+            key={stream.id}
+            stream={stream}
+            onClick={() => setActiveStream(stream)}
             isMultiSelectMode={isMultiSelectMode}
             isSelected={selectedStreams.some(s => s.id === stream.id)}
             onSelect={toggleStreamSelection}
-            onClick={() => !isMultiSelectMode && setActiveStream(stream)}
           />
         ))}
       </div>
-
-      {/* Stream Modal */}
-      {activeStream && (
-        <StreamModal 
-          stream={activeStream} 
-          onClose={() => setActiveStream(null)} 
-        />
-      )}
+      
+      {activeStream && <StreamModal stream={activeStream} onClose={() => setActiveStream(null)} />}
     </div>
   );
 }
@@ -305,19 +301,29 @@ function StreamCard({
   isSelected?: boolean;
   onSelect?: (stream: StreamData) => void;
 }) {
-  // Replace template variables in thumbnail URL with appropriate dimensions
+  // Format the stream thumbnail URL
   const thumbnailUrl = stream.thumbnail_url
-    ? stream.thumbnail_url
-        .replace('{width}', '440')
-        .replace('{height}', '248')
-    : '/placeholder-stream.jpg'; // Fallback image
-    
-  // Format viewer count
+    .replace('{width}', '440')
+    .replace('{height}', '248');
+  
+  // Format viewer count with commas for thousands
   const formatViewerCount = (count: number): string => {
-    if (count >= 1000) {
-      return `${(count / 1000).toFixed(1)}K`;
+    return count > 999 ? `${(count / 1000).toFixed(1)}K` : count.toString();
+  };
+  
+  // Calculate and format stream duration
+  const formatStreamDuration = (startTimeString: string): string => {
+    const startTime = new Date(startTimeString);
+    const now = new Date();
+    const diffMs = now.getTime() - startTime.getTime();
+    const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (diffHrs > 0) {
+      return `${diffHrs}h ${diffMins}m`;
+    } else {
+      return `${diffMins}m`;
     }
-    return count.toString();
   };
   
   const handleCardClick = () => {
@@ -329,104 +335,81 @@ function StreamCard({
   };
   
   return (
-    <Card className={`overflow-hidden hover:shadow-md transition-shadow relative group ${
-      isSelected ? 'ring-2 ring-[#9146FF] ring-offset-2' : ''
-    }`}>
-      <div 
-        className="cursor-pointer"
-        onClick={handleCardClick}
-      >
-        <div className="relative aspect-video">
-          {/* Use regular img tag for thumbnail for better Safari compatibility */}
-          <img 
-            src={thumbnailUrl} 
-            alt={`${stream.user_name}'s stream`}
-            loading="lazy"
-            className="absolute inset-0 w-full h-full object-cover"
-          />
-          <div className="absolute top-2 right-2 bg-red-500 text-white px-2 py-0.5 text-xs font-semibold rounded">
-            LIVE
-          </div>
-          <div className="absolute bottom-2 left-2 bg-black/70 text-white px-2 py-0.5 text-xs font-semibold rounded flex items-center">
-            <div className="w-2 h-2 bg-red-500 rounded-full mr-1.5"></div>
-            {formatViewerCount(stream.viewer_count)} viewers
-          </div>
-          
-          {/* Selection indicator for multi-select mode */}
-          {isMultiSelectMode && (
-            <div className="absolute top-2 left-2 bg-black/70 text-white p-1 rounded-full">
-              <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
-                isSelected ? 'bg-[#9146FF]' : 'bg-white/20'
-              }`}>
-                {isSelected && (
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
-                )}
-              </div>
-            </div>
-          )}
-          
-          {/* Play button overlay */}
-          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-            <div className="bg-white/20 p-4 rounded-full">
-              <Twitch className="h-8 w-8 text-white" />
-            </div>
-          </div>
+    <Card 
+      className="overflow-hidden cursor-pointer group relative transition-all duration-200 hover:-translate-y-1"
+      style={{ 
+        backgroundColor: '#0e0e10',
+        borderColor: isSelected ? '#004D61' : '#26262c',
+        borderWidth: isSelected ? '2px' : '1px',
+        borderStyle: 'solid',
+        borderRadius: '4px',
+      }}
+      onClick={(e) => {
+        if (isMultiSelectMode && onSelect) {
+          e.preventDefault();
+          e.stopPropagation();
+          onSelect(stream);
+        } else {
+          onClick();
+        }
+      }}
+    >
+      {/* Stream thumbnail with gradient overlay */}
+      <div className="relative h-[180px] w-full overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/40 to-transparent opacity-60 group-hover:opacity-30 transition-opacity z-10" />
+        <img
+          src={thumbnailUrl}
+          alt={`${stream.user_name} streaming ${stream.game_name}`}
+          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+        />
+        
+        {/* Stream duration */}
+        <div className="absolute top-2 right-2 z-20 px-2 py-1 text-xs font-medium text-white rounded" style={{ backgroundColor: 'rgba(20, 20, 20, 0.95)' }}>
+          {formatStreamDuration(stream.started_at)}
+        </div>
+        
+        {/* Viewer count */}
+        <div className="absolute bottom-2 right-2 z-20 px-2 py-1 text-xs font-medium text-white rounded flex items-center gap-1" style={{ backgroundColor: '#FF0000' }}>
+          <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></span>
+          {formatViewerCount(stream.viewer_count)}
         </div>
       </div>
       
       <CardContent className="p-4">
-        <div className="flex items-start gap-3">
-          {stream.profile_image_url ? (
-            <div className="flex-shrink-0 w-10 h-10 mt-1">
-              {/* Use regular img tag for profile image for better Safari compatibility */}
-              <img 
-                src={stream.profile_image_url}
-                alt={stream.user_name}
-                loading="lazy"
-                className="w-10 h-10 rounded-full"
-              />
-            </div>
-          ) : (
-            <div className="flex-shrink-0 w-10 h-10 mt-1 bg-muted rounded-full flex items-center justify-center">
-              <Twitch className="h-5 w-5 text-[#9146FF]" />
-            </div>
-          )}
+        {/* Stream title */}
+        <h3 className="font-semibold text-white line-clamp-2 min-h-[48px] mb-2" title={stream.title}>
+          {stream.title}
+        </h3>
+        
+        {/* Streamer info and game */}
+        <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center gap-2 text-gray-300">
+            <Twitch className="h-4 w-4" style={{ color: '#9146FF' }} />
+            <span>{stream.user_name}</span>
+          </div>
           
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-sm truncate hover:text-primary">
-              <a 
-                href={`https://twitch.tv/${stream.user_name}`} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="hover:underline flex items-center"
-                onClick={(e) => isMultiSelectMode && e.preventDefault()}
-              >
-                {stream.user_name}
-                <Twitch className="h-3.5 w-3.5 ml-1.5 text-[#9146FF]" />
-              </a>
-            </h3>
-            <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
-              {stream.title}
-            </p>
-            
-            <div className="mt-3 flex flex-wrap gap-1">
-              {stream.tags && stream.tags.slice(0, 3).map((tag, index) => (
-                <span 
-                  key={index} 
-                  className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-muted"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
+          <div className="text-xs py-1 px-2 rounded text-white" style={{ backgroundColor: 'rgba(20, 20, 20, 0.95)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+            {stream.game_name}
           </div>
         </div>
         
-        <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
-          Playing: {stream.game_name}
-        </div>
+        {/* Multi-selection checkbox */}
+        {isMultiSelectMode && (
+          <div 
+            className="absolute top-2 left-2 z-20 h-5 w-5 rounded flex items-center justify-center"
+            style={{ 
+              backgroundColor: isSelected ? '#004D61' : 'rgba(20, 20, 20, 0.95)',
+              border: isSelected ? '1px solid #004D61' : '1px solid rgba(255, 255, 255, 0.3)',
+              boxShadow: '0 0 0 1px rgba(0,0,0,0.15)'
+            }}
+          >
+            {isSelected && (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="#FFFFFF">
+                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+              </svg>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -456,28 +439,29 @@ function StreamModal({ stream, onClose }: { stream: StreamData, onClose: () => v
   const obsChannelName = encodedUsername;
   
   return (
-    <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center">
-      <div className="relative w-full h-[90vh] max-w-[95vw] flex flex-col">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-6">
+      <div className="relative w-full h-[80vh] max-w-5xl flex flex-col overflow-hidden rounded-xl shadow-2xl">
         <button 
-          className="absolute top-4 right-4 z-10 p-2 bg-black/50 rounded-full text-white hover:bg-black/80 transition-colors"
+          className="absolute top-4 right-4 z-10 p-2 bg-[#0e0e10]/60 rounded-full text-white hover:bg-[#18181b]/80 transition-colors border border-[#26262c]/50"
           onClick={onClose}
         >
-          <X className="h-6 w-6" />
+          <X className="h-5 w-5" />
         </button>
         
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 overflow-hidden rounded-t-xl">
           {/* Main content area with proper video aspect ratio */}
           <div className="flex flex-col flex-1">
             {/* Stream header */}
-            <div className="bg-black p-4 flex items-center">
+            <div className="bg-[#0e0e10]/80 backdrop-blur-sm p-3 flex items-center border-b border-[#26262c]/50">
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-white flex items-center">
+                <h3 className="text-base font-semibold text-white flex items-center">
                   {stream.user_name}
-                  <span className="ml-2 text-xs bg-red-600 text-white px-2 py-0.5 rounded">LIVE</span>
+                  <span className="ml-2 text-xs bg-red-600/90 text-white px-1.5 py-0.5 rounded-sm">LIVE</span>
                 </h3>
-                <p className="text-gray-300 text-sm line-clamp-1">{stream.title}</p>
+                <p className="text-[#EFEFF1] text-xs line-clamp-1">{stream.title}</p>
               </div>
-              <div className="text-gray-300 text-sm">
+              <div className="text-[#ADADB8] text-xs flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse"></span>
                 {stream.viewer_count.toLocaleString()} viewers
               </div>
             </div>
@@ -494,13 +478,13 @@ function StreamModal({ stream, onClose }: { stream: StreamData, onClose: () => v
           </div>
           
           {/* Chat sidebar with OBS Chat as requested */}
-          <div className="w-[340px] hidden md:flex flex-col flex-shrink-0 border-l border-black bg-black">
-            <div className="p-2 bg-black text-white text-sm font-medium border-b border-black flex justify-between items-center">
-              <span>STREAM CHAT</span>
+          <div className="w-[280px] hidden md:flex flex-col flex-shrink-0 border-l border-[#26262c]/50 bg-[#0e0e10]/80 backdrop-blur-sm">
+            <div className="p-2 bg-[#18181b]/90 text-white text-xs font-medium border-b border-[#26262c]/50 flex justify-between items-center backdrop-blur-sm">
+              <span className="text-[#EFEFF1]">STREAM CHAT</span>
             </div>
             
             {/* Custom container for OBS Chat with forced black background */}
-            <div className="flex-1 bg-black overflow-hidden relative">
+            <div className="flex-1 bg-black/90 overflow-hidden relative">
               <iframe 
                 className="w-full h-full border-0"
                 srcDoc={`
@@ -511,7 +495,7 @@ function StreamModal({ stream, onClose }: { stream: StreamData, onClose: () => v
                         html, body {
                           margin: 0;
                           padding: 0;
-                          background-color: #000000;
+                          background-color: rgba(0, 0, 0, 0.85);
                           height: 100%;
                           width: 100%;
                           overflow: hidden;
@@ -524,7 +508,7 @@ function StreamModal({ stream, onClose }: { stream: StreamData, onClose: () => v
                           left: 0;
                           right: 0;
                           bottom: 0;
-                          background-color: #000000;
+                          background-color: rgba(0, 0, 0, 0.85);
                         }
                         
                         /* Style the iframe */
@@ -532,7 +516,7 @@ function StreamModal({ stream, onClose }: { stream: StreamData, onClose: () => v
                           border: none;
                           width: 100%;
                           height: 100%;
-                          background-color: #000000;
+                          background-color: rgba(0, 0, 0, 0.85);
                           position: relative;
                           z-index: 1;
                         }
@@ -544,8 +528,7 @@ function StreamModal({ stream, onClose }: { stream: StreamData, onClose: () => v
                           left: 0;
                           width: 100%;
                           height: 100%;
-                          background-color: #000000;
-                          opacity: 0.2;
+                          background-color: rgba(0, 0, 0, 0.2);
                           z-index: 2;
                           pointer-events: none;
                         }
@@ -555,20 +538,20 @@ function StreamModal({ stream, onClose }: { stream: StreamData, onClose: () => v
                       <div id="chat-container">
                         <iframe 
                           id="obs-chat"
-                          src="https://nightdev.com/hosted/obschat/?theme=dark&channel=${obsChannelName}&fade=false&bot_activity=true&prevent_clipping=true&background=000000&background_opacity=100&text_color=ffffff&text_opacity=100"
+                          src="https://nightdev.com/hosted/obschat/?theme=dark&channel=${obsChannelName}&fade=false&bot_activity=true&prevent_clipping=true&background=000000&background_opacity=85&text_color=ffffff&text_opacity=100"
                           allowfullscreen="true"
                         ></iframe>
                         <div id="black-overlay"></div>
                       </div>
                       
                       <script>
-                        // Add a script to force black background
+                        // Add a script to force transparent background
                         document.addEventListener('DOMContentLoaded', function() {
                           // Reference to the iframe
                           const obsChat = document.getElementById('obs-chat');
                           
-                          // Function to check and apply black background
-                          function forceBlackBackground() {
+                          // Function to check and apply transparent background
+                          function forceTransparentBackground() {
                             try {
                               // Try to access the iframe's document
                               const iframeDoc = obsChat.contentDocument || obsChat.contentWindow.document;
@@ -577,25 +560,25 @@ function StreamModal({ stream, onClose }: { stream: StreamData, onClose: () => v
                               const style = document.createElement('style');
                               style.textContent = \`
                                 html, body, div, iframe, ul, li, p, span {
-                                  background-color: #000000 !important;
-                                  background: #000000 !important;
+                                  background-color: rgba(0, 0, 0, 0.85) !important;
+                                  background: rgba(0, 0, 0, 0.85) !important;
                                 }
                                 
                                 /* Target specific OBS chat elements */
                                 #chat-wrapper, #chat-container {
-                                  background-color: #000000 !important;
-                                  background: #000000 !important;
+                                  background-color: rgba(0, 0, 0, 0.85) !important;
+                                  background: rgba(0, 0, 0, 0.85) !important;
                                 }
                                 
-                                /* Force any potential white elements to be black */
+                                /* Force any potential white elements to be transparent black */
                                 [style*="background-color: white"],
                                 [style*="background-color: #fff"],
                                 [style*="background-color: rgb(255, 255, 255)"],
                                 [style*="background: white"],
                                 [style*="background: #fff"],
                                 [style*="background: rgb(255, 255, 255)"] {
-                                  background-color: #000000 !important;
-                                  background: #000000 !important;
+                                  background-color: rgba(0, 0, 0, 0.85) !important;
+                                  background: rgba(0, 0, 0, 0.85) !important;
                                 }
                               \`;
                               
@@ -603,22 +586,20 @@ function StreamModal({ stream, onClose }: { stream: StreamData, onClose: () => v
                               iframeDoc.head.appendChild(style);
                               
                               // Also directly set background color on body and html
-                              iframeDoc.documentElement.style.backgroundColor = '#000000';
-                              iframeDoc.body.style.backgroundColor = '#000000';
-                              
-                              console.log('Applied black background to OBS chat');
+                              iframeDoc.documentElement.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
+                              iframeDoc.body.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
                             } catch (err) {
-                              console.error('Failed to apply black background:', err);
+                              // Silent error in production
                             }
                           }
                           
-                          // Apply black background when iframe loads
-                          obsChat.onload = forceBlackBackground;
+                          // Apply transparent background when iframe loads
+                          obsChat.onload = forceTransparentBackground;
                           
                           // Also try applying it repeatedly at first
                           let attempts = 0;
                           const interval = setInterval(function() {
-                            forceBlackBackground();
+                            forceTransparentBackground();
                             attempts++;
                             
                             if (attempts >= 10) {
@@ -634,13 +615,13 @@ function StreamModal({ stream, onClose }: { stream: StreamData, onClose: () => v
               ></iframe>
             </div>
             
-            <div className="px-2 py-2 bg-black border-t border-black text-sm text-center flex items-center justify-center gap-2">
-              <Twitch className="h-4 w-4 text-[#9146FF]" />
+            <div className="px-3 py-2 bg-[#18181b]/90 backdrop-blur-sm border-t border-[#26262c]/50 text-sm text-center flex items-center justify-center gap-2">
+              <Twitch className="h-3.5 w-3.5 text-[#004D61]" />
               <a 
                 href={`https://www.twitch.tv/${encodedUsername}/`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[#9146FF] hover:underline text-sm"
+                className="text-[#004D61] hover:text-[#003a4d] hover:underline text-xs transition-colors"
               >
                 Watch on Twitch
               </a>
@@ -649,12 +630,12 @@ function StreamModal({ stream, onClose }: { stream: StreamData, onClose: () => v
         </div>
         
         {/* Mobile chat button */}
-        <div className="md:hidden p-2 bg-black text-center">
+        <div className="md:hidden p-2 bg-[#0e0e10]/80 backdrop-blur-sm border-t border-[#26262c]/50 text-center rounded-b-xl">
           <a 
             href={`https://www.twitch.tv/popout/${encodedUsername}/chat?popout=`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-block py-1.5 px-4 bg-[#9146FF] text-white rounded text-sm"
+            className="inline-block py-1.5 px-3 bg-[#004D61]/90 hover:bg-[#003a4d] text-white rounded-md font-medium text-xs transition-colors"
           >
             Open Chat
           </a>

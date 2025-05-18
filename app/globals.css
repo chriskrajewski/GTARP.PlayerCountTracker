@@ -41,40 +41,41 @@
     --chart-5: 40 70% 50%;
   }
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+  /* Force dark mode with exact colors */
+  html, body, .dark {
+    --background: 0 0% 0% !important; /* Pure black background #000000 */
+    --foreground: 0 0% 100% !important; /* Pure white text #FFFFFF */
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 240 3.7% 5.9% !important; /* Dark card bg #0e0e10 */
+    --card-foreground: 0 0% 100% !important;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 240 3.7% 5.9% !important; /* Dark popover bg #0e0e10 */
+    --popover-foreground: 0 0% 100% !important;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 192 100% 19% !important; /* Teal #004D61 */
+    --primary-foreground: 0 0% 100% !important;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 240 5.9% 10% !important; /* Slightly lighter than dark bg #18181b */
+    --secondary-foreground: 0 0% 100% !important;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 240 5.9% 10% !important; /* #18181b */
+    --muted-foreground: 240 5% 64.9% !important; /* Light gray text */
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 192 100% 19% !important; /* Teal for accents #004D61 */
+    --accent-foreground: 0 0% 100% !important;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6% !important;
+    --destructive-foreground: 0 0% 100% !important;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --border: 240 3.7% 15.9% !important; /* Darker border color #26262c */
+    --input: 240 3.7% 15.9% !important;
+    --ring: 192 100% 19% !important; /* Teal for focus rings #004D61 */
 
-    --chart-1: 210 100% 60%;
-    --chart-2: 160 100% 50%;
-    --chart-3: 10 100% 60%;
-    --chart-4: 280 100% 60%;
-    --chart-5: 40 100% 60%;
+    --chart-1: 210 100% 60% !important;
+    --chart-2: 160 100% 50% !important;
+    --chart-3: 10 100% 60% !important;
+    --chart-4: 280 100% 60% !important;
+    --chart-5: 40 100% 60% !important;
   }
 }
 
@@ -84,7 +85,30 @@
   }
   body {
     @apply bg-background text-foreground;
+    background-color: #000000 !important;
+    color: #FFFFFF !important;
   }
+}
+
+/* Color utility classes */
+.twitch-dark-bg {
+  background-color: #0e0e10 !important;
+}
+
+.twitch-secondary-bg {
+  background-color: #18181b !important;
+}
+
+.twitch-purple {
+  color: #004D61 !important;
+}
+
+.twitch-purple-bg {
+  background-color: #004D61 !important;
+}
+
+.twitch-border {
+  border-color: #26262c !important;
 }
 
 /* Custom styles for react-grid-layout */
@@ -92,7 +116,7 @@
   position: absolute;
   width: 20px !important;
   height: 20px !important;
-  background-color: #9146FF !important;
+  background-color: #004D61 !important;
   opacity: 0 !important;
   z-index: 30 !important;
   border-radius: 3px;
@@ -109,7 +133,7 @@
 
 /* Enhance all resize handles to be more visible */
 .react-resizable-handle::after {
-  border-color: #9146FF !important;
+  border-color: #004D61 !important;
   border-width: 3px !important;
   width: 14px !important;
   height: 14px !important;
@@ -246,32 +270,149 @@
 
 /* Visual indicator for dragging and resizing */
 .react-grid-item.react-grid-placeholder {
-  background-color: #9146FF !important;
+  background-color: #004D61 !important;
   opacity: 0.3 !important;
-  border-radius: 8px;
 }
 
-/* Make minimum size for layout items */
-
-/* Show hint style - temporarily highlight drag and resize handles */
 .show-hint .drag-handle {
   opacity: 1 !important;
-  animation: pulse-hint 2s infinite;
+  animation: pulse-hint 1.5s infinite;
 }
 
 .show-hint .react-resizable-handle {
   opacity: 0.8 !important;
-  animation: pulse-hint 2s infinite;
+  animation: pulse-hint 1.5s infinite;
 }
 
 @keyframes pulse-hint {
-  0% {
-    box-shadow: 0 0 0 0 rgba(145, 70, 255, 0.7);
-  }
-  70% {
-    box-shadow: 0 0 0 10px rgba(145, 70, 255, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(145, 70, 255, 0);
-  }
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.2); opacity: 1; }
+}
+
+/* MultiStream style Card and Buttons adapted for the entire site */
+.card, .custom-card {
+  background-color: #18181b !important;
+  border: 1px solid #26262c !important;
+  border-radius: 0.375rem !important;
+  overflow: hidden !important;
+}
+
+.card-header, .custom-card-header {
+  padding: 0.75rem 1rem !important;
+  border-bottom: 1px solid #26262c !important;
+}
+
+.card-content, .custom-card-content {
+  padding: 1rem !important;
+}
+
+.btn, .custom-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 0.375rem !important;
+  font-weight: 500 !important;
+  transition: all 0.15s ease !important;
+}
+
+.btn-primary, .custom-btn-primary {
+  background-color: #004D61 !important;
+  color: white !important;
+}
+
+.btn-primary:hover, .custom-btn-primary:hover {
+  background-color: #003a4d !important;
+}
+
+.btn-secondary, .custom-btn-secondary {
+  background-color: #26262c !important;
+  color: white !important;
+}
+
+.btn-secondary:hover, .custom-btn-secondary:hover {
+  background-color: #3a3a43 !important;
+}
+
+.nav-link, .custom-nav-link {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  padding: 0.5rem 1rem !important;
+  border-radius: 0.375rem !important;
+  color: rgba(255, 255, 255, 0.7) !important;
+  transition: all 0.15s ease !important;
+}
+
+.nav-link:hover, .custom-nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: white !important;
+}
+
+/* Global Twitch theme overrides - to enforce consistency */
+body {
+  background-color: #000000 !important;
+  color: #FFFFFF !important;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: #FFFFFF !important;
+}
+
+a {
+  color: #004D61 !important;
+}
+
+a:hover {
+  color: #003a4d !important;
+}
+
+/* Force Twitch-style headers on all pages */
+header, 
+nav, 
+[class*="header"], 
+[class*="Header"], 
+[role="banner"] {
+  background-color: #0e0e10 !important;
+  border-bottom: 1px solid #26262c !important;
+  color: white !important;
+}
+
+/* Force Twitch-style footers on all pages */
+footer, 
+[class*="footer"], 
+[class*="Footer"], 
+[role="contentinfo"] {
+  background-color: #0e0e10 !important;
+  border-top: 1px solid #26262c !important;
+  color: white !important;
+}
+
+/* Tables in Twitch-style */
+table {
+  background-color: #0e0e10 !important;
+  border-color: #26262c !important;
+}
+
+th {
+  background-color: #18181b !important;
+  color: white !important;
+  border-color: #26262c !important;
+}
+
+td {
+  border-color: #26262c !important;
+  color: white !important;
+}
+
+tr:hover {
+  background-color: #18181b !important;
+}
+
+/* Ensure links and buttons in tables maintain styling */
+td a, th a {
+  color: #004D61 !important;
+}
+
+td a:hover, th a:hover {
+  color: #003a4d !important;
 }

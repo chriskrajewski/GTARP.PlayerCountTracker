@@ -34,9 +34,7 @@ export function DataRefreshPopup() {
           setLatestRefresh(new Date(latestTimestamp))
         }
       } catch (err) {
-        console.error("Error loading refresh times:", err)
-        setError("Failed to load refresh information")
-      } finally {
+        // Silent error in production
         setIsLoading(false)
       }
     }

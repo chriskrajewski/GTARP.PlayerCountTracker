@@ -21,8 +21,24 @@ export default function RootLayout({
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <html lang="en">
+    <html lang="en" className="dark !bg-black" style={{ 
+      colorScheme: 'dark', 
+      backgroundColor: '#000000',
+      color: '#FFFFFF'
+    }}>
       <head>
+        {/* Force dark mode */}
+        <meta name="color-scheme" content="dark" />
+        <meta name="theme-color" content="#000000" />
+        <style dangerouslySetInnerHTML={{ __html: `
+          body {
+            background-color: #000000 !important;
+            color: #FFFFFF !important;
+          }
+          .dark {
+            color-scheme: dark !important;
+          }
+        `}} />
         <script src="https://cdn.jsdelivr.net/npm/@statsig/js-client@3/build/statsig-js-client+session-replay+web-analytics.min.js?apikey=client-Nu49JS6kPL97gZnvHVQZF64xQpf7aCGgRMdLm3wrEt5">
         </script>
         <Script src="https://www.googletagmanager.com/gtag/js?id=G-546BM3B67W" strategy="afterInteractive">
@@ -34,8 +50,13 @@ export default function RootLayout({
         `}
       </Script>
       </head>
-      <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="dark" disableTransitionOnChange>
+      <body className={`${inter.className} !bg-black !text-white`} style={{ 
+        backgroundColor: '#000000', 
+        color: '#FFFFFF',
+        margin: 0,
+        padding: 0
+      }}>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} forcedTheme="dark" disableTransitionOnChange>
           <Suspense>
             {children}
             <Analytics />

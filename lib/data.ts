@@ -516,79 +516,78 @@ export function getViewerStats(streamData: ViewerCountData[], serverId: string) 
 
 export async function getDataStartTimes(): Promise<DataStartInfo[]> {
   try {
-    // Check if we're in a browser environment
-    const isClient = typeof window !== "undefined"
-    const client = isClient ? supabase : createServerClient()
-
-    const { data, error } = await client
-      .from("data_start")
-      .select("server_id, start_date")
-      .order("server_id", { ascending: true })
-
-    if (error) {
-      console.error("Error fetching data start times:", error)
-      return []
-    }
-
-    return data || []
-  } catch (err) {
-    console.error("Error in getDataStartTimes:", err)
-    return []
+    // Fetch the earliest records for each server
+    const { data, error } = await supabase
+      .from('player_counts')
+      .select('server_id, created_at')
+      .order('created_at', { ascending: true });
+      
+    if (error) throw error;
+    
+    // Group by server_id and keep only the earliest entry per server
+    const serverMap = new Map<string, string>();
+    data?.forEach(item => {
+      if (!serverMap.has(item.server_id)) {
+        serverMap.set(item.server_id, item.created_at);
+      }
+    });
+    
+    // Convert to array of objects
+    const result: DataStartInfo[] = Array.from(serverMap.entries()).map(([server_id, created_at]) => ({
+      server_id,
+      started_at: created_at
+    }));
+    
+    return result;
+  } catch (error) {
+    // Silent error in production
+    throw new Error("Failed to fetch data start times");
   }
 }
 
 export async function getLastRefreshTimes(): Promise<LastRefreshInfo[]> {
   try {
-    // Check if we're in a browser environment
-    const isClient = typeof window !== "undefined"
-    const client = isClient ? supabase : createServerClient()
-
-    // This query gets the latest timestamp for each server_id
-    const { data, error } = await client
-      .from("player_counts")
-      .select("server_id, timestamp")
-      .order("timestamp", { ascending: false })
-
-    if (error) {
-      console.error("Error fetching last refresh times:", error)
-      return []
-    }
-
-    // Group by server_id and take only the most recent timestamp for each
-    const serverMap = new Map<string, string>()
-    data.forEach(item => {
+    // Fetch the most recent records for each server
+    const { data, error } = await supabase
+      .from('player_counts')
+      .select('server_id, created_at')
+      .order('created_at', { ascending: false });
+      
+    if (error) throw error;
+    
+    // Group by server_id and keep only the most recent entry per server
+    const serverMap = new Map<string, string>();
+    data?.forEach(item => {
       if (!serverMap.has(item.server_id)) {
-        serverMap.set(item.server_id, item.timestamp)
+        serverMap.set(item.server_id, item.created_at);
       }
-    })
-
-    // Convert the map to an array of objects
-    const lastRefreshData = Array.from(serverMap.entries()).map(([server_id, last_refresh]) => ({
+    });
+    
+    // Convert to array of objects
+    const result: LastRefreshInfo[] = Array.from(serverMap.entries()).map(([server_id, created_at]) => ({
       server_id,
-      last_refresh
-    }))
-
-    return lastRefreshData
-  } catch (err) {
-    console.error("Error in getLastRefreshTimes:", err)
-    return []
+      last_refresh: created_at
+    }));
+    
+    return result;
+  } catch (error) {
+    // Silent error in production
+    throw new Error("Failed to fetch last refresh times");
   }
 }
 
 // Add this new function to fetch server colors
 export async function getServerColors(): Promise<ServerColor[]> {
-  // Check if we're in a browser environment
-  const isClient = typeof window !== "undefined";
-  const client = isClient ? supabase : createServerClient();
-
-  const { data, error } = await client
-    .from("server_colors")
-    .select("server_id, color_hsl");
-
-  if (error) {
-    console.error("Error fetching server colors:", error);
+  try {
+    const { data, error } = await supabase
+      .from('server_colors')
+      .select('server_id, color_hsl');
+      
+    if (error) throw error;
+    
+    return data || [];
+  } catch (error) {
+    // Silent error in production
     return [];
   }
-
-  return data || [];
 }
