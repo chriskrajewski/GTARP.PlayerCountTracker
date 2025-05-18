@@ -61,7 +61,7 @@ export async function getAnonymizedCommits() {
       const response = await octokit.request('GET /repos/{owner}/{repo}/commits', {
         owner: repoOwner,
         repo: repoName,
-        per_page: 15, // Reduced to 15 for better performance
+        per_page: 30, // Increased to 30 to compensate for filtering out merge commits
         headers: {
           'X-GitHub-Api-Version': '2022-11-28'
         }
@@ -74,7 +74,21 @@ export async function getAnonymizedCommits() {
       // Sanitize and cache the commit data
       const sanitizedCommits = Array.isArray(response.data) 
         ? response.data
-            .filter(commit => !EXCLUDED_COMMIT_IDS.includes(commit.sha.substring(0, 8)))
+            // Filter out excluded commit IDs and merge pull requests
+            .filter(commit => {
+              // Filter out excluded commit IDs
+              if (EXCLUDED_COMMIT_IDS.includes(commit.sha.substring(0, 8))) {
+                return false;
+              }
+              
+              // Filter out merge pull request commits
+              if (commit.commit && commit.commit.message && 
+                  commit.commit.message.trim().startsWith('Merge pull request')) {
+                return false;
+              }
+              
+              return true;
+            })
             .map(sanitizeCommitData)
         : [];
         
