@@ -5,8 +5,8 @@ import { supabase } from '@/lib/supabase'
 export async function generateMetadata(
   props: { params: { serverId: string } }
 ): Promise<Metadata> {
-  // Destructure after receiving the complete props object
-  const { params } = props;
+  // Make sure to await the params before using them
+  const params = await Promise.resolve(props.params);
   const serverId = params.serverId;
   let serverName = "Server";
   
