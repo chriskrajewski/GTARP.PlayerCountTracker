@@ -213,7 +213,12 @@ export default function PlayerCountChart({
               labels: {
                 style: {
                   colors: '#EFEFF1'
-                }
+                },
+                datetimeUTC: false,
+                format: 'h:mm TT',
+              },
+              tooltip: {
+                enabled: true
               }
             },
             yaxis: {
@@ -230,6 +235,16 @@ export default function PlayerCountChart({
             },
             theme: {
               mode: 'dark'
+            },
+            tooltip: {
+              x: {
+                format: 'MMM dd, yyyy h:mm TT'
+              },
+              y: {
+                formatter: function(value) {
+                  return value + ' players';
+                }
+              }
             },
             legend: {
               show: true,
