@@ -575,6 +575,8 @@ export async function getServerColors(): Promise<ServerColor[]> {
   const isClient = typeof window !== "undefined";
   const client = isClient ? supabase : createServerClient();
 
+  console.log("Fetching server colors from database...");
+  
   const { data, error } = await client
     .from("server_colors")
     .select("server_id, color_hsl");
@@ -582,6 +584,21 @@ export async function getServerColors(): Promise<ServerColor[]> {
   if (error) {
     console.error("Error fetching server colors:", error);
     return [];
+  }
+
+  console.log("Server colors returned from database:", data);
+  
+  // Full debug of each record
+  if (data && data.length > 0) {
+    data.forEach((record, index) => {
+      console.log(`Record ${index}:`, {
+        server_id: record.server_id,
+        server_id_type: typeof record.server_id,
+        server_id_length: record.server_id.length,
+        server_id_chars: Array.from(String(record.server_id)).map(c => c.charCodeAt(0)),
+        color_hsl: record.color_hsl
+      });
+    });
   }
 
   return data || [];
