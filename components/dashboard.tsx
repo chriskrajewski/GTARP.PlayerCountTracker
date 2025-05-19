@@ -235,23 +235,106 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="w-full sm:w-auto overflow-x-auto">
+      <div className="w-full overflow-x-auto">
       <Tabs defaultValue="8h" value={timeRange} onValueChange={handleTimeRangeChange} className="w-full">
-        <TabsList className="grid grid-cols-4 md:grid-cols-11 bg-[#18181b] border border-[#26262c] p-0.5 rounded-md">
-          <TabsTrigger value="1h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">1h</TabsTrigger>
-          <TabsTrigger value="2h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">2h</TabsTrigger>
-          <TabsTrigger value="4h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">4h</TabsTrigger>
-          <TabsTrigger value="6h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">6h</TabsTrigger>
-          <TabsTrigger value="8h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">8h</TabsTrigger>
-          <TabsTrigger value="24h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">24h</TabsTrigger>
-          <TabsTrigger value="7d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">7d</TabsTrigger>
-          <TabsTrigger value="30d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">30d</TabsTrigger>
-          <TabsTrigger value="90d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">3m</TabsTrigger>
-          <TabsTrigger value="180d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">6m</TabsTrigger>
-          <TabsTrigger value="365d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">1y</TabsTrigger>
-        </TabsList>
+        <div className="flex flex-col gap-2 mb-2">
+          <div className="text-sm text-gray-400">Time Range:</div>
+          
+          {/* Mobile touch-friendly time selector */}
+          <div className="md:hidden flex overflow-x-auto pb-2 scrollbar-hide">
+            <div className="flex space-x-2 min-w-max">
+              <button 
+                onClick={() => handleTimeRangeChange("1h")}
+                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "1h" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
+              >
+                1h
+              </button>
+              <button 
+                onClick={() => handleTimeRangeChange("2h")}
+                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "2h" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
+              >
+                2h
+              </button>
+              <button 
+                onClick={() => handleTimeRangeChange("4h")}
+                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "4h" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
+              >
+                4h
+              </button>
+              <button 
+                onClick={() => handleTimeRangeChange("6h")}
+                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "6h" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
+              >
+                6h
+              </button>
+              <button 
+                onClick={() => handleTimeRangeChange("8h")}
+                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "8h" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
+              >
+                8h
+              </button>
+              <button 
+                onClick={() => handleTimeRangeChange("24h")}
+                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "24h" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
+              >
+                24h
+              </button>
+              <button 
+                onClick={() => handleTimeRangeChange("7d")}
+                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "7d" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
+              >
+                7d
+              </button>
+              <button 
+                onClick={() => handleTimeRangeChange("30d")}
+                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "30d" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
+              >
+                30d
+              </button>
+              <button 
+                onClick={() => handleTimeRangeChange("90d")}
+                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "90d" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
+              >
+                3m
+              </button>
+              <button 
+                onClick={() => handleTimeRangeChange("180d")}
+                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "180d" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
+              >
+                6m
+              </button>
+              <button 
+                onClick={() => handleTimeRangeChange("365d")}
+                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "365d" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
+              >
+                1y
+              </button>
+              <button 
+                onClick={() => handleTimeRangeChange("all")}
+                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "all" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
+              >
+                All
+              </button>
+            </div>
+          </div>
+          
+          {/* Desktop - TabsList */}
+          <TabsList className="hidden md:grid grid-cols-11 bg-[#18181b] border border-[#26262c] p-0.5 rounded-md">
+            <TabsTrigger value="1h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">1h</TabsTrigger>
+            <TabsTrigger value="2h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">2h</TabsTrigger>
+            <TabsTrigger value="4h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">4h</TabsTrigger>
+            <TabsTrigger value="6h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">6h</TabsTrigger>
+            <TabsTrigger value="8h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">8h</TabsTrigger>
+            <TabsTrigger value="24h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">24h</TabsTrigger>
+            <TabsTrigger value="7d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">7d</TabsTrigger>
+            <TabsTrigger value="30d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">30d</TabsTrigger>
+            <TabsTrigger value="90d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">3m</TabsTrigger>
+            <TabsTrigger value="180d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">6m</TabsTrigger>
+            <TabsTrigger value="365d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">1y</TabsTrigger>
+          </TabsList>
+        </div>
       </Tabs>
-    </div>
+      </div>
         
       <Card className="bg-[#0e0e10] border-[#26262c] rounded-md shadow-md">
         <CardHeader className="border-b border-[#26262c]">
