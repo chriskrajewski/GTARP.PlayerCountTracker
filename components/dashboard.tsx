@@ -30,8 +30,9 @@ export default function Dashboard() {
   const [selectedServers, setSelectedServers] = useState<string[]>([])
   const [timeRange, setTimeRange] = useState<TimeRange>("8h")
   const [playerData, setPlayerData] = useState<PlayerCountData[]>([])
-  const [streamData, setStreamerData] = useState<StreamCountData[]>([])
-  const [viewData, setViewerData] = useState<ViewerCountData[]>([])
+  // Always current (24h) stream and view data - not affected by time range
+  const [currentStreamData, setCurrentStreamData] = useState<StreamCountData[]>([])
+  const [currentViewData, setCurrentViewData] = useState<ViewerCountData[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -85,32 +86,53 @@ export default function Dashboard() {
     loadServers()
   }, [])
 
-  // Extract loadPlayerData function to make it reusable
-  const loadPlayerData = async () => {
-      if (selectedServers.length === 0) return
+  // Load stream and viewer counts - separate from player data
+  const loadStreamAndViewData = async () => {
+    if (selectedServers.length === 0) return
 
-      try {
-        setLoading(true)
-      setRefreshing(true)
-        const data = await getPlayerCounts(selectedServers, timeRange)
-        const streamData = await getStreamCounts(selectedServers, timeRange)
-        const viewData = await getViewerCounts(selectedServers, timeRange)
-        setPlayerData(data)
-        setStreamerData(streamData)
-        setViewerData(viewData)
-        setLoading(false)
-      setRefreshing(false)
-      } catch (err) {
-        console.error("Error loading player data:", err)
-        setError("Failed to load player data. Please check your connection and try again.")
-        setLoading(false)
-      setRefreshing(false)
-      }
+    try {
+      // Always use "24h" for streamer and viewer counts to get current data
+      const streamData = await getStreamCounts(selectedServers, "1h");
+      const viewData = await getViewerCounts(selectedServers, "1h");
+      
+      setCurrentStreamData(streamData);
+      setCurrentViewData(viewData);
+    } catch (err) {
+      console.error("Error loading stream and viewer data:", err)
     }
+  }
 
+  // Load player data - affected by time range
+  const loadPlayerData = async () => {
+    if (selectedServers.length === 0) return
+
+    try {
+      setLoading(true);
+      setRefreshing(true);
+      
+      // Player counts are affected by time range
+      const data = await getPlayerCounts(selectedServers, timeRange);
+      setPlayerData(data);
+      
+      setLoading(false);
+      setRefreshing(false);
+    } catch (err) {
+      console.error("Error loading player data:", err)
+      setError("Failed to load player data. Please check your connection and try again.")
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }
+
+  // Update player data when time range or server selection changes
   useEffect(() => {
     loadPlayerData()
   }, [selectedServers, timeRange])
+
+  // Update stream and viewer data only when server selection changes
+  useEffect(() => {
+    loadStreamAndViewData()
+  }, [selectedServers])
 
   // Save selected servers to localStorage whenever they change
   useEffect(() => {
@@ -144,6 +166,7 @@ export default function Dashboard() {
 
   const handleRefresh = () => {
     loadPlayerData()
+    loadStreamAndViewData()
   }
 
   const chartData = aggregateDataForChart(playerData, selectedServers, timeRange)
@@ -205,8 +228,8 @@ export default function Dashboard() {
               serverId={serverId} 
               serverName={getServerNameById(serverId)}
               loading={loading} 
-              streamerData={streamData}
-              viewerData={viewData}
+              streamerData={currentStreamData}
+              viewerData={currentViewData}
             />
           ))}
         </div>
