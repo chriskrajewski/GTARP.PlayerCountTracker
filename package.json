@@ -13,6 +13,7 @@
     "prepare-deploy": "npm run verify && npm run build"
   },
   "dependencies": {
+    "@ai-sdk/xai": "^1.2.16",
     "@analytics/google-tag-manager": "^0.6.0",
     "@google-analytics/data": "^5.1.0",
     "@hookform/resolvers": "^3.9.1",
@@ -49,6 +50,7 @@
     "@sveltejs/kit": "latest",
     "@vercel/analytics": "latest",
     "@vercel/speed-insights": "^1.2.0",
+    "ai": "^4.3.16",
     "analytics": "^0.8.16",
     "apexcharts": "^4.7.0",
     "autoprefixer": "^10.4.20",
@@ -60,8 +62,10 @@
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",
     "next": "15.2.4",
+    "next-rate-limit": "^0.0.3",
     "next-themes": "^0.4.4",
     "octokit": "^3.2.1",
+    "openai": "^4.100.0",
     "react": "^19",
     "react-apexcharts": "^1.7.0",
     "react-day-picker": "^8.10.1",
@@ -76,6 +80,7 @@
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.6",
+    "vercel": "^42.1.1",
     "vue": "latest",
     "vue-router": "latest",
     "zod": "^3.24.1"

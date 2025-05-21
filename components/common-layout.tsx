@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Download, ClipboardList, MessageSquare, Menu, X, Heart } from 'lucide-react';
+import { ArrowLeft, Download, ClipboardList, MessageSquare, Menu, X, Heart, Bot } from 'lucide-react';
 import FeedbackForm from '@/components/feedback-form';
 import { CSVExport } from '@/components/csv-export';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -136,6 +136,14 @@ export function CommonLayout({
             </button>
           )}
           
+          <Link 
+            href="/chat" 
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+          >
+            <Bot className="h-3.5 w-3.5" />
+            <span className="text-[#EFEFF1]">AI Chat</span>
+          </Link>
+
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -207,6 +215,15 @@ export function CommonLayout({
                   </button>
                 )}
                 
+                <Link 
+                  href="/chat" 
+                  className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Bot className="h-3.5 w-3.5" />
+                  <span className="text-[#EFEFF1]">AI Chat</span>
+                </Link>
+
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
