@@ -74,24 +74,17 @@ export default function PlayerCountChart({
     async function loadColors() {
       try {
         const colors = await getServerColors();
-        console.log("Loaded colors from DB:", colors);
         
         // Convert to a map for easy lookup
         const colorMap: Record<string, string> = {};
         
         colors.forEach(color => {
-          console.log(`Adding color to map: ${color.server_id} -> ${color.color_hsl}`);
           colorMap[color.server_id] = color.color_hsl;
         });
-        
-        console.log("Final color map created:", colorMap);
-        console.log("Color map keys:", Object.keys(colorMap));
-        console.log(`Map contains o3re8y? ${colorMap.hasOwnProperty('o3re8y')}`);
         
         // Set the database colors
         setDbColors(colorMap);
       } catch (error) {
-        console.error("Error loading server colors:", error);
       } finally {
         setIsLoadingColors(false);
       }
@@ -140,34 +133,26 @@ export default function PlayerCountChart({
       [id]: color
     }));
     
-    console.log(`Generated distinct color for ${id}: ${color}`);
     return color;
   };
       
   // Get color for a server, prioritizing database colors
   const getServerColor = (serverId: string) => {
     // First check if we have a color in the database
-    console.log(`Looking for color for server ID: "${serverId}"`);
-    console.log(`Available dbColors keys: ${Object.keys(dbColors).join(', ')}`);
-    console.log(`dbColors contains key ${serverId}? ${serverId in dbColors}`);
     
     // Check if the server ID might be case-sensitive
     const matchingKey = Object.keys(dbColors).find(key => 
       key.toLowerCase() === serverId.toLowerCase()
     );
     if (matchingKey && matchingKey !== serverId) {
-      console.log(`Found case-insensitive match: ${matchingKey} vs ${serverId}`);
     }
     
     // Check for whitespace or hidden characters
-    console.log(`Server ID character codes: ${Array.from(serverId).map(c => c.charCodeAt(0))}`);
     
     if (dbColors[serverId]) {
-      console.log(`Using DB color for ${serverId}: ${dbColors[serverId]}`);
       return dbColors[serverId];
     }
     // Fall back to random color if not in database
-    console.log(`No DB color for ${serverId}, using random color`);
     return getRandomColor(serverId);
   };
   
@@ -176,9 +161,6 @@ export default function PlayerCountChart({
     return <div className="h-[400px] w-full flex items-center justify-center">Loading chart colors...</div>;
   }
   
-  // Log server IDs for debugging
-  console.log("Server IDs for chart:", serverIds);
-  console.log("Current DB colors:", dbColors);
   
   // Return the chart component
   return (
@@ -198,10 +180,8 @@ export default function PlayerCountChart({
               // Debug colors for each server ID
               const colors = serverIds.map(serverId => {
                 const color = getServerColor(serverId);
-                console.log(`Color for server ${serverId}: ${color}`);
                 return color;
               });
-              console.log('Final colors array:', colors);
               return colors;
             })(),
             stroke: {
