@@ -28,6 +28,14 @@ export default function RootLayout({
       color: '#FFFFFF'
     }}>
       <head>
+      {(process.env.NODE_ENV === "development" || process.env.VERCEL_ENV === "preview") && (
+       // eslint-disable-next-line @next/next/no-sync-scripts
+      <script
+      data-recording-token="PSW2hFNYWiRq1mWWr7bv4nKfgD9aY45suYTDZVLi"
+      data-is-production-environment="false"
+      src="https://snippet.meticulous.ai/v1/meticulous.js"
+      />
+      )}
         {/* Force dark mode */}
         <meta name="color-scheme" content="dark" />
         <meta name="theme-color" content="#000000" />

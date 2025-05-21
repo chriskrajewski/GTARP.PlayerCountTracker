@@ -38,9 +38,7 @@ export function initializeStatsig() {
   if (typeof window === 'undefined') return;
 
   const statsigWindow = window as StatsigWindow;
-  
-  // Debug: Check if Statsig is available
-  console.log('Statsig available on window:', !!statsigWindow.statsig);
+
   
   if (statsigWindow.statsig) {
     // Generate a user ID if none exists
@@ -49,8 +47,6 @@ export function initializeStatsig() {
       userID = `user_${Math.random().toString(36).substring(2, 15)}`;
       localStorage.setItem('statsig_user_id', userID);
     }
-
-    console.log('Initializing Statsig with userID:', userID);
 
     // Initialize with user ID
     statsigWindow.statsig.initialize({
@@ -64,15 +60,12 @@ export function initializeStatsig() {
           const gateName = FEATURE_GATES[key as keyof typeof FEATURE_GATES];
           try {
             const isEnabled = statsigWindow.statsig.checkGate(gateName);
-            console.log(`Feature gate ${gateName}: ${isEnabled ? 'ENABLED' : 'DISABLED'}`);
           } catch (err) {
-            console.error(`Error checking gate ${gateName}:`, err);
           }
         }
       }
     }, 500);
   } else {
-    console.error('Statsig not available on window object');
   }
 }
 
@@ -83,8 +76,7 @@ export function useFeatureGate(featureGate: string): boolean {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Debug: Log which feature gate we're checking
-    console.log(`Checking feature gate: ${featureGate}`);
+
     
     // Initialize if not already done
     initializeStatsig();
@@ -94,14 +86,11 @@ export function useFeatureGate(featureGate: string): boolean {
       if (window.statsig) {
         try {
           const enabled = window.statsig.checkGate(featureGate);
-          console.log(`useFeatureGate(${featureGate}) = ${enabled}`);
           setIsEnabled(enabled);
         } catch (err) {
-          console.error(`Error in useFeatureGate(${featureGate}):`, err);
           setIsEnabled(false);
         }
       } else {
-        console.warn(`Statsig not available when checking ${featureGate}`);
       }
     };
 
@@ -126,15 +115,12 @@ export function checkFeatureEnabled(featureGate: string): boolean {
   if (window.statsig) {
     try {
       const result = window.statsig?.checkGate(featureGate) ?? false;
-      console.log(`checkFeatureEnabled(${featureGate}) = ${result}`);
       return result;
     } catch (err) {
-      console.error(`Error in checkFeatureEnabled(${featureGate}):`, err);
       return false;
     }
   }
   
-  console.warn(`Statsig not available when checking ${featureGate} (non-React)`);
   
   // OVERRIDE: Return true for debugging
   return true;
