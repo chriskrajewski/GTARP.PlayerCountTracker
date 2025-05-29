@@ -83,7 +83,7 @@ export async function getAnonymizedCommits() {
               
               // Filter out merge pull request commits
               if (commit.commit && commit.commit.message && 
-                  commit.commit.message.trim().startsWith('Merge pull request')) {
+                  commit.commit.message.trim().startsWith('Merge pull request') || commit.commit.message.trim().startsWith('Merge branch')) {
                 return false;
               }
               
