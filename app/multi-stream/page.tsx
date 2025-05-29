@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, Twitch, Maximize, Minimize, Grid3X3, Grid2X2, LayoutGrid, Copy, Check, ChevronDown, Users, PanelLeft, PanelRight, PanelBottom, RotateCcw, Lock, Unlock, LayoutPanelTop, MonitorUp, PictureInPicture, Rows3, Rows2, Columns, Table2, Layers, ClipboardList, MessageSquare } from 'lucide-react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { ArrowLeft, Twitch, Maximize, Minimize, Grid3X3, Grid2X2, LayoutGrid, Copy, Check, ChevronDown, Users, PanelLeft, PanelRight, PanelBottom, RotateCcw, Lock, Unlock, LayoutPanelTop, MonitorUp, PictureInPicture, Rows3, Rows2, Columns, Table2, Layers, ClipboardList, MessageSquare, Heart } from 'lucide-react';
 import Link from 'next/link';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import FeedbackForm from '@/components/feedback-form';
 import { createPortal } from 'react-dom';
+import { useFeatureGate, FEATURE_GATES } from '@/lib/statsig';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Create responsive grid layout with width provider
 const ResponsiveGridLayout = WidthProvider(Responsive);
@@ -23,6 +25,12 @@ type LayoutConfig = { [key: string]: { x: number, y: number, w: number, h: numbe
 type LayoutType = '2x2' | '1+2' | '1+3' | 'cascade' | 'horizontal' | 'vertical' | 'bigTop' | 'bigBottom' | 'pip' | '3+1' | 'pyramid';
 
 export default function MultiStreamPage() {
+  // Feature flag check
+  const isMultiStreamEnabled = useFeatureGate(FEATURE_GATES.MULTI_STREAM);
+  const isFeedbackEnabled = useFeatureGate(FEATURE_GATES.FEEDBACK_FORM);
+  const isChangelogEnabled = useFeatureGate(FEATURE_GATES.CHANGELOG);
+  
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [streams, setStreams] = useState<StreamInfo[]>([]);
   const [layout, setLayout] = useState<LayoutType>('2x2');
@@ -38,6 +46,18 @@ export default function MultiStreamPage() {
   // Refs for positioning modals
   const layoutButtonRef = useRef<HTMLButtonElement>(null);
   const chatButtonRef = useRef<HTMLButtonElement>(null);
+  
+  // Redirect if feature is disabled
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !isMultiStreamEnabled) {
+      router.push('/');
+    }
+  }, [isMultiStreamEnabled, router]);
+  
+  // If feature is disabled, show nothing during the redirect
+  if (!isMultiStreamEnabled) {
+    return null;
+  }
   
   // Modal position state
   const [layoutModalPosition, setLayoutModalPosition] = useState({ top: 0, left: 0 });
@@ -158,8 +178,26 @@ export default function MultiStreamPage() {
     }
   };
   
-  // Get parent domain for Twitch embed
-  const parentDomain = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+  // Return parent domain for Twitch embed
+  const parentDomain = typeof window !== "undefined" ? window.location.hostname : 'localhost';
+  
+  // Get active chat username from state
+  const activeChatUsername = streams[activeChatIndex]?.username || streams[0]?.username;
+  
+  // Check if we're on a mobile device
+  const [isMobile, setIsMobile] = useState(false);
+  
+  // Effect to check for mobile device
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   
   // Initialize and configure layouts
   useEffect(() => {
@@ -780,6 +818,9 @@ export default function MultiStreamPage() {
     };
   }, []);
   
+  // State to track if the orientation warning has been dismissed
+  const [isOrientationWarningDismissed, setIsOrientationWarningDismissed] = useState(false);
+  
   if (streams.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-black text-white p-6">
@@ -796,182 +837,300 @@ export default function MultiStreamPage() {
     );
   }
   
-  // Get current active chat username
-  const activeChatUsername = streams[activeChatIndex]?.username || streams[0]?.username;
-  
   // Portal-based modals for dropdowns
   const LayoutSelectorModal = () => {
-    if (!isLayoutSelectorOpen || typeof window === 'undefined') return null;
+    if (!isLayoutSelectorOpen) return null;
     
-    return createPortal(
+    const modalWidth = isMobile ? 280 : 200;
+    
+    return typeof window !== 'undefined' ? createPortal(
       <div 
         id="layout-selector-modal"
-        className="fixed bg-[#18181b] rounded shadow-lg z-[9999] w-[320px] grid grid-cols-2 gap-1 p-2"
+        className="fixed bg-[#18181b] rounded shadow-lg border border-[#2f2f35] z-50 overflow-hidden"
         style={{ 
-          top: `${layoutModalPosition.top}px`, 
-          left: `${layoutModalPosition.left}px`
+          top: layoutModalPosition.top, 
+          left: isMobile ? '50%' : layoutModalPosition.left, 
+          width: modalWidth,
+          maxWidth: '90vw',
+          transform: isMobile ? 'translateX(-50%)' : 'none',
+          maxHeight: '80vh',
+          overflowY: 'auto'
         }}
       >
-        <button
-          onClick={() => {
-            generateLayout(streams, 'bigTop');
-            setIsLayoutSelectorOpen(false);
-          }}
-          className={`text-left px-3 py-2 rounded text-sm flex items-center ${
-            layout === 'bigTop' ? 'bg-[#004D61] text-white' : 'hover:bg-black/40'
-          }`}
-        >
-          <LayoutPanelTop className="h-4 w-4 mr-2" />
-          Focus Top
-        </button>
-        <button
-          onClick={() => {
-            generateLayout(streams, 'bigBottom');
-            setIsLayoutSelectorOpen(false);
-          }}
-          className={`text-left px-3 py-2 rounded text-sm flex items-center ${
-            layout === 'bigBottom' ? 'bg-[#004D61] text-white' : 'hover:bg-black/40'
-          }`}
-        >
-          <MonitorUp className="h-4 w-4 mr-2" />
-          Focus Bottom
-        </button>
-        <button
-          onClick={() => {
-            generateLayout(streams, 'horizontal');
-            setIsLayoutSelectorOpen(false);
-          }}
-          className={`text-left px-3 py-2 rounded text-sm flex items-center ${
-            layout === 'horizontal' ? 'bg-[#004D61] text-white' : 'hover:bg-black/40'
-          }`}
-        >
-          <Rows3 className="h-4 w-4 mr-2" />
-          Horizontal Rows
-        </button>
-        <button
-          onClick={() => {
-            generateLayout(streams, 'vertical');
-            setIsLayoutSelectorOpen(false);
-          }}
-          className={`text-left px-3 py-2 rounded text-sm flex items-center ${
-            layout === 'vertical' ? 'bg-[#004D61] text-white' : 'hover:bg-black/40'
-          }`}
-        >
-          <Columns className="h-4 w-4 mr-2" />
-          Vertical Columns
-        </button>
-        <button
-          onClick={() => {
-            generateLayout(streams, 'pip');
-            setIsLayoutSelectorOpen(false);
-          }}
-          className={`text-left px-3 py-2 rounded text-sm flex items-center ${
-            layout === 'pip' ? 'bg-[#004D61] text-white' : 'hover:bg-black/40'
-          }`}
-        >
-          <PictureInPicture className="h-4 w-4 mr-2" />
-          Picture-in-Picture
-        </button>
-        <button
-          onClick={() => {
-            generateLayout(streams, '3+1');
-            setIsLayoutSelectorOpen(false);
-          }}
-          className={`text-left px-3 py-2 rounded text-sm flex items-center ${
-            layout === '3+1' ? 'bg-[#004D61] text-white' : 'hover:bg-black/40'
-          }`}
-        >
-          <Table2 className="h-4 w-4 mr-2" />
-          3 Small + 1 Large
-        </button>
-        <button
-          onClick={() => {
-            generateLayout(streams, 'pyramid');
-            setIsLayoutSelectorOpen(false);
-          }}
-          className={`text-left px-3 py-2 rounded text-sm flex items-center ${
-            layout === 'pyramid' ? 'bg-[#004D61] text-white' : 'hover:bg-black/40'
-          }`}
-        >
-          <Rows2 className="h-4 w-4 mr-2" />
-          Pyramid
-        </button>
-        <button
-          onClick={() => {
-            generateLayout(streams, 'cascade');
-            setIsLayoutSelectorOpen(false);
-          }}
-          className={`text-left px-3 py-2 rounded text-sm flex items-center ${
-            layout === 'cascade' ? 'bg-[#004D61] text-white' : 'hover:bg-black/40'
-          }`}
-        >
-          <Layers className="h-4 w-4 mr-2" />
-          Cascade
-        </button>
-      </div>,
-      document.body
-    );
-  };
-
-  const ChatSelectorModal = () => {
-    if (!isChatSelectorOpen || typeof window === 'undefined') return null;
-    
-    return createPortal(
-      <div 
-        id="chat-selector-modal"
-        className="fixed bg-[#18181b] rounded shadow-lg z-[9999] w-[200px]"
-        style={{ 
-          top: `${chatModalPosition.top}px`, 
-          right: `${chatModalPosition.right}px`
-        }}
-      >
-        <div className="p-1">
-          {streams.map((stream, idx) => (
-            <button
-              key={stream.username}
+        <div className="p-2 grid grid-cols-2 gap-2">
+          <button 
+            onClick={() => {
+              generateLayout(streams, '2x2');
+              setIsLayoutSelectorOpen(false);
+            }}
+            className={`flex flex-col items-center gap-1 p-2 rounded ${layout === '2x2' ? 'bg-[#004D61]' : 'hover:bg-black/40'}`}
+          >
+            <Grid3X3 className="h-6 w-6" />
+            <span className="text-xs">Grid</span>
+          </button>
+          
+          <button 
+            onClick={() => {
+              generateLayout(streams, '1+2');
+              setIsLayoutSelectorOpen(false);
+            }}
+            className={`flex flex-col items-center gap-1 p-2 rounded ${layout === '1+2' ? 'bg-[#004D61]' : 'hover:bg-black/40'}`}
+          >
+            <LayoutGrid className="h-6 w-6" />
+            <span className="text-xs">Feature</span>
+          </button>
+          
+          <button 
+            onClick={() => {
+              generateLayout(streams, '1+3');
+              setIsLayoutSelectorOpen(false);
+            }}
+            className={`flex flex-col items-center gap-1 p-2 rounded ${layout === '1+3' ? 'bg-[#004D61]' : 'hover:bg-black/40'}`}
+          >
+            <Grid2X2 className="h-6 w-6" />
+            <span className="text-xs">Theater</span>
+          </button>
+          
+          <button 
+            onClick={() => {
+              generateLayout(streams, 'horizontal');
+              setIsLayoutSelectorOpen(false);
+            }}
+            className={`flex flex-col items-center gap-1 p-2 rounded ${layout === 'horizontal' ? 'bg-[#004D61]' : 'hover:bg-black/40'}`}
+          >
+            <Rows3 className="h-6 w-6" />
+            <span className="text-xs">Horizontal</span>
+          </button>
+          
+          <button 
+            onClick={() => {
+              generateLayout(streams, 'vertical');
+              setIsLayoutSelectorOpen(false);
+            }}
+            className={`flex flex-col items-center gap-1 p-2 rounded ${layout === 'vertical' ? 'bg-[#004D61]' : 'hover:bg-black/40'}`}
+          >
+            <Columns className="h-6 w-6" />
+            <span className="text-xs">Vertical</span>
+          </button>
+          
+          <button 
+            onClick={() => {
+              generateLayout(streams, 'bigTop');
+              setIsLayoutSelectorOpen(false);
+            }}
+            className={`flex flex-col items-center gap-1 p-2 rounded ${layout === 'bigTop' ? 'bg-[#004D61]' : 'hover:bg-black/40'}`}
+          >
+            <LayoutPanelTop className="h-6 w-6" />
+            <span className="text-xs">Big Top</span>
+          </button>
+          
+          <button 
+            onClick={() => {
+              generateLayout(streams, 'pip');
+              setIsLayoutSelectorOpen(false);
+            }}
+            className={`flex flex-col items-center gap-1 p-2 rounded ${layout === 'pip' ? 'bg-[#004D61]' : 'hover:bg-black/40'}`}
+          >
+            <PictureInPicture className="h-6 w-6" />
+            <span className="text-xs">Picture-in-Picture</span>
+          </button>
+          
+          <button 
+            onClick={() => {
+              generateLayout(streams, 'cascade');
+              setIsLayoutSelectorOpen(false);
+            }}
+            className={`flex flex-col items-center gap-1 p-2 rounded ${layout === 'cascade' ? 'bg-[#004D61]' : 'hover:bg-black/40'}`}
+          >
+            <Layers className="h-6 w-6" />
+            <span className="text-xs">Cascade</span>
+          </button>
+          
+          {/* Compact mode toggle */}
+          <div className="col-span-2 mt-2 pt-2 border-t border-gray-700">
+            <button 
               onClick={() => {
-                setActiveChatIndex(idx);
-                setIsChatSelectorOpen(false);
+                setCompactType(prev => prev === 'vertical' ? null : 'vertical');
+                setIsLayoutSelectorOpen(false);
               }}
-              className={`w-full text-left px-3 py-2 rounded text-sm flex items-center ${
-                idx === activeChatIndex 
-                  ? 'bg-[#004D61] text-white' 
-                  : 'hover:bg-black/40'
-              }`}
+              className="w-full flex items-center justify-between p-2 hover:bg-black/40 rounded"
             >
-              <Twitch className="h-3.5 w-3.5 mr-2 text-[#004D61]" />
-              {stream.username}
+              <span className="text-sm">Auto-compact</span>
+              <div className={`w-8 h-4 rounded-full flex items-center ${compactType === 'vertical' ? 'bg-[#004D61]' : 'bg-gray-700'}`}>
+                <div className={`w-3 h-3 rounded-full bg-white transform transition-transform ${compactType === 'vertical' ? 'translate-x-4' : 'translate-x-1'}`}></div>
+              </div>
             </button>
-          ))}
+          </div>
         </div>
       </div>,
       document.body
-    );
+    ) : null;
+  };
+  
+  // Chat selector modal with streamer list
+  const ChatSelectorModal = () => {
+    if (!isChatSelectorOpen) return null;
+    
+    return typeof window !== 'undefined' ? createPortal(
+      <div 
+        id="chat-selector-modal"
+        className="fixed bg-[#18181b] rounded shadow-lg border border-[#2f2f35] z-50 overflow-hidden"
+        style={{ 
+          top: chatModalPosition.top, 
+          right: isMobile ? '50%' : chatModalPosition.right,
+          transform: isMobile ? 'translateX(50%)' : 'none',
+          width: isMobile ? 280 : 200,
+          maxWidth: '90vw',
+          maxHeight: '80vh',
+          overflowY: 'auto'
+        }}
+      >
+        <div className="p-2">
+          {/* Chat position controls for mobile */}
+          {isMobile && (
+            <div className="mb-2 pb-2 border-b border-gray-700">
+              <div className="text-xs text-gray-400 mb-1 px-2">Chat Position</div>
+              <div className="grid grid-cols-4 gap-1">
+                <button
+                  onClick={() => {
+                    changeChatPosition('left');
+                    setIsChatSelectorOpen(false);
+                  }}
+                  className={`flex flex-col items-center p-2 rounded ${chatPosition === 'left' ? 'bg-[#004D61]' : 'hover:bg-black/40'}`}
+                  title="Dock chat to left"
+                >
+                  <PanelLeft className="h-5 w-5" />
+                  <span className="text-xs mt-1">Left</span>
+                </button>
+                <button
+                  onClick={() => {
+                    changeChatPosition('right');
+                    setIsChatSelectorOpen(false);
+                  }}
+                  className={`flex flex-col items-center p-2 rounded ${chatPosition === 'right' ? 'bg-[#004D61]' : 'hover:bg-black/40'}`}
+                  title="Dock chat to right"
+                >
+                  <PanelRight className="h-5 w-5" />
+                  <span className="text-xs mt-1">Right</span>
+                </button>
+                <button
+                  onClick={() => {
+                    changeChatPosition('bottom');
+                    setIsChatSelectorOpen(false);
+                  }}
+                  className={`flex flex-col items-center p-2 rounded ${chatPosition === 'bottom' ? 'bg-[#004D61]' : 'hover:bg-black/40'}`}
+                  title="Dock chat to bottom"
+                >
+                  <PanelBottom className="h-5 w-5" />
+                  <span className="text-xs mt-1">Bottom</span>
+                </button>
+                <button
+                  onClick={() => {
+                    changeChatPosition('grid');
+                    setIsChatSelectorOpen(false);
+                  }}
+                  className={`flex flex-col items-center p-2 rounded ${chatPosition === 'grid' ? 'bg-[#004D61]' : 'hover:bg-black/40'}`}
+                  title="Free position chat"
+                >
+                  <Grid3X3 className="h-5 w-5" />
+                  <span className="text-xs mt-1">Free</span>
+                </button>
+              </div>
+            </div>
+          )}
+        
+          <div className="text-xs text-gray-400 mb-1 px-2">Select Chat</div>
+          <div className="space-y-1">
+            {streams.map((stream, index) => (
+              <button
+                key={index}
+                onClick={() => {
+                  setActiveChatIndex(index);
+                  setIsChatSelectorOpen(false);
+                }}
+                className={`w-full text-left px-3 py-2 rounded flex items-center ${index === activeChatIndex ? 'bg-[#004D61]' : 'hover:bg-black/40'}`}
+              >
+                <Twitch className="h-4 w-4 mr-2" />
+                <span className={`${isMobile ? 'text-sm' : 'text-xs'}`}>{stream.username}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>,
+      document.body
+    ) : null;
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-black" style={{ backgroundColor: '#000000' }}>
+    <div className="flex flex-col h-screen bg-[#0e0e10] text-white overflow-hidden">
       {/* Header with controls */}
-      <div className="twitch-dark-bg text-white px-4 py-2 z-10 flex items-center justify-between sticky top-0" style={{ backgroundColor: '#0e0e10', borderBottom: '1px solid #26262c' }}>
+      <div className={`flex ${isMobile ? 'flex-col space-y-2 p-2' : 'flex-row items-center justify-between p-3'} 
+        twitch-dark-bg text-white z-10 sticky top-0 border-b border-[#26262c]`} style={{ backgroundColor: '#0e0e10' }}>
+        
         {/* Left section - Back button and title */}
-        <div className="flex items-center gap-4">
-          <Link href="/" className="text-white hover:text-gray-300 py-2">
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <h1 className="font-bold flex items-center">
-            <img 
-              src="https://cdn.7tv.app/emote/01FHJJSFZ00001HW666WR6HKPB/2x.avif" 
-              alt="Twitch Logo" 
-              className="h-9 w-9 mr-2" 
-            />
-             Multi-Stream Viewer
-          </h1>
+        <div className={`${isMobile ? 'w-full flex justify-between' : 'flex items-center gap-4'}`}>
+          <div className="flex items-center">
+            <Link href="/" className="text-white/80 hover:text-white mr-3">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+            <h1 className="font-bold flex items-center">
+              <img 
+                src="https://cdn.7tv.app/emote/01FHJJSFZ00001HW666WR6HKPB/2x.avif" 
+                alt="Twitch Logo" 
+                className="h-9 w-9 mr-2" 
+              />
+              <span>Multi-Stream Viewer</span>
+            </h1>
+          </div>
+          
+          {/* Mobile layout controls */}
+          {isMobile && (
+            <div className="flex items-center">
+              {/* Layout selector button for mobile */}
+              <button
+                ref={layoutButtonRef}
+                onClick={() => {
+                  setIsLayoutSelectorOpen(!isLayoutSelectorOpen);
+                  if (layoutButtonRef.current) {
+                    const rect = layoutButtonRef.current.getBoundingClientRect();
+                    setLayoutModalPosition({
+                      top: rect.bottom + window.scrollY,
+                      left: rect.left + window.scrollX
+                    });
+                  }
+                }}
+                className="p-2 bg-black/40 rounded hover:bg-black/60 mr-2"
+                title="Change layout"
+              >
+                <Grid3X3 className="h-5 w-5" />
+              </button>
+              
+              {/* Chat selector button for mobile */}
+              <button
+                ref={chatButtonRef}
+                onClick={() => {
+                  setIsChatSelectorOpen(!isChatSelectorOpen);
+                  if (chatButtonRef.current) {
+                    const rect = chatButtonRef.current.getBoundingClientRect();
+                    setChatModalPosition({
+                      top: rect.bottom + window.scrollY,
+                      right: window.innerWidth - rect.right + window.scrollX
+                    });
+                  }
+                }}
+                className="p-2 bg-black/40 rounded hover:bg-black/60"
+                title="Chat options"
+              >
+                <MessageSquare className="h-5 w-5" />
+              </button>
+            </div>
+          )}
         </div>
         
-        {/* Middle section - Layout and Chat controls */}
-        <div className="flex justify-center items-center gap-2">
-          {/* Layout controls with dropdown for more options */}
-          <div className="relative group">
+        {/* Center controls - Only visible on desktop */}
+        {!isMobile && (
+          <div className="flex items-center gap-4">
+            {/* Layout controls with dropdown for more options */}
             <div className="flex bg-black/40 rounded overflow-hidden">
               <button 
                 onClick={() => generateLayout(streams, '2x2')}
@@ -998,7 +1157,6 @@ export default function MultiStreamPage() {
                 ref={layoutButtonRef}
                 onClick={() => {
                   setIsLayoutSelectorOpen(!isLayoutSelectorOpen);
-                  // Update position immediately when clicked
                   if (layoutButtonRef.current) {
                     const rect = layoutButtonRef.current.getBoundingClientRect();
                     setLayoutModalPosition({
@@ -1013,127 +1171,182 @@ export default function MultiStreamPage() {
                 <ChevronDown className="h-5 w-5" />
               </button>
             </div>
-          </div>
-          
-          {/* Chat controls */}
-          <div className="flex items-center gap-2">
-            {/* Chat selector dropdown */}
-            <div className="relative">
-              <button
-                ref={chatButtonRef}
-                onClick={() => {
-                  setIsChatSelectorOpen(!isChatSelectorOpen);
-                  // Update position immediately when clicked
-                  if (chatButtonRef.current) {
-                    const rect = chatButtonRef.current.getBoundingClientRect();
-                    setChatModalPosition({
-                      top: rect.bottom + window.scrollY,
-                      right: window.innerWidth - rect.right + window.scrollX
-                    });
-                  }
-                }}
-                className="px-3 py-1.5 bg-black/40 rounded flex items-center hover:bg-black/60 text-sm"
-                title="Select chat to display"
-              >
-                <Users className="h-4 w-4 mr-1" />
-                <span className="max-w-[100px] truncate">{activeChatUsername}</span>
-                <ChevronDown className="h-3 w-3 ml-1" />
-              </button>
-            </div>
             
-            {/* Chat position controls */}
-            <div className="flex bg-black/40 rounded overflow-hidden">
-              <button
-                onClick={() => changeChatPosition('left')}
-                className={`p-1.5 ${chatPosition === 'left' ? 'bg-[#004D61]' : 'hover:bg-black/60'}`}
-                title="Dock chat to left"
-              >
-                <PanelLeft className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => changeChatPosition('right')}
-                className={`p-1.5 ${chatPosition === 'right' ? 'bg-[#004D61]' : 'hover:bg-black/60'}`}
-                title="Dock chat to right"
-              >
-                <PanelRight className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => changeChatPosition('bottom')}
-                className={`p-1.5 ${chatPosition === 'bottom' ? 'bg-[#004D61]' : 'hover:bg-black/60'}`}
-                title="Dock chat to bottom"
-              >
-                <PanelBottom className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => changeChatPosition('grid')}
-                className={`p-1.5 ${chatPosition === 'grid' ? 'bg-[#004D61]' : 'hover:bg-black/60'}`}
-                title="Free position chat"
-              >
-                <Grid3X3 className="h-4 w-4" />
-              </button>
+            {/* Chat controls */}
+            <div className="flex items-center gap-2">
+              {/* Chat selector dropdown */}
+              <div className="relative">
+                <button
+                  ref={chatButtonRef}
+                  onClick={() => {
+                    setIsChatSelectorOpen(!isChatSelectorOpen);
+                    if (chatButtonRef.current) {
+                      const rect = chatButtonRef.current.getBoundingClientRect();
+                      setChatModalPosition({
+                        top: rect.bottom + window.scrollY,
+                        right: window.innerWidth - rect.right + window.scrollX
+                      });
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-black/40 rounded flex items-center hover:bg-black/60 text-sm"
+                  title="Select chat to display"
+                >
+                  <Users className="h-4 w-4 mr-1" />
+                  <span className="max-w-[100px] truncate">{activeChatUsername}</span>
+                  <ChevronDown className="h-3 w-3 ml-1" />
+                </button>
+              </div>
+              
+              {/* Chat position controls */}
+              <div className="flex bg-black/40 rounded overflow-hidden">
+                <button
+                  onClick={() => changeChatPosition('left')}
+                  className={`p-1.5 ${chatPosition === 'left' ? 'bg-[#004D61]' : 'hover:bg-black/60'}`}
+                  title="Dock chat to left"
+                >
+                  <PanelLeft className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => changeChatPosition('right')}
+                  className={`p-1.5 ${chatPosition === 'right' ? 'bg-[#004D61]' : 'hover:bg-black/60'}`}
+                  title="Dock chat to right"
+                >
+                  <PanelRight className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => changeChatPosition('bottom')}
+                  className={`p-1.5 ${chatPosition === 'bottom' ? 'bg-[#004D61]' : 'hover:bg-black/60'}`}
+                  title="Dock chat to bottom"
+                >
+                  <PanelBottom className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => changeChatPosition('grid')}
+                  className={`p-1.5 ${chatPosition === 'grid' ? 'bg-[#004D61]' : 'hover:bg-black/60'}`}
+                  title="Free position chat"
+                >
+                  <Grid3X3 className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
         
-        {/* Right section - Stream controls and utility buttons */}
-        <div className="flex items-center gap-2">
-          {/* Share button */}
-          <button
-            onClick={copyShareLink}
-            className="p-2 bg-black/40 rounded hover:bg-black/60"
-            title="Copy share link"
-          >
-            {isCopied ? <Check className="h-5 w-5 text-green-500" /> : <Copy className="h-5 w-5" />}
-          </button>
-          
-          {/* Fullscreen toggle */}
-          <button
-            onClick={toggleFullscreen}
-            className="p-2 bg-black/40 rounded hover:bg-black/60"
-            title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-          >
-            {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
-          </button>
-          
-          {/* Reset layout button */}
-          <button 
-            onClick={resetLayout}
-            className="p-2 bg-black/40 rounded hover:bg-black/60 relative group"
-            title="Reset layout"
-          >
-            <RotateCcw className="h-5 w-5" />
-            <span className="absolute -bottom-10 right-0 bg-[#18181b] text-white text-xs py-1 px-2 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
-              Reset to default layout
-            </span>
-          </button>
-
-          {/* Toggle layout collision mode */}
-          <button 
-            onClick={() => setCompactType(prev => prev === 'vertical' ? null : 'vertical')}
-            className="p-2 bg-black/40 rounded hover:bg-black/60 relative group"
-            title={compactType === 'vertical' ? "Switch to free positioning" : "Switch to auto-compact mode"}
-          >
-            {compactType === 'vertical' ? <Lock className="h-5 w-5" /> : <Unlock className="h-5 w-5" />}
-            <span className="absolute -bottom-10 right-0 bg-[#18181b] text-white text-xs py-1 px-2 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
-              {compactType === 'vertical' ? "Auto-compact mode (on)" : "Free positioning mode (on)"}
-            </span>
-          </button>
-          
-          {/* Moved to the end - Feedback Button */}
-          <FeedbackForm 
-            trigger={
-              <button className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium" style={{ color: '#EFEFF1' }}>
-                <MessageSquare className="h-3.5 w-3.5 text-[#EFEFF1]" />
-                <span className="text-[#EFEFF1]">Feedback</span>
+        {/* Right section - Only visible on desktop */}
+        <div className={`flex items-center gap-2 ${isMobile ? 'w-full justify-between mt-2' : ''}`}>
+          {/* Mobile layout: more condensed controls */}
+          {isMobile ? (
+            <>
+              <button
+                onClick={copyShareLink}
+                className="p-2 bg-black/40 rounded hover:bg-black/60"
+                title="Copy share link"
+              >
+                {isCopied ? <Check className="h-5 w-5 text-green-500" /> : <Copy className="h-5 w-5" />}
               </button>
-            }
-          />
-          
-          {/* Moved to the end - Changelog Button */}
-          <Link href="/changelog" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium" style={{ color: '#EFEFF1' }}>
-            <ClipboardList className="h-3.5 w-3.5 text-[#EFEFF1]" />
-            <span className="text-[#EFEFF1]">Changelog</span>
-          </Link>
+              
+              <button
+                onClick={toggleFullscreen}
+                className="p-2 bg-black/40 rounded hover:bg-black/60"
+                title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              >
+                {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
+              </button>
+              
+              <button 
+                onClick={resetLayout}
+                className="p-2 bg-black/40 rounded hover:bg-black/60"
+                title="Reset layout"
+              >
+                <RotateCcw className="h-5 w-5" />
+              </button>
+              
+              <button 
+                onClick={() => setCompactType(prev => prev === 'vertical' ? null : 'vertical')}
+                className="p-2 bg-black/40 rounded hover:bg-black/60"
+                title={compactType === 'vertical' ? "Switch to free positioning" : "Switch to auto-compact mode"}
+              >
+                {compactType === 'vertical' ? <Lock className="h-5 w-5" /> : <Unlock className="h-5 w-5" />}
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Desktop layout: full controls */}
+              <button
+                onClick={copyShareLink}
+                className="p-2 bg-black/40 rounded hover:bg-black/60"
+                title="Copy share link"
+              >
+                {isCopied ? <Check className="h-5 w-5 text-green-500" /> : <Copy className="h-5 w-5" />}
+              </button>
+              
+              <button
+                onClick={toggleFullscreen}
+                className="p-2 bg-black/40 rounded hover:bg-black/60"
+                title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              >
+                {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
+              </button>
+              
+              <button 
+                onClick={resetLayout}
+                className="p-2 bg-black/40 rounded hover:bg-black/60 relative group"
+                title="Reset layout"
+              >
+                <RotateCcw className="h-5 w-5" />
+                <span className="absolute -bottom-10 right-0 bg-[#18181b] text-white text-xs py-1 px-2 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                  Reset to default layout
+                </span>
+              </button>
+              
+              <button 
+                onClick={() => setCompactType(prev => prev === 'vertical' ? null : 'vertical')}
+                className="p-2 bg-black/40 rounded hover:bg-black/60 relative group"
+                title={compactType === 'vertical' ? "Switch to free positioning" : "Switch to auto-compact mode"}
+              >
+                {compactType === 'vertical' ? <Lock className="h-5 w-5" /> : <Unlock className="h-5 w-5" />}
+                <span className="absolute -bottom-10 right-0 bg-[#18181b] text-white text-xs py-1 px-2 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                  {compactType === 'vertical' ? "Auto-compact mode (on)" : "Free positioning mode (on)"}
+                </span>
+              </button>
+              
+              {/* Feedback Button */}
+              <FeedbackForm 
+                trigger={
+                  <button className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium" style={{ color: '#EFEFF1' }}>
+                    <MessageSquare className="h-3.5 w-3.5 text-[#EFEFF1]" />
+                    <span className="text-[#EFEFF1]">Feedback</span>
+                  </button>
+                }
+              />
+              
+              {/* Changelog Button */}
+              <Link href="/changelog" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium" style={{ color: '#EFEFF1' }}>
+                <ClipboardList className="h-3.5 w-3.5 text-[#EFEFF1]" />
+                <span className="text-[#EFEFF1]">Changelog</span>
+              </Link>
+              
+              {/* Donate Button */}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <a 
+                      href="https://streamelements.com/alantiix/tip" 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+                    >
+                      <Heart className="h-3.5 w-3.5 text-[#ff4545]" />
+                      <span className="text-[#EFEFF1]">Donate</span>
+                    </a>
+                  </TooltipTrigger>
+                  <TooltipContent className="bg-[#18181b] text-white border-[#26262c]">
+                    Buy me a cup of coffee :)
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </>
+          )}
         </div>
       </div>
       
@@ -1164,29 +1377,68 @@ export default function MultiStreamPage() {
                 <div className="mr-2 w-6 h-6 bg-[#004D61] rounded-full flex items-center justify-center text-xs">3</div>
                 <span>Use the layout presets at the top to quickly organize streams</span>
               </li>
+              {isMobile && (
+                <li className="flex items-center">
+                  <div className="mr-2 w-6 h-6 bg-[#004D61] rounded-full flex items-center justify-center text-xs">4</div>
+                  <span className="text-yellow-300">On mobile: rotate to landscape for better viewing</span>
+                </li>
+              )}
             </ul>
+          </div>
+        )}
+        
+        {/* Mobile orientation warning */}
+        {isMobile && window.innerHeight > window.innerWidth && !isOrientationWarningDismissed && (
+          <div className="absolute top-4 right-4 left-4 z-40 bg-yellow-700/90 p-3 rounded-lg text-white shadow-lg border border-yellow-600 text-sm">
+            <div className="flex justify-between items-center">
+              <p>Rotate your device to landscape mode for a better viewing experience</p>
+              <button 
+                onClick={() => setIsOrientationWarningDismissed(true)}
+                className="ml-2 p-1 bg-yellow-600/50 rounded hover:bg-yellow-600 flex-shrink-0"
+                aria-label="Dismiss orientation warning"
+              >
+                <span className="text-white font-bold text-xs px-1">✕</span>
+              </button>
+            </div>
           </div>
         )}
         
         <ResponsiveGridLayout
           className="layout"
-          layouts={{ lg: Object.values(gridLayout) }}
+          layouts={{ 
+            lg: Object.values(gridLayout),
+            md: Object.values(gridLayout).map(item => ({
+              ...item,
+              w: Math.min(item.w, 12), // Ensure items don't exceed container width
+              h: Math.max(item.h, 3)   // Ensure minimum height for visibility
+            })),
+            sm: Object.values(gridLayout).map(item => ({
+              ...item,
+              w: 12,                    // Full width on small screens
+              h: item.i === 'chat' ? 6 : 12  // Smaller height for chat on mobile
+            })),
+            xs: Object.values(gridLayout).map(item => ({
+              ...item,
+              w: 12,                    // Full width on extra small screens
+              h: item.i === 'chat' ? 6 : 8    // Even smaller for mobile
+            }))
+          }}
           breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
           cols={{ lg: 12, md: 12, sm: 12, xs: 12, xxs: 12 }}
-          rowHeight={30}
+          rowHeight={isMobile ? 25 : 30}
           onLayoutChange={onLayoutChange}
           onResize={onResize}
           onResizeStop={onResizeStop} 
           isDraggable={true}
           isResizable={true}
-          resizeHandles={['se', 'sw', 'nw', 'ne']} // Simplify to just corners
+          resizeHandles={isMobile ? ['se'] : ['se', 'sw', 'nw', 'ne']} // Simplify on mobile
           margin={[4, 4]} // Larger margins to avoid collisions
           containerPadding={[4, 4]}
           compactType={compactType}
           preventCollision={compactType === null}
           maxRows={30}
           useCSSTransforms={false} // Disable CSS transforms that can cause cursor issues
-          style={{ height: 'calc(100vh - 50px)', minHeight: '500px' }}
+          style={{ height: 'calc(100vh - 50px)', minHeight: isMobile ? '300px' : '500px' }}
           autoSize={true}
           verticalCompact={compactType === 'vertical'}
           draggableHandle=".drag-handle"
@@ -1210,11 +1462,11 @@ export default function MultiStreamPage() {
                     <span className="ml-1 px-1 rounded-sm" style={{ backgroundColor: '#004D61' }}>Chat</span>
                   )}
                 </div>
-                {/* Simplified drag handle */}
-                <div className="absolute top-0 right-0 left-0 h-12 bg-black/50 cursor-grab z-40 drag-handle flex items-center justify-center opacity-30 hover:opacity-80 transition-opacity">
-                  <div className="px-2 py-0.5 rounded bg-[#004D61]/80 flex items-center justify-center text-white text-xs">
+                {/* Improved drag handle */}
+                <div className={`absolute top-0 right-0 left-0 ${isMobile ? 'h-16' : 'h-12'} bg-black/50 cursor-grab z-40 drag-handle flex items-center justify-center opacity-30 hover:opacity-80 transition-opacity`}>
+                  <div className={`px-2 py-0.5 rounded bg-[#004D61]/80 flex items-center justify-center text-white ${isMobile ? 'text-sm py-1' : 'text-xs'}`}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1"><path d="M5 9h14M5 15h14"></path></svg>
-                    Move
+                    {isMobile ? 'Drag to Move' : 'Move'}
                   </div>
                 </div>
                 
@@ -1223,6 +1475,15 @@ export default function MultiStreamPage() {
                 <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-[#004D61] opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-[#004D61] opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-[#004D61] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                
+                {/* Mobile-specific resize indicator */}
+                {isMobile && (
+                  <div className="absolute bottom-0 right-0 w-24 h-24 flex items-center justify-center pointer-events-none z-30 opacity-50">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M22 2L12 12M22 12L22 2L12 2" stroke="#004D61" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" transform="rotate(135 12 12)"/>
+                    </svg>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -1237,6 +1498,7 @@ export default function MultiStreamPage() {
                   <!DOCTYPE html>
                   <html style="background: #000000; height: 100%; width: 100%; overflow: hidden;">
                     <head>
+                      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
                       <style>
                         html, body {
                           margin: 0;
@@ -1314,6 +1576,15 @@ export default function MultiStreamPage() {
                           display: flex;
                           overflow: hidden;
                         }
+                        
+                        /* Mobile optimizations */
+                        @media (max-width: 768px) {
+                          #chat-title {
+                            height: 44px;
+                            font-size: 16px;
+                            padding: 10px 15px;
+                          }
+                        }
                       </style>
                     </head>
                     <body>
@@ -1368,6 +1639,17 @@ export default function MultiStreamPage() {
                                 [style*="background: rgb(255, 255, 255)"] {
                                   background-color: #000000 !important;
                                   background: #000000 !important;
+                                }
+                                
+                                /* Mobile optimizations */
+                                @media (max-width: 768px) {
+                                  .chat-line { 
+                                    font-size: 14px !important; 
+                                  }
+                                  .chat-badges img {
+                                    width: 18px;
+                                    height: 18px;
+                                  }
                                 }
                               \`;
                               

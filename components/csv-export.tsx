@@ -108,18 +108,18 @@ export function CSVExport({ servers, selectedServers }: CSVExportProps) {
   }
 
   return (
-    <div className="flex flex-col gap-3 p-4 border rounded-lg bg-card text-card-foreground shadow-sm">
-      <h3 className="text-lg font-semibold">Export Data as CSV</h3>
+    <div className="flex flex-col gap-3 p-3 sm:p-4 border rounded-lg bg-card text-card-foreground shadow-sm">
+      <h3 className="text-base sm:text-lg font-semibold">Export Data as CSV</h3>
       
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col gap-3">
         {/* Data Type Selector */}
         <div className="space-y-1">
-          <label className="text-sm font-medium">Data Type</label>
+          <label className="text-xs sm:text-sm font-medium">Data Type</label>
           <Tabs value={dataType} onValueChange={setDataType} defaultValue="player" className="w-full">
-            <TabsList className="grid grid-cols-3">
-              <TabsTrigger value="player">Player Counts</TabsTrigger>
-              <TabsTrigger value="streamer">Streamer Counts</TabsTrigger>
-              <TabsTrigger value="viewer">Viewer Counts</TabsTrigger>
+            <TabsList className="grid grid-cols-3 h-auto">
+              <TabsTrigger value="player" className="text-xs sm:text-sm py-1.5 px-1 sm:px-2">Player Counts</TabsTrigger>
+              <TabsTrigger value="streamer" className="text-xs sm:text-sm py-1.5 px-1 sm:px-2">Streamer Counts</TabsTrigger>
+              <TabsTrigger value="viewer" className="text-xs sm:text-sm py-1.5 px-1 sm:px-2">Viewer Counts</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -127,19 +127,19 @@ export function CSVExport({ servers, selectedServers }: CSVExportProps) {
 
       <div className="flex flex-col sm:flex-row gap-3">
         {/* Start Date Selector */}
-        <div className="space-y-1">
-          <label className="text-sm font-medium">Start Date</label>
+        <div className="space-y-1 w-full">
+          <label className="text-xs sm:text-sm font-medium">Start Date</label>
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 className={cn(
-                  "w-full justify-start text-left font-normal",
+                  "w-full justify-start text-left font-normal text-xs sm:text-sm py-1.5",
                   !startDate && "text-muted-foreground"
                 )}
               >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {startDate ? format(startDate, "PPP") : "Select date"}
+                <CalendarIcon className="mr-1 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                {startDate ? format(startDate, "PP") : "Select date"}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0">
@@ -154,19 +154,19 @@ export function CSVExport({ servers, selectedServers }: CSVExportProps) {
         </div>
 
         {/* End Date Selector */}
-        <div className="space-y-1">
-          <label className="text-sm font-medium">End Date</label>
+        <div className="space-y-1 w-full">
+          <label className="text-xs sm:text-sm font-medium">End Date</label>
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 className={cn(
-                  "w-full justify-start text-left font-normal",
+                  "w-full justify-start text-left font-normal text-xs sm:text-sm py-1.5",
                   !endDate && "text-muted-foreground"
                 )}
               >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {endDate ? format(endDate, "PPP") : "Select date"}
+                <CalendarIcon className="mr-1 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                {endDate ? format(endDate, "PP") : "Select date"}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0">
@@ -185,20 +185,20 @@ export function CSVExport({ servers, selectedServers }: CSVExportProps) {
       <Button 
         onClick={handleExport} 
         disabled={isExporting || !startDate || !endDate || selectedServers.length === 0}
-        className="mt-2"
+        className="mt-2 text-xs sm:text-sm py-1.5 h-auto"
       >
         {isExporting ? (
           <>Exporting...</>
         ) : (
           <>
-            <Download className="mr-2 h-4 w-4" />
+            <Download className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
             Export CSV
           </>
         )}
       </Button>
       
       {selectedServers.length === 0 && (
-        <p className="text-sm text-muted-foreground">Please select at least one server to export data.</p>
+        <p className="text-xs sm:text-sm text-muted-foreground">Please select at least one server to export data.</p>
       )}
     </div>
   )

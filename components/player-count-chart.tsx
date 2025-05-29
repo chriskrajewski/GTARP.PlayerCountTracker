@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { ChartContainer } from "@/components/ui/chart"
-import type { TimeRange } from "@/lib/data"
+import type { TimeRange, ServerColor } from "@/lib/data"
 import "../app/globals.css"
 import { ApexOptions } from "apexcharts"
 import dynamic from 'next/dynamic'
+import { getServerColors } from "@/lib/data"
 
 // Dynamically import ApexCharts to prevent SSR issues
 const Chart = dynamic(() => import('react-apexcharts'), { ssr: false })
@@ -34,15 +35,63 @@ export default function PlayerCountChart({
   
   // Initialize color cache
   const [randomColorCache, setRandomColorCache] = useState<Record<string, string>>({});
+  // State for storing colors from the database
+  const [dbColors, setDbColors] = useState<Record<string, string>>({});
+  const [isLoadingColors, setIsLoadingColors] = useState(true);
   
-  // Server colors configuration for the chart
-  const serverColors: Record<string, string> = {
-    "nopixel": "hsla(var(--nopixel), 1)",
-    "eclipserpna": "hsla(var(--prodigy), 1)",
-    "prodigy": "hsla(var(--prodigy), 1)",
-    "onx": "hsla(var(--onx), 1)", 
-    "unscripted": "hsla(var(--unscripted), 1)",
-  };
+  // Predefined palette of highly distinct colors
+  const distinctColors = [
+    "hsl(0, 80%, 50%)",      // Red
+    "hsl(210, 80%, 50%)",    // Blue
+    "hsl(48, 80%, 50%)",     // Gold
+    "hsl(180, 80%, 50%)",    // Cyan
+    "hsl(30, 80%, 50%)",     // Orange
+    "hsl(240, 80%, 50%)",    // Indigo
+    "hsl(15, 80%, 50%)",     // Vermilion
+    "hsl(195, 80%, 50%)",    // Sky Blue
+    "hsl(135, 80%, 50%)",    // Emerald
+    "hsl(345, 80%, 50%)",    // Crimson
+  ];
+  
+  // Additional colors with different saturation/lightness for more variety
+  const extendedPalette = [
+    ...distinctColors,
+    ...distinctColors.map(color => {
+      const hue = parseInt(color.match(/hsl\((\d+)/)?.[1] || "0", 10);
+      return `hsl(${hue}, 65%, 65%)`;
+    }),
+    ...distinctColors.map(color => {
+      const hue = parseInt(color.match(/hsl\((\d+)/)?.[1] || "0", 10);
+      return `hsl(${hue}, 90%, 35%)`;
+    })
+  ];
+  
+  // Keep track of used colors from the palette
+  const [usedColorIndices, setUsedColorIndices] = useState<number[]>([]);
+  
+  // Fetch colors from the database
+  useEffect(() => {
+    async function loadColors() {
+      try {
+        const colors = await getServerColors();
+        
+        // Convert to a map for easy lookup
+        const colorMap: Record<string, string> = {};
+        
+        colors.forEach(color => {
+          colorMap[color.server_id] = color.color_hsl;
+        });
+        
+        // Set the database colors
+        setDbColors(colorMap);
+      } catch (error) {
+      } finally {
+        setIsLoadingColors(false);
+      }
+    }
+    
+    loadColors();
+  }, []);
 
   // Generate static random colors but consistent for each server
   const getRandomColor = (id: string) => {
@@ -50,12 +99,35 @@ export default function PlayerCountChart({
       return randomColorCache[id];
     }
     
-    const hue = Math.floor(Math.random() * 360);
-    const saturation = 70 + Math.floor(Math.random() * 30);
-    const lightness = 45 + Math.floor(Math.random() * 10);
+    // Use the server ID to generate a hash
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+      hash = ((hash << 5) - hash) + id.charCodeAt(i);
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    hash = Math.abs(hash);
     
-    const color = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    // Find an unused color from the palette
+    let colorIndex;
+    const availableIndices = Array.from(
+      { length: extendedPalette.length }, 
+      (_, i) => i
+    ).filter(i => !usedColorIndices.includes(i));
     
+    if (availableIndices.length > 0) {
+      // If we have unused colors, pick one based on the hash
+      colorIndex = availableIndices[hash % availableIndices.length];
+    } else {
+      // If all colors are used, just pick one based on the hash
+      colorIndex = hash % extendedPalette.length;
+    }
+    
+    const color = extendedPalette[colorIndex];
+    
+    // Update usedColorIndices
+    setUsedColorIndices(prev => [...prev, colorIndex]);
+    
+    // Update color cache
     setRandomColorCache(prev => ({
       ...prev,
       [id]: color
@@ -64,230 +136,113 @@ export default function PlayerCountChart({
     return color;
   };
       
-  // Prepare chart configuration
-  const chartConfig = useMemo(() => {
-    const config: ChartConfig = {};
+  // Get color for a server, prioritizing database colors
+  const getServerColor = (serverId: string) => {
+    // First check if we have a color in the database
     
-    serverIds.forEach((serverId) => {
-      // Use predefined color if available, otherwise generate random
-      const color = serverColors[serverId.toLowerCase()] || getRandomColor(serverId);
-      
-      config[serverId] = {
-        color
-      };
-    });
-    
-    return config;
-  }, [serverIds, serverColors, randomColorCache]);
-
-  const chartColors = {
-    grid: "rgba(75, 85, 99, 0.1)",
-    text: "rgba(255, 255, 255, 0.6)",
-    tooltip: {
-      background: "#1F2937",
-      border: "#4B5563",
-      text: "#F9FAFB"
+    // Check if the server ID might be case-sensitive
+    const matchingKey = Object.keys(dbColors).find(key => 
+      key.toLowerCase() === serverId.toLowerCase()
+    );
+    if (matchingKey && matchingKey !== serverId) {
     }
+    
+    // Check for whitespace or hidden characters
+    
+    if (dbColors[serverId]) {
+      return dbColors[serverId];
+    }
+    // Fall back to random color if not in database
+    return getRandomColor(serverId);
+  };
+  
+  // Wait for colors to load before rendering the chart
+  if (isLoadingColors && typeof window !== 'undefined') {
+    return <div className="h-[400px] w-full flex items-center justify-center">Loading chart colors...</div>;
   }
   
-  // Configure the chart options
-  const options: ApexOptions = {
-    chart: {
-      type: 'line',
-      height: 400,
-      fontFamily: 'Inter, sans-serif',
-      background: 'transparent',
-      toolbar: {
-        show: false
-      },
-      zoom: {
-        enabled: true,
-        type: 'x',
-        autoScaleYaxis: true
-      }
-    },
-    theme: {
-      mode: 'dark',
-    },
-    stroke: {
-      curve: 'smooth',
-      width: 3,
-    },
-    colors: [
-      '#60A5FA',  // blue
-      '#34D399',  // green
-      '#F87171',  // red
-      '#C084FC',  // purple
-      '#FBBF24',  // yellow
-    ],
-    fill: {
-      type: 'gradient',
-      gradient: {
-        opacityFrom: 0.3,
-        opacityTo: 0.1,
-      }
-    },
-    dataLabels: {
-      enabled: false
-    },
-    grid: {
-      show: true,
-      borderColor: chartColors.grid,
-      strokeDashArray: 2,
-      position: 'back',
-    },
-    tooltip: {
-      theme: 'dark',
-      style: {
-        fontSize: '12px',
-        fontFamily: 'Inter, sans-serif',
-      },
-      x: {
-        format: timeRange === '1h' || timeRange === '2h' || timeRange === '4h' || timeRange === '6h' || timeRange === '8h' || timeRange === '24h' 
-          ? 'HH:mm' 
-          : 'MMM dd',
-      },
-      y: {
-        formatter: function(value: number) {
-          return Math.round(value).toString()
-        }
-      },
-      marker: {
-        show: true,
-      },
-    },
-    xaxis: {
-      type: 'datetime',
-      labels: {
-        style: {
-          colors: chartColors.text,
-          fontSize: '12px',
-          fontFamily: 'Inter, sans-serif',
-        },
-        format: 
-          timeRange === '1h' || timeRange === '2h' || timeRange === '4h' || timeRange === '6h' || timeRange === '8h' ? 'HH:mm' :
-          timeRange === '24h' ? 'HH:mm' :
-          timeRange === '7d' ? 'dd MMM' :
-          'MMM yyyy',
-      },
-      axisBorder: {
-        show: false
-      },
-      axisTicks: {
-        show: false
-      },
-      tooltip: {
-        enabled: false
-      }
-    },
-    yaxis: {
-      labels: {
-        style: {
-          colors: chartColors.text,
-          fontSize: '12px',
-          fontFamily: 'Inter, sans-serif',
-        },
-        formatter: function(value: number) {
-          return Math.round(value).toString()
-        }
-      },
-      min: function(min: number) {
-        // Get max value from all series
-        const maxVal = data.reduce((max, item) => {
-          const values = serverIds.map(id => item[id] || 0);
-          const itemMax = Math.max(...values);
-          return itemMax > max ? itemMax : max;
-        }, 0);
-        
-        // Start from zero if min value is closer to zero than 20% of the range
-        return min < (maxVal - min) * 0.2 ? 0 : min - (maxVal - min) * 0.1;
-      },
-      max: function(max: number) {
-        // Get min value from all series
-        const minVal = data.reduce((minValue, item) => {
-          const values = serverIds.map(id => item[id] || 0);
-          const itemMin = Math.min(...values);
-          return itemMin < minValue ? itemMin : minValue;
-        }, Infinity);
-        
-        // Add a little padding on top
-        return max + (max - minVal) * 0.1;
-      }
-    },
-    legend: {
-      show: true,
-      position: 'top',
-      horizontalAlign: 'left',
-      fontSize: '14px',
-      fontFamily: 'Inter, sans-serif',
-      labels: {
-        colors: chartColors.text
-      },
-      markers: {
-        size: 10,
-        strokeWidth: 0,
-        shape: 'circle',
-        offsetX: 0,
-        offsetY: 0
-      },
-      itemMargin: {
-        horizontal: 10,
-        vertical: 8
-      }
-    },
-    responsive: [
-      {
-        breakpoint: 640,
-        options: {
-          chart: {
-            height: 300
-          },
-          legend: {
-            position: 'bottom',
-            horizontalAlign: 'center'
-          }
-        }
-      }
-    ]
-  };
-
-  if (loading) {
-    return (
-      <div className="h-[400px] w-full">
-        <div className="flex h-full items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600"></div>
-        </div>
-      </div>
-    )
-  }
-
-  if (data.length === 0) {
-    return (
-      <div className="h-[400px] w-full">
-        <div className="flex h-full items-center justify-center">
-          <p className="text-center text-gray-400">No data available for the selected time range</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Format series data for ApexCharts
-  const series = serverIds.map(serverId => ({
-    name: serverNames[serverId] || `Server ${serverId}`,
-    data: data.map(d => ({
-      x: d.timestamp,
-      y: d[serverId] || 0
-    }))
-  }));
-
+  
   // Return the chart component
   return (
     <div className="h-[400px] w-full">
       {typeof window !== 'undefined' && (
         <Chart
-          options={options}
-          series={series}
-          type="area"
+          options={{
+            chart: {
+              type: 'line',
+              height: 400,
+              background: 'transparent',
+              toolbar: {
+                show: false
+              }
+            },
+            colors: (() => {
+              // Debug colors for each server ID
+              const colors = serverIds.map(serverId => {
+                const color = getServerColor(serverId);
+                return color;
+              });
+              return colors;
+            })(),
+            stroke: {
+              width: 3,
+              curve: 'straight'
+            },
+            xaxis: {
+              type: 'datetime',
+              labels: {
+                style: {
+                  colors: '#EFEFF1'
+                },
+                datetimeUTC: false,
+                format: 'h:mm TT',
+              },
+              tooltip: {
+                enabled: true
+              }
+            },
+            yaxis: {
+              labels: {
+                style: {
+                  colors: '#EFEFF1'
+                }
+              }
+            },
+            grid: {
+              show: true,
+              borderColor: "rgba(75, 85, 99, 0.1)",
+              strokeDashArray: 2
+            },
+            theme: {
+              mode: 'dark'
+            },
+            tooltip: {
+              x: {
+                format: 'MMM dd, yyyy h:mm TT'
+              },
+              y: {
+                formatter: function(value) {
+                  return value + ' players';
+                }
+              }
+            },
+            legend: {
+              show: true,
+              position: 'top',
+              horizontalAlign: 'left',
+              labels: {
+                colors: '#EFEFF1'
+              }
+            }
+          }}
+          series={serverIds.map(serverId => ({
+            name: serverNames[serverId] || `Server ${serverId}`,
+            data: data.map(d => [
+              new Date(d.timestamp).getTime(),
+              d[serverId] || 0
+            ])
+          }))}
+          type="line"
           height="400"
         />
       )}
