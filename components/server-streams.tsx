@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Loader2, ExternalLink, Twitch, X } from "lucide-react";
+import { useFeatureGate, FEATURE_GATES } from "@/lib/statsig";
 
 // Define Twitch embed types
 declare global {
@@ -59,10 +60,33 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
   // New state for multi-stream functionality
   const [selectedStreams, setSelectedStreams] = useState<StreamData[]>([]);
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  
+  // New state for search/filter functionality
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filteredStreams, setFilteredStreams] = useState<StreamData[]>([]);
+  
+  // For mobile detection - only used on desktop
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
+  // FORCE ENABLE for debugging
+  const isStreamViewerEnabled = true;
+  const isMultiStreamEnabled = true;
+  
+  useEffect(() => {
+    console.log('ServerStreams rendering with features forced ON:', {
+      isStreamViewerEnabled,
+      isMultiStreamEnabled
+    });
+  }, []);
 
   useEffect(() => {
     async function fetchStreams() {
       try {
+        if (!isStreamViewerEnabled) {
+          setLoading(false);
+          return;
+        }
+        
         setLoading(true);
         setError(null);
         setDetailedError(null);
@@ -107,10 +131,12 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
     }
     
     fetchStreams();
-  }, [serverId]);
+  }, [serverId, isStreamViewerEnabled]);
 
   // Load Twitch embed script once when component mounts
   useEffect(() => {
+    if (!isStreamViewerEnabled) return;
+    
     const script = document.createElement('script');
     script.src = 'https://embed.twitch.tv/embed/v1.js';
     script.async = true;
@@ -126,7 +152,22 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
     return () => {
       // Leave the script in the DOM as other components might need it
     };
-  }, []);
+  }, [isStreamViewerEnabled]);
+
+  // Filter streams based on search query
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredStreams(streams);
+    } else {
+      const query = searchQuery.toLowerCase();
+      const filtered = streams.filter((stream) => 
+        stream.title.toLowerCase().includes(query) || 
+        stream.user_name.toLowerCase().includes(query) ||
+        stream.game_name.toLowerCase().includes(query)
+      );
+      setFilteredStreams(filtered);
+    }
+  }, [searchQuery, streams]);
 
   // Function to toggle a stream selection
   const toggleStreamSelection = (stream: StreamData) => {
@@ -150,7 +191,7 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
 
   // Function to launch multi-stream view
   const launchMultiStream = () => {
-    if (selectedStreams.length === 0) {
+    if (!isMultiStreamEnabled || selectedStreams.length === 0) {
       alert("Please select at least one stream");
       return;
     }
@@ -168,6 +209,26 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
     }
     setIsMultiSelectMode(!isMultiSelectMode);
   };
+
+  // Handle stream selection
+  const handleStreamClick = (stream: StreamData) => {
+    // Skip modal on mobile - direct links are handled in the StreamCard component
+    if (!isMobile) {
+      setActiveStream(stream);
+    }
+  };
+
+  if (!isStreamViewerEnabled) {
+    return (
+      <div className="py-12 px-6 bg-gray-800 border border-gray-700 rounded-md text-center">
+        <Twitch className="h-10 w-10 mx-auto mb-4 text-purple-400 opacity-50" />
+        <h3 className="text-lg font-semibold mb-2 text-gray-100">Stream Viewer Unavailable</h3>
+        <p className="text-gray-400 max-w-md mx-auto">
+          The stream viewer feature is currently unavailable.
+        </p>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -223,67 +284,110 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
 
   return (
     <div className="space-y-6">
-      {/* Multi-stream controls */}
-      <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-        <div className="flex gap-2 items-center">
-          <button
-            onClick={toggleMultiSelectMode}
-            className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
-            style={{
-              backgroundColor: isMultiSelectMode ? '#004D61' : '#18181b',
-              color: '#FFFFFF',
-              border: isMultiSelectMode ? '1px solid #004D61' : '1px solid #26262c',
-              borderRadius: '4px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'background-color 0.2s ease'
-            }}
-          >
-            {isMultiSelectMode 
-              ? <span className="flex items-center gap-1"><X className="h-4 w-4" /> Cancel</span> 
-              : "Select Multiple Streams"}
-          </button>
-          
-          {isMultiSelectMode && (
+      {/* Search and filter controls */}
+      <div className="flex flex-wrap justify-between items-center gap-4 mb-2">
+        <div className="relative w-full md:w-1/2">
+          <input
+            type="text"
+            placeholder="Search streams by title, streamer, or character..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent"
+          />
+          {searchQuery && (
             <button
-              onClick={launchMultiStream}
-              disabled={selectedStreams.length === 0}
-              className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
-              style={{
-                backgroundColor: selectedStreams.length === 0 ? '#26262c' : '#004D61',
-                color: selectedStreams.length === 0 ? '#ADADB8' : '#FFFFFF',
-                border: selectedStreams.length === 0 ? '1px solid #26262c' : '1px solid #004D61',
-                borderRadius: '4px',
-                fontWeight: 600,
-                cursor: selectedStreams.length === 0 ? 'not-allowed' : 'pointer',
-                opacity: selectedStreams.length === 0 ? 0.7 : 1,
-                transition: 'background-color 0.2s ease'
-              }}
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
             >
-              Launch Multi-Stream ({selectedStreams.length})
+              <X className="h-4 w-4" />
             </button>
           )}
         </div>
         
-        <p className="text-sm text-gray-400">
-          {streams.length} {streams.length === 1 ? "stream" : "streams"} live
+        <p className="text-xs sm:text-sm text-gray-400">
+          {filteredStreams.length} of {streams.length} {streams.length === 1 ? "stream" : "streams"} live
         </p>
       </div>
       
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {streams.map((stream) => (
-          <StreamCard
-            key={stream.id}
-            stream={stream}
-            onClick={() => setActiveStream(stream)}
-            isMultiSelectMode={isMultiSelectMode}
-            isSelected={selectedStreams.some(s => s.id === stream.id)}
-            onSelect={toggleStreamSelection}
-          />
-        ))}
-      </div>
+      {/* Multi-stream controls */}
+      {isMultiStreamEnabled && (
+        <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
+          <div className="flex flex-wrap gap-2 items-center">
+            <button
+              onClick={toggleMultiSelectMode}
+              className="px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors"
+              style={{
+                backgroundColor: isMultiSelectMode ? '#004D61' : '#18181b',
+                color: '#FFFFFF',
+                border: isMultiSelectMode ? '1px solid #004D61' : '1px solid #26262c',
+                borderRadius: '4px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'background-color 0.2s ease'
+              }}
+            >
+              {isMultiSelectMode 
+                ? <span className="flex items-center gap-1"><X className="h-4 w-4" /> Cancel</span> 
+                : "Select Multiple Streams"}
+            </button>
+            
+            {isMultiSelectMode && (
+              <button
+                onClick={launchMultiStream}
+                disabled={selectedStreams.length === 0}
+                className="px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors"
+                style={{
+                  backgroundColor: selectedStreams.length === 0 ? '#26262c' : '#004D61',
+                  color: selectedStreams.length === 0 ? '#ADADB8' : '#FFFFFF',
+                  border: selectedStreams.length === 0 ? '1px solid #26262c' : '1px solid #004D61',
+                  borderRadius: '4px',
+                  fontWeight: 600,
+                  cursor: selectedStreams.length === 0 ? 'not-allowed' : 'pointer',
+                  opacity: selectedStreams.length === 0 ? 0.7 : 1,
+                  transition: 'background-color 0.2s ease'
+                }}
+              >
+                Launch Multi-Stream ({selectedStreams.length})
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       
-      {activeStream && <StreamModal stream={activeStream} onClose={() => setActiveStream(null)} />}
+      {/* Show "no results" message when search has no matches */}
+      {filteredStreams.length === 0 && searchQuery.trim() !== "" && (
+        <div className="py-12 px-6 bg-gray-800 border border-gray-700 rounded-md text-center">
+          <h3 className="text-lg font-semibold mb-2 text-gray-100">No Matching Streams</h3>
+          <p className="text-gray-400 max-w-md mx-auto">
+            No streams match your search query. Try a different search term.
+          </p>
+          <button
+            onClick={() => setSearchQuery("")}
+            className="mt-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-md text-sm transition-colors"
+          >
+            Clear Search
+          </button>
+        </div>
+      )}
+      
+      {/* Stream grid */}
+      {filteredStreams.length > 0 && (
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+          {filteredStreams.map((stream) => (
+            <StreamCard
+              key={stream.id}
+              stream={stream}
+              onClick={() => handleStreamClick(stream)}
+              isMultiSelectMode={isMultiStreamEnabled && isMultiSelectMode}
+              isSelected={selectedStreams.some(s => s.id === stream.id)}
+              onSelect={toggleStreamSelection}
+            />
+          ))}
+        </div>
+      )}
+      
+      {/* Only render modal on desktop */}
+      {!isMobile && activeStream && <StreamModal stream={activeStream} onClose={() => setActiveStream(null)} />}
     </div>
   );
 }
@@ -301,6 +405,8 @@ function StreamCard({
   isSelected?: boolean;
   onSelect?: (stream: StreamData) => void;
 }) {
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
   // Format the stream thumbnail URL
   const thumbnailUrl = stream.thumbnail_url
     .replace('{width}', '440')
@@ -326,10 +432,15 @@ function StreamCard({
     }
   };
   
+  // Open Twitch directly on mobile
   const handleCardClick = () => {
     if (isMultiSelectMode && onSelect) {
       onSelect(stream);
+    } else if (isMobile) {
+      // On mobile, go directly to Twitch
+      window.open(`https://www.twitch.tv/${stream.user_name.toLowerCase()}`, '_blank');
     } else {
+      // On desktop, show the modal
       onClick();
     }
   };
@@ -344,15 +455,7 @@ function StreamCard({
         borderStyle: 'solid',
         borderRadius: '4px',
       }}
-      onClick={(e) => {
-        if (isMultiSelectMode && onSelect) {
-          e.preventDefault();
-          e.stopPropagation();
-          onSelect(stream);
-        } else {
-          onClick();
-        }
-      }}
+      onClick={handleCardClick}
     >
       {/* Stream thumbnail with gradient overlay */}
       <div className="relative h-[180px] w-full overflow-hidden">
@@ -373,6 +476,14 @@ function StreamCard({
           <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></span>
           {formatViewerCount(stream.viewer_count)}
         </div>
+
+        {/* Mobile indicator */}
+        {isMobile && (
+          <div className="absolute bottom-2 left-2 z-20 px-2 py-1 text-xs font-medium text-white rounded flex items-center gap-1 bg-[#004D61]">
+            <Twitch className="h-3 w-3" />
+            <span>Open</span>
+          </div>
+        )}
       </div>
       
       <CardContent className="p-4">
@@ -416,6 +527,9 @@ function StreamCard({
 }
 
 function StreamModal({ stream, onClose }: { stream: StreamData, onClose: () => void }) {
+  const [playerLoaded, setPlayerLoaded] = useState(false);
+  const [isPlayerError, setIsPlayerError] = useState(false);
+  
   useEffect(() => {
     // Add overflow:hidden to body when modal is open
     document.body.style.overflow = 'hidden';
@@ -426,41 +540,53 @@ function StreamModal({ stream, onClose }: { stream: StreamData, onClose: () => v
     };
   }, []);
   
+  // Handle player loading state
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!playerLoaded) {
+        setIsPlayerError(true);
+      }
+    }, 5000); // Set timeout for player loading
+    
+    return () => clearTimeout(timer);
+  }, [playerLoaded]);
+  
   // Simplify parent domain handling for better Safari compatibility
   const parentDomain = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
   
   // Properly encode usernames to handle Unicode characters
   const encodedUsername = encodeURIComponent(stream.user_name.toLowerCase());
   
-  // Use encoded username in all URLs
+  // Create direct Twitch URLs for fallback options
+  const twitchChannelUrl = `https://www.twitch.tv/${encodedUsername}`;
+  const twitchChatUrl = `https://www.twitch.tv/popout/${encodedUsername}/chat?popout=`;
+  
+  // Use parent parameter for iframe compatibility
   const iframeUrl = `https://player.twitch.tv/?channel=${encodedUsername}&parent=${parentDomain}&autoplay=true`;
   
-  // Use the OBS chat URL as requested in the original requirement
-  const obsChannelName = encodedUsername;
-  
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-6">
-      <div className="relative w-full h-[80vh] max-w-5xl flex flex-col overflow-hidden rounded-xl shadow-2xl">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-6">
+      <div className="relative w-full h-[85vh] sm:h-[80vh] max-w-5xl flex flex-col overflow-hidden rounded-xl shadow-2xl">
         <button 
-          className="absolute top-4 right-4 z-10 p-2 bg-[#0e0e10]/60 rounded-full text-white hover:bg-[#18181b]/80 transition-colors border border-[#26262c]/50"
+          className="absolute right-2 top-2 sm:right-4 sm:top-4 z-10 p-2 bg-[#0e0e10]/60 rounded-full text-white hover:bg-[#18181b]/80 transition-colors border border-[#26262c]/50"
           onClick={onClose}
         >
-          <X className="h-5 w-5" />
+          <X className="h-4 w-4 sm:h-5 sm:w-5" />
         </button>
         
         <div className="flex flex-1 overflow-hidden rounded-t-xl">
           {/* Main content area with proper video aspect ratio */}
           <div className="flex flex-col flex-1">
             {/* Stream header */}
-            <div className="bg-[#0e0e10]/80 backdrop-blur-sm p-3 flex items-center border-b border-[#26262c]/50">
-              <div className="flex-1">
-                <h3 className="text-base font-semibold text-white flex items-center">
-                  {stream.user_name}
+            <div className="bg-[#0e0e10]/80 backdrop-blur-sm p-2 sm:p-3 flex items-center border-b border-[#26262c]/50">
+              <div className="flex-1 overflow-hidden">
+                <h3 className="text-sm sm:text-base font-semibold text-white flex items-center">
+                  <span className="truncate">{stream.user_name}</span>
                   <span className="ml-2 text-xs bg-red-600/90 text-white px-1.5 py-0.5 rounded-sm">LIVE</span>
                 </h3>
                 <p className="text-[#EFEFF1] text-xs line-clamp-1">{stream.title}</p>
               </div>
-              <div className="text-[#ADADB8] text-xs flex items-center gap-1">
+              <div className="text-[#ADADB8] text-xs flex items-center gap-1 ml-2 whitespace-nowrap">
                 <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse"></span>
                 {stream.viewer_count.toLocaleString()} viewers
               </div>
@@ -468,16 +594,38 @@ function StreamModal({ stream, onClose }: { stream: StreamData, onClose: () => v
             
             {/* Stream player with 16:9 aspect ratio */}
             <div className="flex-1 bg-black relative min-h-0">
-              <iframe 
-                src={iframeUrl}
-                className="absolute inset-0 w-full h-full border-0"
-                allowFullScreen
-                allow="autoplay; encrypted-media"
-              ></iframe>
+              {isPlayerError ? (
+                // Fallback when player fails to load
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
+                  <div className="mb-4 text-gray-400">
+                    <Twitch className="h-10 w-10 mx-auto mb-2 text-purple-400" />
+                    <p className="text-sm sm:text-base">Unable to load the stream player</p>
+                  </div>
+                  
+                  <div className="flex flex-col sm:flex-row gap-2 mt-2">
+                    <a 
+                      href={twitchChannelUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="py-2 px-4 bg-[#004D61] hover:bg-[#003a4d] text-white rounded text-xs sm:text-sm font-medium"
+                    >
+                      Open on Twitch
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <iframe 
+                  src={iframeUrl}
+                  className="absolute inset-0 w-full h-full border-0"
+                  allowFullScreen
+                  allow="autoplay; encrypted-media"
+                  onLoad={() => setPlayerLoaded(true)}
+                ></iframe>
+              )}
             </div>
           </div>
           
-          {/* Chat sidebar with OBS Chat as requested */}
+          {/* Chat sidebar with OBS Chat as requested - desktop only */}
           <div className="w-[280px] hidden md:flex flex-col flex-shrink-0 border-l border-[#26262c]/50 bg-[#0e0e10]/80 backdrop-blur-sm">
             <div className="p-2 bg-[#18181b]/90 text-white text-xs font-medium border-b border-[#26262c]/50 flex justify-between items-center backdrop-blur-sm">
               <span className="text-[#EFEFF1]">STREAM CHAT</span>
@@ -491,6 +639,7 @@ function StreamModal({ stream, onClose }: { stream: StreamData, onClose: () => v
                   <!DOCTYPE html>
                   <html style="background: #000000;">
                     <head>
+                      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
                       <style>
                         html, body {
                           margin: 0;
@@ -538,7 +687,7 @@ function StreamModal({ stream, onClose }: { stream: StreamData, onClose: () => v
                       <div id="chat-container">
                         <iframe 
                           id="obs-chat"
-                          src="https://nightdev.com/hosted/obschat/?theme=dark&channel=${obsChannelName}&fade=false&bot_activity=true&prevent_clipping=true&background=000000&background_opacity=85&text_color=ffffff&text_opacity=100"
+                          src="https://nightdev.com/hosted/obschat/?theme=dark&channel=${encodedUsername}&fade=false&bot_activity=true&prevent_clipping=true&background=000000&background_opacity=85&text_color=ffffff&text_opacity=100"
                           allowfullscreen="true"
                         ></iframe>
                         <div id="black-overlay"></div>
@@ -618,7 +767,7 @@ function StreamModal({ stream, onClose }: { stream: StreamData, onClose: () => v
             <div className="px-3 py-2 bg-[#18181b]/90 backdrop-blur-sm border-t border-[#26262c]/50 text-sm text-center flex items-center justify-center gap-2">
               <Twitch className="h-3.5 w-3.5 text-[#004D61]" />
               <a 
-                href={`https://www.twitch.tv/${encodedUsername}/`}
+                href={twitchChannelUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[#004D61] hover:text-[#003a4d] hover:underline text-xs transition-colors"
@@ -629,15 +778,23 @@ function StreamModal({ stream, onClose }: { stream: StreamData, onClose: () => v
           </div>
         </div>
         
-        {/* Mobile chat button */}
-        <div className="md:hidden p-2 bg-[#0e0e10]/80 backdrop-blur-sm border-t border-[#26262c]/50 text-center rounded-b-xl">
+        {/* Mobile chat & twitch buttons */}
+        <div className="md:hidden p-2 bg-[#0e0e10]/80 backdrop-blur-sm border-t border-[#26262c]/50 text-center rounded-b-xl flex justify-center gap-2">
           <a 
-            href={`https://www.twitch.tv/popout/${encodedUsername}/chat?popout=`}
+            href={twitchChatUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block py-1.5 px-3 bg-[#18181b] hover:bg-[#26262c] text-white rounded-md font-medium text-xs transition-colors"
+          >
+            Open Chat
+          </a>
+          <a 
+            href={twitchChannelUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-block py-1.5 px-3 bg-[#004D61]/90 hover:bg-[#003a4d] text-white rounded-md font-medium text-xs transition-colors"
           >
-            Open Chat
+            Watch on Twitch
           </a>
         </div>
       </div>
