@@ -61,6 +61,10 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
   const [selectedStreams, setSelectedStreams] = useState<StreamData[]>([]);
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   
+  // New state for search/filter functionality
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filteredStreams, setFilteredStreams] = useState<StreamData[]>([]);
+  
   // For mobile detection - only used on desktop
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
@@ -149,6 +153,21 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
       // Leave the script in the DOM as other components might need it
     };
   }, [isStreamViewerEnabled]);
+
+  // Filter streams based on search query
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredStreams(streams);
+    } else {
+      const query = searchQuery.toLowerCase();
+      const filtered = streams.filter((stream) => 
+        stream.title.toLowerCase().includes(query) || 
+        stream.user_name.toLowerCase().includes(query) ||
+        stream.game_name.toLowerCase().includes(query)
+      );
+      setFilteredStreams(filtered);
+    }
+  }, [searchQuery, streams]);
 
   // Function to toggle a stream selection
   const toggleStreamSelection = (stream: StreamData) => {
@@ -265,6 +284,31 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
 
   return (
     <div className="space-y-6">
+      {/* Search and filter controls */}
+      <div className="flex flex-wrap justify-between items-center gap-4 mb-2">
+        <div className="relative w-full md:w-1/2">
+          <input
+            type="text"
+            placeholder="Search streams by title, streamer, or character..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        
+        <p className="text-xs sm:text-sm text-gray-400">
+          {filteredStreams.length} of {streams.length} {streams.length === 1 ? "stream" : "streams"} live
+        </p>
+      </div>
+      
       {/* Multi-stream controls */}
       {isMultiStreamEnabled && (
         <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
@@ -307,25 +351,40 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
               </button>
             )}
           </div>
-          
-          <p className="text-xs sm:text-sm text-gray-400">
-            {streams.length} {streams.length === 1 ? "stream" : "streams"} live
-          </p>
         </div>
       )}
       
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-        {streams.map((stream) => (
-          <StreamCard
-            key={stream.id}
-            stream={stream}
-            onClick={() => handleStreamClick(stream)}
-            isMultiSelectMode={isMultiStreamEnabled && isMultiSelectMode}
-            isSelected={selectedStreams.some(s => s.id === stream.id)}
-            onSelect={toggleStreamSelection}
-          />
-        ))}
-      </div>
+      {/* Show "no results" message when search has no matches */}
+      {filteredStreams.length === 0 && searchQuery.trim() !== "" && (
+        <div className="py-12 px-6 bg-gray-800 border border-gray-700 rounded-md text-center">
+          <h3 className="text-lg font-semibold mb-2 text-gray-100">No Matching Streams</h3>
+          <p className="text-gray-400 max-w-md mx-auto">
+            No streams match your search query. Try a different search term.
+          </p>
+          <button
+            onClick={() => setSearchQuery("")}
+            className="mt-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-md text-sm transition-colors"
+          >
+            Clear Search
+          </button>
+        </div>
+      )}
+      
+      {/* Stream grid */}
+      {filteredStreams.length > 0 && (
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+          {filteredStreams.map((stream) => (
+            <StreamCard
+              key={stream.id}
+              stream={stream}
+              onClick={() => handleStreamClick(stream)}
+              isMultiSelectMode={isMultiStreamEnabled && isMultiSelectMode}
+              isSelected={selectedStreams.some(s => s.id === stream.id)}
+              onSelect={toggleStreamSelection}
+            />
+          ))}
+        </div>
+      )}
       
       {/* Only render modal on desktop */}
       {!isMobile && activeStream && <StreamModal stream={activeStream} onClose={() => setActiveStream(null)} />}
