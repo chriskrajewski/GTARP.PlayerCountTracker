@@ -177,7 +177,7 @@ export default function PlayerCountChart({
               }
             },
             colors: (() => {
-              // Debug colors for each server ID
+              // Color mapping for each server ID
               const colors = serverIds.map(serverId => {
                 const color = getServerColor(serverId);
                 return color;
@@ -195,7 +195,20 @@ export default function PlayerCountChart({
                   colors: '#EFEFF1'
                 },
                 datetimeUTC: false,
-                format: 'h:mm TT',
+                format: (() => {
+                  // Dynamic formatting based on time range
+                  if (timeRange === '1h' || timeRange === '2h' || timeRange === '4h' || timeRange === '6h' || timeRange === '8h') {
+                    return 'h:mm TT';
+                  } else if (timeRange === '24h') {
+                    return 'h:mm TT';
+                  } else if (timeRange === '7d') {
+                    return 'MMM dd';
+                  } else if (timeRange === '30d' || timeRange === '90d') {
+                    return 'MMM dd';
+                  } else {
+                    return 'MMM yyyy';
+                  }
+                })(),
               },
               tooltip: {
                 enabled: true

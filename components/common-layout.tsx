@@ -42,14 +42,7 @@ export function CommonLayout({
   const isChangelogEnabled = true;
   const isCsvExportEnabled = true;
   
-  useEffect(() => {
-    // Log that this component is rendering with forced enable
-    console.log('CommonLayout rendering with features forced ON:', {
-      isFeedbackEnabled,
-      isChangelogEnabled,
-      isCsvExportEnabled
-    });
-  }, []);
+
 
   // Close mobile menu when clicking outside
   useEffect(() => {

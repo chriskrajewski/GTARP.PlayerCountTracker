@@ -72,12 +72,7 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
   const isStreamViewerEnabled = true;
   const isMultiStreamEnabled = true;
   
-  useEffect(() => {
-    console.log('ServerStreams rendering with features forced ON:', {
-      isStreamViewerEnabled,
-      isMultiStreamEnabled
-    });
-  }, []);
+
 
   useEffect(() => {
     async function fetchStreams() {

@@ -111,7 +111,7 @@ export function useFeatureGate(featureGate: string): boolean {
 export function checkFeatureEnabled(featureGate: string): boolean {
   if (typeof window === 'undefined') return false;
   
-  // Debug log
+
   if (window.statsig) {
     try {
       const result = window.statsig?.checkGate(featureGate) ?? false;
