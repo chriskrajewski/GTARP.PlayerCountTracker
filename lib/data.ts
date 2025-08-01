@@ -66,6 +66,154 @@ export type ServerColor = {
   color_hsl: string;
 }
 
+// Get optimal sampling interval for large datasets
+function getOptimalSamplingInterval(timeRange: TimeRange): string {
+  switch (timeRange) {
+    case "30d":
+      return "every 3 hours"
+    case "90d":
+      return "every 12 hours"
+    case "180d":
+      return "daily"
+    case "365d":
+      return "every 3 days"
+    case "all":
+      return "weekly"
+    default:
+      return "hourly"
+  }
+}
+
+// Apply client-side sampling to reduce data points
+function applySampling(data: PlayerCountData[], timeRange: TimeRange): PlayerCountData[] {
+  if (data.length <= 1000) return data
+  
+  // Calculate sampling rate based on time range
+  let sampleRate: number
+  switch (timeRange) {
+    case "30d":
+      sampleRate = Math.max(1, Math.floor(data.length / 500)) // Target ~500 points
+      break
+    case "90d":
+      sampleRate = Math.max(1, Math.floor(data.length / 300)) // Target ~300 points
+      break
+    case "180d":
+    case "365d":
+      sampleRate = Math.max(1, Math.floor(data.length / 200)) // Target ~200 points
+      break
+    default:
+      sampleRate = Math.max(1, Math.floor(data.length / 1000))
+  }
+  
+  // Sample data at regular intervals
+  const sampledData: PlayerCountData[] = []
+  for (let i = 0; i < data.length; i += sampleRate) {
+    sampledData.push(data[i])
+  }
+  
+  // Always include the last data point
+  if (data.length > 0 && sampledData[sampledData.length - 1] !== data[data.length - 1]) {
+    sampledData.push(data[data.length - 1])
+  }
+  
+  return sampledData
+}
+
+// Time-based sampling to ensure coverage across full date range
+export async function getPlayerCountsWithTimeBasedSampling(serverIds: string[], timeRange: TimeRange): Promise<PlayerCountData[]> {
+  const isClient = typeof window !== "undefined"
+  const client = isClient ? supabase : createServerClient()
+  
+  const now = new Date()
+  let startDate: Date
+  let daysDifference: number
+  
+  // Calculate start date and days
+  switch (timeRange) {
+    case "7d":
+      startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      daysDifference = 7
+      break
+    case "30d":
+      startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+      daysDifference = 30
+      break
+    case "90d":
+      startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+      daysDifference = 90
+      break
+    case "180d":
+      startDate = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000)
+      daysDifference = 180
+      break
+    case "365d":
+      startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+      daysDifference = 365
+      break
+    default:
+      return getPlayerCounts(serverIds, timeRange)
+  }
+  
+
+  
+  try {
+    const sampledData: PlayerCountData[] = []
+    
+    // Sample data from different time periods to ensure full coverage
+    // Adjust sample periods based on time range for optimal coverage
+    let samplePeriods: number
+    let daysPerPeriod: number
+    
+    if (timeRange === "7d") {
+      samplePeriods = 7 // One sample per day for 7d
+      daysPerPeriod = 1
+    } else if (timeRange === "30d") {
+      samplePeriods = 15 // Sample every 2 days for 30d
+      daysPerPeriod = 2
+    } else {
+      samplePeriods = Math.min(20, daysDifference) // Max 20 sample periods for longer ranges
+      daysPerPeriod = Math.floor(daysDifference / samplePeriods)
+    }
+    
+
+    
+    for (let i = 0; i < samplePeriods; i++) {
+      const periodStart = new Date(startDate.getTime() + (i * daysPerPeriod * 24 * 60 * 60 * 1000))
+      const periodEnd = new Date(periodStart.getTime() + (daysPerPeriod * 24 * 60 * 60 * 1000))
+      
+      // Get records from each time period - adjust limit based on time range
+      const recordsPerPeriod = timeRange === "7d" ? 100 : 50 // More records for shorter ranges
+      
+      const { data, error } = await client
+        .from('player_counts')
+        .select('server_id, timestamp, player_count')
+        .gte('timestamp', periodStart.toISOString())
+        .lt('timestamp', periodEnd.toISOString())
+        .in('server_id', serverIds.length > 0 ? serverIds : [])
+        .order('timestamp', { ascending: true })
+        .limit(recordsPerPeriod)
+      
+      if (!error && data && data.length > 0) {
+        // Take every nth record to spread across the period - more samples for shorter ranges
+        const samplesPerPeriod = timeRange === "7d" ? 10 : 5 // More detail for 7d charts
+        const stride = Math.max(1, Math.floor(data.length / samplesPerPeriod))
+        
+        for (let j = 0; j < data.length; j += stride) {
+          sampledData.push(data[j])
+        }
+
+      }
+    }
+    
+
+    return sampledData.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+    
+  } catch (error) {
+    console.warn('Time-based sampling failed, falling back to regular method:', error)
+    return getPlayerCounts(serverIds, timeRange)
+  }
+}
+
 // Get appropriate time aggregation based on time range
 export function getTimeAggregation(timeRange: TimeRange): TimeAggregation {
   switch (timeRange) {
@@ -163,10 +311,14 @@ export async function getPlayerCounts(serverIds: string[], timeRange: TimeRange)
   const isClient = typeof window !== "undefined"
   const client = isClient ? supabase : createServerClient()
 
+  // Note: This function is now mainly for shorter time ranges
+  // Longer ranges (30d+) should use getPlayerCountsSmart() instead
+  
   let query = client
     .from("player_counts")
     .select("server_id, timestamp, player_count")
     .order("timestamp", { ascending: true })
+    .limit(50000) // High limit for detailed shorter ranges
 
   if (serverIds.length > 0) {
     query = query.in("server_id", serverIds)
@@ -225,6 +377,8 @@ export async function getPlayerCounts(serverIds: string[], timeRange: TimeRange)
     return []
   }
 
+
+
   return data
 }
 
@@ -235,7 +389,8 @@ export async function getStreamCounts(serverIds: string[], timeRange: TimeRange)
   let query = client
     .from("streamer_count")
     .select("server_id, timestamp, streamercount")
-    .order("timestamp", { ascending: true });
+    .order("timestamp", { ascending: true })
+    .limit(50000); // Increase limit for larger time ranges
 
   if (serverIds.length > 0) {
     query = query.in("server_id", serverIds);
@@ -302,7 +457,8 @@ export async function getViewerCounts(serverIds: string[], timeRange: TimeRange)
   let query = client
     .from("viewer_count")
     .select("server_id, timestamp, viewcount")
-    .order("timestamp", { ascending: true });
+    .order("timestamp", { ascending: true })
+    .limit(50000); // Increase limit for larger time ranges
 
   if (serverIds.length > 0) {
     query = query.in("server_id", serverIds);
@@ -396,11 +552,8 @@ export function aggregateDataByTime(
         const day = date.getDay()
         const diff = date.getDate() - day
         firstDayOfWeek.setDate(diff)
-        // Format: 2023-W01 (year and week number)
-        const weekNumber = Math.ceil(
-          ((date.getTime() - new Date(date.getFullYear(), 0, 1).getTime()) / 86400000 + 1) / 7,
-        )
-        timeKey = `${date.getFullYear()}-W${String(weekNumber).padStart(2, "0")}`
+        // Use the first day of the week as a proper ISO date format
+        timeKey = `${firstDayOfWeek.getFullYear()}-${String(firstDayOfWeek.getMonth() + 1).padStart(2, "0")}-${String(firstDayOfWeek.getDate()).padStart(2, "0")}`
         break
       case "month":
         // Format: 2023-01
@@ -422,7 +575,7 @@ export function aggregateDataByTime(
   })
 
   // Convert to array format for the chart
-  return Object.entries(groupedData)
+  const result = Object.entries(groupedData)
     .map(([timestamp, servers]) => {
       const entry: AggregatedData = { timestamp }
 
@@ -439,6 +592,10 @@ export function aggregateDataByTime(
       return entry
     })
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+
+
+
+  return result
 }
 
 // This function now uses the time aggregation
@@ -449,6 +606,23 @@ export function aggregateDataForChart(
 ): AggregatedData[] {
   const aggregation = getTimeAggregation(timeRange)
   return aggregateDataByTime(data, serverIds, aggregation)
+}
+
+// Smart data fetching that chooses the best strategy based on time range
+export async function getPlayerCountsSmart(serverIds: string[], timeRange: TimeRange): Promise<PlayerCountData[]> {
+  // For time ranges with potentially dense data, use time-based sampling
+  if (["7d", "30d", "90d", "180d", "365d", "all"].includes(timeRange)) {
+    try {
+
+      return await getPlayerCountsWithTimeBasedSampling(serverIds, timeRange)
+    } catch (error) {
+
+      return await getPlayerCounts(serverIds, timeRange)
+    }
+  }
+  
+  // For very short ranges (1h-24h), use regular method for maximum detail
+  return await getPlayerCounts(serverIds, timeRange)
 }
 
 export function getServerStats(data: PlayerCountData[], serverId: string) {

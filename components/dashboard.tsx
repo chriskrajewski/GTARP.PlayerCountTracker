@@ -4,10 +4,11 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
-import { RefreshCw } from "lucide-react"
+import { RefreshCw, Loader2 } from "lucide-react"
 import {
   getServers,
   getPlayerCounts,
+  getPlayerCountsSmart,
   aggregateDataForChart,
   getStreamCounts,
   getViewerCounts,
@@ -36,6 +37,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [chartLoading, setChartLoading] = useState(false)
 
   useEffect(() => {
     async function loadServers() {
@@ -107,19 +109,19 @@ export default function Dashboard() {
     if (selectedServers.length === 0) return
 
     try {
-      setLoading(true);
+      setChartLoading(true);
       setRefreshing(true);
       
-      // Player counts are affected by time range
-      const data = await getPlayerCounts(selectedServers, timeRange);
+      // Player counts are affected by time range - use smart fetching for large datasets
+      const data = await getPlayerCountsSmart(selectedServers, timeRange);
       setPlayerData(data);
       
-      setLoading(false);
+      setChartLoading(false);
       setRefreshing(false);
     } catch (err) {
       console.error("Error loading player data:", err)
       setError("Failed to load player data. Please check your connection and try again.")
-      setLoading(false);
+      setChartLoading(false);
       setRefreshing(false);
     }
   }
@@ -171,6 +173,10 @@ export default function Dashboard() {
 
   const chartData = aggregateDataForChart(playerData, selectedServers, timeRange)
 
+
+  
+
+
   // Get server name by ID
   const getServerNameById = (serverId: string): string => {
     const server = servers.find(s => s.server_id === serverId)
@@ -208,11 +214,11 @@ export default function Dashboard() {
               variant="outline" 
               size="icon" 
               onClick={handleRefresh} 
-              disabled={loading || refreshing || selectedServers.length === 0}
+              disabled={loading || refreshing || chartLoading || selectedServers.length === 0}
               title="Refresh data"
               className="bg-[#18181b] border-[#26262c] text-[#EFEFF1] hover:bg-[#26262c] hover:border-[#343438]"
             >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-4 w-4 ${refreshing || chartLoading ? 'animate-spin' : ''}`} />
               <span className="sr-only">Refresh data</span>
             </Button>
           </div>
@@ -339,15 +345,41 @@ export default function Dashboard() {
       <Card className="bg-[#0e0e10] border-[#26262c] rounded-md shadow-md">
         <CardHeader className="border-b border-[#26262c]">
           <CardTitle className="text-[#EFEFF1]">Player Count Over Time</CardTitle>
+          {/* Data availability warnings - only show when not loading */}
+          {!chartLoading && playerData.length === 0 && (
+            <div className="text-sm text-yellow-400 bg-yellow-900/20 p-2 rounded mt-2">
+              ⚠️ No data available for {timeRange} range. Check "Data start information" below for available data periods.
+            </div>
+          )}
+          {!chartLoading && playerData.length > 0 && chartData.length < 7 && timeRange !== "1h" && timeRange !== "2h" && (
+            <div className="text-sm text-blue-400 bg-blue-900/20 p-2 rounded mt-2">
+              📊 Limited historical data: Only {chartData.length} data point{chartData.length === 1 ? '' : 's'} available for {timeRange} range. 
+              <br/>Consider using a shorter time range or check "Data start information" for data availability.
+            </div>
+          )}
         </CardHeader>
         <CardContent>
-          <PlayerCountChart 
-            data={chartData} 
-            serverIds={selectedServers} 
-            serverNames={serverNameMap}
-            loading={loading} 
-            timeRange={timeRange} 
-          />
+          {chartLoading ? (
+            <div className="h-[400px] w-full flex flex-col items-center justify-center space-y-4">
+              <Loader2 className="h-8 w-8 animate-spin text-[#004D61]" />
+              <div className="text-center space-y-2">
+                <p className="text-[#EFEFF1] font-medium">Loading chart data...</p>
+                {["7d", "30d", "90d", "180d", "365d", "all"].includes(timeRange) && (
+                  <p className="text-sm text-[#9CA3AF]">
+                    Sampling data across {timeRange === "7d" ? "7 days" : timeRange === "30d" ? "30 days" : timeRange === "90d" ? "90 days" : timeRange === "180d" ? "6 months" : timeRange === "365d" ? "1 year" : "all time"} for optimal performance
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <PlayerCountChart 
+              data={chartData} 
+              serverIds={selectedServers} 
+              serverNames={serverNameMap}
+              loading={loading} 
+              timeRange={timeRange} 
+            />
+          )}
         </CardContent>
       </Card>
     </div>
