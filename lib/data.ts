@@ -47,7 +47,7 @@ export type ViewerCountData = {
 
 export type AggregatedData = {
   timestamp: string
-  [key: string]: number | string
+  [key: string]: number | string | null
 }
 
 export type DataStartInfo = {
@@ -119,7 +119,7 @@ function applySampling(data: PlayerCountData[], timeRange: TimeRange): PlayerCou
   return sampledData
 }
 
-// Time-based sampling to ensure coverage across full date range
+// Time-based sampling with proper timestamp alignment for multiple servers
 export async function getPlayerCountsWithTimeBasedSampling(serverIds: string[], timeRange: TimeRange): Promise<PlayerCountData[]> {
   const isClient = typeof window !== "undefined"
   const client = isClient ? supabase : createServerClient()
@@ -154,35 +154,31 @@ export async function getPlayerCountsWithTimeBasedSampling(serverIds: string[], 
       return getPlayerCounts(serverIds, timeRange)
   }
   
-
-  
   try {
-    const sampledData: PlayerCountData[] = []
+    const allData: PlayerCountData[] = []
     
-    // Sample data from different time periods to ensure full coverage
-    // Adjust sample periods based on time range for optimal coverage
+    // Calculate sample periods and intervals
     let samplePeriods: number
     let daysPerPeriod: number
     
     if (timeRange === "7d") {
-      samplePeriods = 7 // One sample per day for 7d
-      daysPerPeriod = 1
+      samplePeriods = 14 // More frequent sampling for 7d
+      daysPerPeriod = 0.5
     } else if (timeRange === "30d") {
-      samplePeriods = 15 // Sample every 2 days for 30d
-      daysPerPeriod = 2
+      samplePeriods = 20 // Sample every 1.5 days for 30d
+      daysPerPeriod = 1.5
+    } else if (timeRange === "90d") {
+      samplePeriods = 30 // Sample every 3 days for 90d
+      daysPerPeriod = 3
     } else {
-      samplePeriods = Math.min(20, daysDifference) // Max 20 sample periods for longer ranges
-      daysPerPeriod = Math.floor(daysDifference / samplePeriods)
+      samplePeriods = Math.min(40, daysDifference) // Max 40 sample periods for longer ranges
+      daysPerPeriod = daysDifference / samplePeriods
     }
     
-
-    
+    // Fetch data for each sample period
     for (let i = 0; i < samplePeriods; i++) {
       const periodStart = new Date(startDate.getTime() + (i * daysPerPeriod * 24 * 60 * 60 * 1000))
       const periodEnd = new Date(periodStart.getTime() + (daysPerPeriod * 24 * 60 * 60 * 1000))
-      
-      // Get records from each time period - adjust limit based on time range
-      const recordsPerPeriod = timeRange === "7d" ? 100 : 50 // More records for shorter ranges
       
       const { data, error } = await client
         .from('player_counts')
@@ -191,21 +187,57 @@ export async function getPlayerCountsWithTimeBasedSampling(serverIds: string[], 
         .lt('timestamp', periodEnd.toISOString())
         .in('server_id', serverIds.length > 0 ? serverIds : [])
         .order('timestamp', { ascending: true })
-        .limit(recordsPerPeriod)
+        .limit(200) // Higher limit for better coverage
       
       if (!error && data && data.length > 0) {
-        // Take every nth record to spread across the period - more samples for shorter ranges
-        const samplesPerPeriod = timeRange === "7d" ? 10 : 5 // More detail for 7d charts
-        const stride = Math.max(1, Math.floor(data.length / samplesPerPeriod))
-        
-        for (let j = 0; j < data.length; j += stride) {
-          sampledData.push(data[j])
-        }
-
+        allData.push(...data)
       }
     }
     
-
+    // Now apply intelligent sampling that maintains timestamp alignment
+    if (allData.length === 0) {
+      return []
+    }
+    
+    // Group data by timestamp to ensure all servers are represented at each time point
+    const timestampGroups: Record<string, PlayerCountData[]> = {}
+    
+    allData.forEach(item => {
+      const timestampKey = item.timestamp
+      if (!timestampGroups[timestampKey]) {
+        timestampGroups[timestampKey] = []
+      }
+      timestampGroups[timestampKey].push(item)
+    })
+    
+    // Get all unique timestamps and sort them
+    const sortedTimestamps = Object.keys(timestampGroups)
+      .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+    
+    // Calculate how many timestamps we want to keep for optimal performance
+    const targetDataPoints = timeRange === "7d" ? 100 : timeRange === "30d" ? 150 : timeRange === "90d" ? 200 : 250
+    const step = Math.max(1, Math.floor(sortedTimestamps.length / targetDataPoints))
+    
+    // Sample timestamps at regular intervals to maintain even distribution
+    const sampledData: PlayerCountData[] = []
+    for (let i = 0; i < sortedTimestamps.length; i += step) {
+      const timestamp = sortedTimestamps[i]
+      const dataAtTimestamp = timestampGroups[timestamp]
+      
+      // Add all servers' data for this timestamp
+      sampledData.push(...dataAtTimestamp)
+    }
+    
+    // Always include the last timestamp if it wasn't included
+    if (sortedTimestamps.length > 0) {
+      const lastTimestamp = sortedTimestamps[sortedTimestamps.length - 1]
+      const lastTimestampIncluded = sampledData.some(item => item.timestamp === lastTimestamp)
+      
+      if (!lastTimestampIncluded) {
+        sampledData.push(...timestampGroups[lastTimestamp])
+      }
+    }
+    
     return sampledData.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
     
   } catch (error) {
@@ -518,6 +550,61 @@ export async function getViewerCounts(serverIds: string[], timeRange: TimeRange)
   return data || []; // Ensure we always return an array
 }
 
+// Helper function to fill missing data points with intelligent interpolation
+function fillMissingDataPoints(data: AggregatedData[], serverIds: string[]): AggregatedData[] {
+  if (data.length === 0) return data
+  
+  // Convert null values to proper interpolated values
+  const filledData = data.map((entry, index) => {
+    const filledEntry = { ...entry }
+    
+    serverIds.forEach(serverId => {
+      if (filledEntry[serverId] === null) {
+        // Find the nearest non-null values before and after this point
+        let beforeValue: number | null = null
+        let afterValue: number | null = null
+        
+        // Look backwards for a valid value
+        for (let i = index - 1; i >= 0; i--) {
+          const prevValue = data[i][serverId]
+          if (prevValue !== null && typeof prevValue === 'number') {
+            beforeValue = prevValue
+            break
+          }
+        }
+        
+        // Look forwards for a valid value
+        for (let i = index + 1; i < data.length; i++) {
+          const nextValue = data[i][serverId]
+          if (nextValue !== null && typeof nextValue === 'number') {
+            afterValue = nextValue
+            break
+          }
+        }
+        
+        // Interpolate or use fallback
+        if (beforeValue !== null && afterValue !== null) {
+          // Linear interpolation
+          filledEntry[serverId] = Math.round((beforeValue + afterValue) / 2)
+        } else if (beforeValue !== null) {
+          // Use last known value
+          filledEntry[serverId] = beforeValue
+        } else if (afterValue !== null) {
+          // Use next known value
+          filledEntry[serverId] = afterValue
+        } else {
+          // No nearby values, use 0 as last resort
+          filledEntry[serverId] = 0
+        }
+      }
+    })
+    
+    return filledEntry
+  })
+  
+  return filledData
+}
+
 // Aggregate data by time period
 export function aggregateDataByTime(
   data: PlayerCountData[],
@@ -574,7 +661,7 @@ export function aggregateDataByTime(
     groupedData[timeKey][item.server_id].push(item.player_count)
   })
 
-  // Convert to array format for the chart
+  // Convert to array format for the chart with better missing data handling
   const result = Object.entries(groupedData)
     .map(([timestamp, servers]) => {
       const entry: AggregatedData = { timestamp }
@@ -585,17 +672,20 @@ export function aggregateDataByTime(
           // Calculate average player count for this time period
           entry[serverId] = Math.round(counts.reduce((sum, count) => sum + count, 0) / counts.length)
         } else {
-          entry[serverId] = 0
+          // Instead of always defaulting to 0, use null to let the chart handle gaps properly
+          // This prevents misleading zeros in the chart display
+          entry[serverId] = null
         }
       })
 
       return entry
     })
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+  
+  // Fill in missing data points with interpolated values for better chart continuity
+  const filledResult = fillMissingDataPoints(result, serverIds)
 
-
-
-  return result
+  return filledResult
 }
 
 // This function now uses the time aggregation
