@@ -215,9 +215,30 @@ export default function PlayerCountChart({
               }
             },
             yaxis: {
+              min: 0,
+              forceNiceScale: true,
+              tickAmount: (() => {
+                // Dynamic tick amount based on time range for optimal granularity
+                if (timeRange === '1h' || timeRange === '2h' || timeRange === '4h' || timeRange === '6h' || timeRange === '8h') {
+                  return 12; // More granular for shorter time ranges
+                } else if (timeRange === '24h') {
+                  return 12; // 12 ticks for better granularity
+                } else if (timeRange === '7d') {
+                  return 15; // 15 ticks for 7 day range - much more detailed
+                } else if (timeRange === '30d') {
+                  return 20; // 20 ticks for 30 day range - very detailed
+                } else if (timeRange === '90d') {
+                  return 30; // 25 ticks for 90 day range - maximum detail
+                } else {
+                  return 15; // Default fallback with good detail
+                }
+              })(),
               labels: {
                 style: {
                   colors: '#EFEFF1'
+                },
+                formatter: function(value) {
+                  return Math.round(value).toString();
                 }
               }
             },
@@ -250,10 +271,17 @@ export default function PlayerCountChart({
           }}
           series={serverIds.map(serverId => ({
             name: serverNames[serverId] || `Server ${serverId}`,
-            data: data.map(d => [
-              new Date(d.timestamp).getTime(),
-              d[serverId] || 0
-            ])
+            data: data
+              .map(d => {
+                const value = d[serverId]
+                const numericValue = value === null || value === undefined ? null : (typeof value === 'number' ? value : 0)
+                
+                return {
+                  x: new Date(d.timestamp).getTime(),
+                  y: numericValue
+                }
+              })
+              .filter(point => point.y !== null) // Remove null data points to prevent chart gaps
           }))}
           type="line"
           height="400"
