@@ -218,19 +218,27 @@ export default function PlayerCountChart({
               min: 0,
               forceNiceScale: true,
               tickAmount: (() => {
-                // Dynamic tick amount based on time range for optimal granularity
-                if (timeRange === '1h' || timeRange === '2h' || timeRange === '4h' || timeRange === '6h' || timeRange === '8h') {
-                  return 12; // More granular for shorter time ranges
+                // Enhanced tick amounts for maximum granularity across ALL time ranges
+                if (timeRange === '1h' || timeRange === '2h') {
+                  return 6; // Maximum detail for very short ranges
+                } else if (timeRange === '4h' || timeRange === '6h') {
+                  return 7; // High detail for short ranges
+                } else if (timeRange === '8h') {
+                  return 16; // Enhanced detail for 8 hour range
                 } else if (timeRange === '24h') {
-                  return 12; // 12 ticks for better granularity
+                  return 16; // Maximum detail for 24 hour range
                 } else if (timeRange === '7d') {
-                  return 15; // 15 ticks for 7 day range - much more detailed
+                  return 25; // Enhanced detail for 7 day range
                 } else if (timeRange === '30d') {
-                  return 20; // 20 ticks for 30 day range - very detailed
+                  return 30; // Maximum detail for 30 day range
                 } else if (timeRange === '90d') {
-                  return 30; // 25 ticks for 90 day range - maximum detail
+                  return 35; // Ultimate detail for 90 day range
+                } else if (timeRange === '180d') {
+                  return 40; // Maximum detail for 6 month range
+                } else if (timeRange === '365d') {
+                  return 45; // Ultimate detail for 1 year range
                 } else {
-                  return 15; // Default fallback with good detail
+                  return 25; // Enhanced default fallback with high detail
                 }
               })(),
               labels: {
