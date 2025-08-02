@@ -5,3 +5,9 @@ prodigy
 smilerp
 time2rp
 district10
+newdayrp
+rebirthrp
+nopixelpublic
+prodigypublic
+echorp
+highliferp
