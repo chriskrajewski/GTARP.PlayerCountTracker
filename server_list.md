@@ -5,7 +5,7 @@ prodigy
 smilerp
 time2rp
 district10
-newdayrp
+newdayrp-us-2.6
 rebirthrp
 nopixelpublic
 prodigypublic
