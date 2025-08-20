@@ -821,18 +821,182 @@ export default function MultiStreamPage() {
   // State to track if the orientation warning has been dismissed
   const [isOrientationWarningDismissed, setIsOrientationWarningDismissed] = useState(false);
   
+  // State for manual stream input
+  const [manualStreamInput, setManualStreamInput] = useState('');
+  const [showManualInput, setShowManualInput] = useState(false);
+  const [inputError, setInputError] = useState<string | null>(null);
+  
+  // Helper function to validate Twitch usernames
+  const isValidTwitchUsername = (username: string): boolean => {
+    // Twitch usernames must be 4-25 characters, alphanumeric + underscores
+    const twitchUsernameRegex = /^[a-zA-Z0-9_]{4,25}$/;
+    return twitchUsernameRegex.test(username);
+  };
+  
+  // Helper function to parse and validate manual input
+  const parseManualInput = (input: string): { valid: string[], invalid: string[], error: string | null } => {
+    if (!input.trim()) {
+      return { valid: [], invalid: [], error: 'Please enter at least one stream name' };
+    }
+    
+    // Split by various delimiters (comma, space, newline, semicolon)
+    const usernames = input
+      .split(/[,\s;\n]+/)
+      .map(username => username.trim().toLowerCase())
+      .filter(username => username.length > 0);
+    
+    if (usernames.length === 0) {
+      return { valid: [], invalid: [], error: 'Please enter at least one valid stream name' };
+    }
+    
+    if (usernames.length > 8) {
+      return { valid: [], invalid: [], error: 'Maximum 8 streams allowed at once' };
+    }
+    
+    const valid: string[] = [];
+    const invalid: string[] = [];
+    
+    usernames.forEach(username => {
+      if (isValidTwitchUsername(username)) {
+        // Avoid duplicates
+        if (!valid.includes(username)) {
+          valid.push(username);
+        }
+      } else {
+        invalid.push(username);
+      }
+    });
+    
+    if (invalid.length > 0) {
+      return { 
+        valid, 
+        invalid, 
+        error: `Invalid usernames: ${invalid.join(', ')}. Usernames must be 4-25 characters and contain only letters, numbers, and underscores.`
+      };
+    }
+    
+    if (valid.length === 0) {
+      return { valid: [], invalid: [], error: 'No valid usernames found' };
+    }
+    
+    return { valid, invalid, error: null };
+  };
+  
+  // Function to launch multi-stream with manual input
+  const launchManualMultiStream = () => {
+    const { valid, invalid, error } = parseManualInput(manualStreamInput);
+    
+    if (error) {
+      setInputError(error);
+      return;
+    }
+    
+    // Clear any previous errors
+    setInputError(null);
+    
+    // Redirect to multi-stream page with the entered streams
+    const streamers = valid.join(',');
+    window.location.href = `/multi-stream?streamers=${streamers}`;
+  };
+  
   if (streams.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-black text-white p-6">
-        <h1 className="text-2xl font-bold mb-6">No streams selected</h1>
-        <p className="mb-4">Please select at least one stream to watch</p>
-        <Link 
-          href="/"
-          className="px-4 py-2 bg-[#004D61] rounded text-white flex items-center hover:bg-[#003a4d]"
-        >
-          <ArrowLeft className="mr-2 h-5 w-5" />
-          Return to Stream Selection
-        </Link>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-black text-white p-6 max-w-2xl mx-auto">
+        <div className="text-center space-y-6 w-full">
+          <div>
+            <h1 className="text-2xl font-bold mb-4">No streams selected</h1>
+            <p className="text-gray-300 mb-6">Please select at least one stream to watch</p>
+          </div>
+          
+          {/* Manual Stream Input Section */}
+          <div className="bg-[#0e0e10] border border-[#26262c] rounded-lg p-6 w-full">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-white">Enter Stream Names Manually</h2>
+              <button
+                onClick={() => setShowManualInput(!showManualInput)}
+                className="text-[#004D61] hover:text-[#003a4d] text-sm font-medium"
+              >
+                {showManualInput ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            
+            {showManualInput && (
+              <div className="space-y-4">
+                <div className="text-left">
+                  <label htmlFor="manual-streams" className="block text-sm font-medium text-gray-300 mb-2">
+                    Stream Names (up to 8 streams)
+                  </label>
+                  <textarea
+                    id="manual-streams"
+                    value={manualStreamInput}
+                    onChange={(e) => {
+                      setManualStreamInput(e.target.value);
+                      // Clear error when user starts typing
+                      if (inputError) setInputError(null);
+                    }}
+                    placeholder="Enter Twitch usernames separated by commas, spaces, or new lines.&#10;&#10;Examples:&#10;shroud, summit1g, pokimane&#10;xqcow ninja&#10;asmongold&#10;lirik"
+                    className="w-full px-4 py-3 bg-[#18181b] border border-[#26262c] rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#004D61] focus:border-transparent resize-vertical min-h-[120px]"
+                    rows={5}
+                  />
+                  <div className="mt-2 text-xs text-gray-400">
+                    <p>• Usernames must be 4-25 characters</p>
+                    <p>• Only letters, numbers, and underscores allowed</p>
+                    <p>• Separate multiple names with commas, spaces, or new lines</p>
+                  </div>
+                </div>
+                
+                {inputError && (
+                  <div className="bg-red-900/20 border border-red-700 rounded-md p-3 text-red-300 text-sm">
+                    {inputError}
+                  </div>
+                )}
+                
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                  <button
+                    onClick={launchManualMultiStream}
+                    disabled={!manualStreamInput.trim()}
+                    className="flex-1 px-4 py-3 bg-[#004D61] hover:bg-[#003a4d] disabled:bg-[#26262c] disabled:text-gray-500 disabled:cursor-not-allowed text-white rounded-md font-medium transition-colors"
+                  >
+                    Launch Multi-Stream
+                  </button>
+                  <button
+                    onClick={() => {
+                      setManualStreamInput('');
+                      setInputError(null);
+                    }}
+                    className="px-4 py-3 bg-[#18181b] hover:bg-[#26262c] text-gray-300 border border-[#26262c] rounded-md font-medium transition-colors"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {!showManualInput && (
+              <p className="text-gray-400 text-sm">
+                Don't see the streams you want? Click "Show" to manually enter Twitch usernames.
+              </p>
+            )}
+          </div>
+          
+          {/* Divider */}
+          <div className="flex items-center justify-center space-x-4">
+            <div className="flex-1 border-t border-[#26262c]"></div>
+            <span className="text-gray-500 text-sm">OR</span>
+            <div className="flex-1 border-t border-[#26262c]"></div>
+          </div>
+          
+          {/* Return to Stream Selection */}
+          <div>
+            <Link 
+              href="/"
+              className="inline-flex items-center px-6 py-3 bg-[#18181b] hover:bg-[#26262c] border border-[#26262c] text-white rounded-md font-medium transition-colors"
+            >
+              <ArrowLeft className="mr-2 h-5 w-5" />
+              Return to Stream Selection
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
