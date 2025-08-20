@@ -224,21 +224,21 @@ export default function PlayerCountChart({
                 } else if (timeRange === '4h' || timeRange === '6h') {
                   return 7; // High detail for short ranges
                 } else if (timeRange === '8h') {
-                  return 16; // Enhanced detail for 8 hour range
+                  return 8; // Enhanced detail for 8 hour range
                 } else if (timeRange === '24h') {
-                  return 16; // Maximum detail for 24 hour range
+                  return 999; // Maximum detail for 24 hour range
                 } else if (timeRange === '7d') {
-                  return 25; // Enhanced detail for 7 day range
+                  return 999; // Enhanced detail for 7 day range
                 } else if (timeRange === '30d') {
-                  return 30; // Maximum detail for 30 day range
+                  return 999; // Maximum detail for 30 day range
                 } else if (timeRange === '90d') {
-                  return 35; // Ultimate detail for 90 day range
+                  return 999; // Ultimate detail for 90 day range
                 } else if (timeRange === '180d') {
-                  return 40; // Maximum detail for 6 month range
+                  return 999; // Maximum detail for 6 month range
                 } else if (timeRange === '365d') {
-                  return 45; // Ultimate detail for 1 year range
+                  return 999; // Ultimate detail for 1 year range
                 } else {
-                  return 25; // Enhanced default fallback with high detail
+                  return 10; // Enhanced default fallback with high detail
                 }
               })(),
               labels: {
