@@ -215,7 +215,15 @@ Comprehensive admin interface for banner management.
 
 ## Admin Interface
 
-The admin interface is accessible at `/admin/banners` and provides:
+The admin interface is accessible at `/admin/banners` and is protected by token-based authentication. You must set the `ADMIN_TOKEN` environment variable and authenticate with that token to access the admin features.
+
+### Authentication Setup
+```bash
+# Set in your environment (.env.local)
+ADMIN_TOKEN=your-secure-64-character-random-token-here
+```
+
+The admin interface provides:
 
 ### Banner Management
 - **Create**: Form-based banner creation with validation

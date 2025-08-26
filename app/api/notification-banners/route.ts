@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { Database } from '@/lib/supabase';
+import { validateAdminRequest } from '@/lib/admin-auth';
 import { z } from 'zod';
 
 // Type definitions
@@ -45,6 +46,14 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const includeInactive = searchParams.get('include_inactive') === 'true';
     const userId = getUserId(request);
+
+    // Admin-only features require authentication
+    if (includeInactive && !validateAdminRequest(request)) {
+      return NextResponse.json(
+        { error: 'Admin authentication required' },
+        { status: 401 }
+      );
+    }
 
     let query = supabase
       .from('notification_banners')
@@ -98,6 +107,14 @@ export async function GET(request: NextRequest) {
 // POST - Create new banner
 export async function POST(request: NextRequest) {
   try {
+    // Require admin authentication
+    if (!validateAdminRequest(request)) {
+      return NextResponse.json(
+        { error: 'Admin authentication required' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const validated = CreateBannerSchema.parse(body);
 
@@ -154,6 +171,14 @@ export async function POST(request: NextRequest) {
 // PUT - Update banner
 export async function PUT(request: NextRequest) {
   try {
+    // Require admin authentication
+    if (!validateAdminRequest(request)) {
+      return NextResponse.json(
+        { error: 'Admin authentication required' },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const bannerId = searchParams.get('id');
 
@@ -223,6 +248,14 @@ export async function PUT(request: NextRequest) {
 // DELETE - Delete banner
 export async function DELETE(request: NextRequest) {
   try {
+    // Require admin authentication
+    if (!validateAdminRequest(request)) {
+      return NextResponse.json(
+        { error: 'Admin authentication required' },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const bannerId = searchParams.get('id');
 

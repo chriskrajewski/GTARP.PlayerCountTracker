@@ -10,13 +10,37 @@ Run the schema file to create the required tables:
 \i api2db/sql/notification_banners_schema.sql
 ```
 
-### 2. Access Admin Panel
+### 2. Set Admin Token
+Add a secure admin token to your environment variables:
+
+```bash
+# In your .env.local file
+ADMIN_TOKEN=your-super-secure-admin-token-here-make-it-long-and-random
+```
+
+**🔒 Security Note:** Use a strong, randomly generated token (at least 32 characters). This protects your admin panel from unauthorized access.
+
+**💡 Generate a secure token:**
+```bash
+# Using Node.js (if available)
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# Using OpenSSL (most systems)
+openssl rand -hex 32
+
+# Or use an online generator (for development only)
+# https://generate-random.org/api-key-generator?count=1&length=64
+```
+
+### 3. Access Admin Panel
 Navigate to the admin panel in your browser:
 ```
 https://your-domain.com/admin/banners
 ```
 
-### 3. Create Your First Banner
+You'll be prompted to enter your admin token. Enter the same token you set in your environment variables.
+
+### 4. Create Your First Banner
 
 1. Click **"New Banner"** button
 2. Fill in the form:
@@ -29,7 +53,7 @@ https://your-domain.com/admin/banners
 
 3. Click **"Create Banner"**
 
-### 4. View Your Banner
+### 5. View Your Banner
 Visit any page of your site - you should see your banner at the top!
 
 ## 🎯 Common Use Cases
@@ -179,9 +203,17 @@ export function Layout({ children }) {
 
 ### Admin Panel Not Loading?
 1. ✅ Navigate to `/admin/banners`
-2. ✅ Check browser console for errors
-3. ✅ Verify database connectivity
-4. ✅ Check API endpoints are responding
+2. ✅ Enter correct admin token (check your .env.local file)
+3. ✅ Verify ADMIN_TOKEN environment variable is set
+4. ✅ Check browser console for errors
+5. ✅ Verify database connectivity
+6. ✅ Check API endpoints are responding
+
+### Getting "Admin authentication required" errors?
+1. ✅ Verify your ADMIN_TOKEN environment variable is set correctly
+2. ✅ Make sure the token in localStorage matches your environment variable
+3. ✅ Try logging out and logging back in to the admin panel
+4. ✅ Check that your token doesn't have extra spaces or special characters
 
 ### Styling Issues?
 1. ✅ Check custom color values are valid hex
