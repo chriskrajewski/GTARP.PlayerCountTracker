@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { Database } from '@/lib/supabase';
-import { validateAdminRequest } from '@/lib/admin-auth';
+import { validateAdminRequest } from '@/lib/admin-auth-server';
 import { z } from 'zod';
 
 // Type definitions
@@ -9,7 +9,26 @@ type NotificationBanner = Database['public']['Tables']['notification_banners']['
 type NotificationBannerInsert = Database['public']['Tables']['notification_banners']['Insert'];
 type NotificationBannerUpdate = Database['public']['Tables']['notification_banners']['Update'];
 
-// Validation schemas
+// Much simpler approach - preprocess data to clean empty strings
+function cleanBannerData(data: any) {
+  const cleanData = { ...data };
+  
+  // Convert empty strings to undefined for optional fields
+  const optionalFields = [
+    'start_date', 'end_date', 'action_text', 'action_url', 
+    'background_color', 'text_color', 'border_color', 'created_by'
+  ];
+  
+  optionalFields.forEach(field => {
+    if (cleanData[field] === '' || cleanData[field] === null) {
+      cleanData[field] = undefined;
+    }
+  });
+  
+  return cleanData;
+}
+
+// Simple validation schema
 const CreateBannerSchema = z.object({
   title: z.string().min(1).max(100),
   message: z.string().min(1).max(500),
@@ -116,7 +135,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const validated = CreateBannerSchema.parse(body);
+    const cleanedData = cleanBannerData(body);
+    const validated = CreateBannerSchema.parse(cleanedData);
 
     // Validate date logic
     if (validated.start_date && validated.end_date) {
@@ -154,13 +174,18 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     if (error instanceof z.ZodError) {
+      console.error('Banner creation validation error:', error.errors);
       return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
+        { 
+          error: 'Validation failed', 
+          details: error.errors,
+          message: 'Please check the form data and try again'
+        },
         { status: 400 }
       );
     }
 
-    console.error('Unexpected error:', error);
+    console.error('Unexpected error creating banner:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -190,7 +215,8 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const validated = UpdateBannerSchema.parse(body);
+    const cleanedData = cleanBannerData(body);
+    const validated = UpdateBannerSchema.parse(cleanedData);
 
     // Validate date logic if both dates are provided
     if (validated.start_date && validated.end_date) {

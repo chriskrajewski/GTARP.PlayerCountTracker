@@ -123,21 +123,22 @@ export function AdminBannerControls() {
     e.preventDefault();
     
     try {
-      const submitData: Partial<NotificationBannerInsert> = {
+      // Send all form data - server will clean empty strings
+      const submitData = {
         title: formData.title,
         message: formData.message,
         type: formData.type,
         priority: formData.priority,
         is_active: formData.is_active,
         is_dismissible: formData.is_dismissible,
-        start_date: formData.start_date || null,
-        end_date: formData.end_date || null,
-        action_text: formData.action_text || null,
-        action_url: formData.action_url || null,
-        action_target: formData.action_target || null,
-        background_color: formData.background_color || null,
-        text_color: formData.text_color || null,
-        border_color: formData.border_color || null,
+        start_date: formData.start_date,
+        end_date: formData.end_date,
+        action_text: formData.action_text,
+        action_url: formData.action_url,
+        action_target: formData.action_target,
+        background_color: formData.background_color,
+        text_color: formData.text_color,
+        border_color: formData.border_color,
       };
 
       const isEditing = editingBanner !== null;
