@@ -16,6 +16,7 @@ import { NotificationBanner } from '@/components/notification-banner';
 import { Database } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { useAdminAuth } from '@/lib/admin-auth';
 
 // Type definitions
 type NotificationBanner = Database['public']['Tables']['notification_banners']['Row'];
@@ -71,12 +72,23 @@ export function AdminBannerControls() {
   const [showForm, setShowForm] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const { toast } = useToast();
+  const { token } = useAdminAuth();
 
   // Fetch banners
   const fetchBanners = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/notification-banners?include_inactive=true');
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch('/api/notification-banners?include_inactive=true', {
+        headers,
+      });
       
       if (!response.ok) {
         throw new Error('Failed to fetch banners');
@@ -97,8 +109,10 @@ export function AdminBannerControls() {
   };
 
   useEffect(() => {
-    fetchBanners();
-  }, []);
+    if (token) {
+      fetchBanners();
+    }
+  }, [token]);
 
   // Form handlers
   const handleInputChange = (field: keyof BannerFormData, value: any) => {
@@ -131,11 +145,17 @@ export function AdminBannerControls() {
         ? `/api/notification-banners?id=${editingBanner.id}`
         : '/api/notification-banners';
       
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const response = await fetch(url, {
         method: isEditing ? 'PUT' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(submitData),
       });
 
@@ -191,8 +211,15 @@ export function AdminBannerControls() {
     }
 
     try {
+      const headers: HeadersInit = {};
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const response = await fetch(`/api/notification-banners?id=${bannerId}`, {
         method: 'DELETE',
+        headers,
       });
 
       if (!response.ok) {
@@ -217,11 +244,17 @@ export function AdminBannerControls() {
 
   const toggleActive = async (banner: NotificationBanner) => {
     try {
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const response = await fetch(`/api/notification-banners?id=${banner.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({ is_active: !banner.is_active }),
       });
 
