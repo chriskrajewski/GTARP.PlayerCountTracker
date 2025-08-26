@@ -12,6 +12,9 @@ Check it out at https://fivemstats.krtech.io
 - Dark mode support
 - Responsive design for all devices
 - Changelog displaying recent updates
+- **Customizable notification banner system** for site-wide announcements
+- Admin panel for banner management with real-time preview
+- User dismissal tracking and analytics
 
 ## How to Build and Run
 
@@ -26,6 +29,7 @@ Check it out at https://fivemstats.krtech.io
 
 1. **Database Setup**:
    - Create your Supabase schema using the SQL in `api2db/sql/sqlSetup.sql`
+   - Set up notification banner tables using `api2db/sql/notification_banners_schema.sql`
    - Configure Supabase Edge Functions to ingest data on a schedule using `api2db/edgeFunction`
 
 2. **Environment Configuration**:
@@ -90,6 +94,29 @@ For production:
 ```bash
 vercel --prod
 ```
+
+## Notification Banner System
+
+This application includes a comprehensive notification banner system for displaying important updates and announcements to users. 
+
+### Quick Start
+- Visit `/admin/banners` to access the admin panel
+- Create, edit, and manage notification banners
+- Support for different banner types (info, warning, success, announcement, urgent)
+- Real-time preview and user dismissal tracking
+
+### Documentation
+- [📚 Complete Documentation](./docs/NOTIFICATION_BANNERS.md) - Comprehensive guide with API reference, component details, and deployment instructions
+- [🚀 Quick Start Guide](./docs/NOTIFICATION_BANNERS_QUICKSTART.md) - Get started in 5 minutes with common examples
+
+### Features
+- Multiple banner types with customizable styling
+- Priority-based display ordering
+- Scheduling support for future banners
+- User dismissal tracking and analytics
+- Responsive design matching site theme
+- Admin interface with real-time preview
+- RESTful API for programmatic management
 
 ## License
 

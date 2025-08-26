@@ -12,6 +12,7 @@ import { DataRefreshPopup } from '@/components/data-refresh-popup';
 import { useFeatureGate, FEATURE_GATES } from '@/lib/statsig';
 import Image from 'next/image';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { NotificationBannerList, useNotificationBanners } from '@/components/notification-banner';
 
 interface CommonLayoutProps {
   children: React.ReactNode;
@@ -36,11 +37,16 @@ export function CommonLayout({
   // const isFeedbackEnabled = useFeatureGate(FEATURE_GATES.FEEDBACK_FORM);
   // const isChangelogEnabled = useFeatureGate(FEATURE_GATES.CHANGELOG);
   // const isCsvExportEnabled = useFeatureGate(FEATURE_GATES.CSV_EXPORT);
+  // const isNotificationBannersEnabled = useFeatureGate(FEATURE_GATES.NOTIFICATION_BANNERS);
   
   // FORCE ENABLE for debugging
   const isFeedbackEnabled = true;
   const isChangelogEnabled = true;
   const isCsvExportEnabled = true;
+  const isNotificationBannersEnabled = true;
+  
+  // Notification banners
+  const { banners, dismissBanner } = useNotificationBanners();
   
 
 
@@ -240,6 +246,19 @@ export function CommonLayout({
           </div>
         )}
       </div>
+
+      {/* Notification Banners */}
+      {isNotificationBannersEnabled && banners.length > 0 && (
+        <div className="relative z-40">
+          <div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 pt-2">
+            <NotificationBannerList 
+              banners={banners} 
+              onDismiss={dismissBanner}
+              maxVisible={2}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Main content */}
       <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#000000' }}>
