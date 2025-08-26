@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateAdminRequest } from '@/lib/admin-auth';
+import { validateAdminRequest } from '@/lib/admin-auth-server';
 
 // POST - Validate admin token
 export async function POST(request: NextRequest) {
