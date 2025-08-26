@@ -51,6 +51,81 @@ export type Database = {
           serverId: string
         }
       }
+      notification_banners: {
+        Row: {
+          id: number
+          created_at: string
+          updated_at: string
+          title: string
+          message: string
+          type: 'info' | 'warning' | 'success' | 'announcement' | 'urgent'
+          priority: number
+          is_active: boolean
+          is_dismissible: boolean
+          start_date: string | null
+          end_date: string | null
+          action_text: string | null
+          action_url: string | null
+          action_target: '_self' | '_blank' | null
+          background_color: string | null
+          text_color: string | null
+          border_color: string | null
+          created_by: string | null
+          view_count: number
+          dismiss_count: number
+        }
+        Insert: {
+          title: string
+          message: string
+          type?: 'info' | 'warning' | 'success' | 'announcement' | 'urgent'
+          priority?: number
+          is_active?: boolean
+          is_dismissible?: boolean
+          start_date?: string | null
+          end_date?: string | null
+          action_text?: string | null
+          action_url?: string | null
+          action_target?: '_self' | '_blank' | null
+          background_color?: string | null
+          text_color?: string | null
+          border_color?: string | null
+          created_by?: string | null
+          view_count?: number
+          dismiss_count?: number
+        }
+        Update: {
+          title?: string
+          message?: string
+          type?: 'info' | 'warning' | 'success' | 'announcement' | 'urgent'
+          priority?: number
+          is_active?: boolean
+          is_dismissible?: boolean
+          start_date?: string | null
+          end_date?: string | null
+          action_text?: string | null
+          action_url?: string | null
+          action_target?: '_self' | '_blank' | null
+          background_color?: string | null
+          text_color?: string | null
+          border_color?: string | null
+          created_by?: string | null
+          view_count?: number
+          dismiss_count?: number
+        }
+      }
+      notification_banner_dismissals: {
+        Row: {
+          id: number
+          banner_id: number
+          user_id: string
+          dismissed_at: string
+        }
+        Insert: {
+          banner_id: number
+          user_id: string
+          dismissed_at?: string
+        }
+      }
     }
   }
 }

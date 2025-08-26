@@ -9,6 +9,7 @@ export const FEATURE_GATES = {
   STREAM_VIEWER: 'enable_stream_viewer',
   CSV_EXPORT: 'enable_csv_export',
   MULTI_STREAM: 'enable_multi_stream',
+  NOTIFICATION_BANNERS: 'enable_notification_banners',
 };
 
 // Type for Statsig window object
