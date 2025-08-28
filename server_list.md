@@ -12,3 +12,4 @@ prodigypublic
 echorp
 highliferp
 unscripted public
+free2rp
