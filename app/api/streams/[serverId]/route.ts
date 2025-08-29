@@ -227,11 +227,11 @@ async function getLiveStreamerStatus(usernames: string[], accessToken: string) {
 
 export async function GET(
   request: Request,
-  context: { params: { serverId: string } }
+  context: { params: Promise<{ serverId: string }> }
 ) {
   try {
-    // Properly await params in Next.js 13+ API routes
-    const params = await Promise.resolve(context.params);
+    // Properly await params in Next.js 15+ API routes
+    const params = await context.params;
     const serverId = params.serverId;
     
     if (!serverId) {

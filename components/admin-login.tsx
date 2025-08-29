@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Eye, EyeOff, Shield, Lock } from 'lucide-react';
 import { useAdminAuth } from '@/lib/admin-auth';
+import { trackAdminAccess } from '@/lib/gtag';
 
 interface AdminLoginProps {
   onAuthSuccess?: () => void;
@@ -35,6 +36,9 @@ export function AdminLogin({ onAuthSuccess }: AdminLoginProps) {
       const success = await login(token.trim());
       
       if (success) {
+        // Track successful admin login
+        trackAdminAccess('login_success');
+        
         setToken('');
         if (onAuthSuccess) {
           onAuthSuccess();
