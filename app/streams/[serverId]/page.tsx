@@ -4,14 +4,14 @@ import { getServerName } from "@/lib/data";
 import { CommonLayout } from "@/components/common-layout";
 
 interface ServerStreamsPageProps {
-  params: {
+  params: Promise<{
     serverId: string;
-  };
+  }>;
 }
 
 export default async function ServerStreamsPage(props: ServerStreamsPageProps) {
   // In Next.js App Router, we need to await params before accessing
-  const params = await Promise.resolve(props.params);
+  const params = await props.params;
   const serverId = params.serverId;
   const serverName = await getServerName(serverId);
 

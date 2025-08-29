@@ -3,10 +3,10 @@ import { supabase } from '@/lib/supabase'
 
 // Generate metadata dynamically based on server ID
 export async function generateMetadata(
-  props: { params: { serverId: string } }
+  props: { params: Promise<{ serverId: string }> }
 ): Promise<Metadata> {
   // Make sure to await the params before using them
-  const params = await Promise.resolve(props.params);
+  const params = await props.params;
   const serverId = params.serverId;
   let serverName = "Server";
   

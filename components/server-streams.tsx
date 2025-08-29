@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Loader2, ExternalLink, Twitch, X } from "lucide-react";
 import { useFeatureGate, FEATURE_GATES } from "@/lib/statsig";
+import { trackStreamClick } from "@/lib/gtag";
 
 // Define Twitch embed types
 declare global {
@@ -207,6 +208,9 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
 
   // Handle stream selection
   const handleStreamClick = (stream: StreamData) => {
+    // Track stream click in Google Analytics
+    trackStreamClick(stream.user_name, serverId);
+    
     // Skip modal on mobile - direct links are handled in the StreamCard component
     if (!isMobile) {
       setActiveStream(stream);

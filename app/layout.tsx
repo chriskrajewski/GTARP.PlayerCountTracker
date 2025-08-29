@@ -8,6 +8,7 @@ import { Suspense } from "react"
 import { SpeedInsights } from "@vercel/speed-insights/react"
 import Script from "next/script";
 import StatsigProvider from "@/components/statsig-provider";
+import GoogleAnalytics from "@/components/google-analytics";
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -51,14 +52,41 @@ export default function RootLayout({
         `}} />
         <script src="https://cdn.jsdelivr.net/npm/@statsig/js-client@3/build/statsig-js-client+session-replay+web-analytics.min.js?apikey=client-Nu49JS6kPL97gZnvHVQZF64xQpf7aCGgRMdLm3wrEt5">
         </script>
-        <Script src="https://www.googletagmanager.com/gtag/js?id=G-546BM3B67W" strategy="afterInteractive">
-        {`
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments)}
-          gtag('js', new Date());
-          gtag('config', 'G-546BM3B67W');
-        `}
-      </Script>
+        {(process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'development') && process.env.NEXT_PUBLIC_GA_TRACKING_ID && (
+          <>
+            <Script src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_TRACKING_ID}`} strategy="afterInteractive" />
+            <Script id="google-analytics" strategy="afterInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', '${process.env.NEXT_PUBLIC_GA_TRACKING_ID}', {
+                  page_title: document.title,
+                  page_location: window.location.href,
+                  send_page_view: true,
+                  anonymize_ip: true,
+                  allow_google_signals: true,
+                  allow_ad_personalization_signals: false,
+                  custom_map: {
+                    'dimension1': 'server_id',
+                    'dimension2': 'time_range'
+                  }
+                });
+                
+                // Debug logging
+                console.log('Google Analytics loaded for tracking ID: ${process.env.NEXT_PUBLIC_GA_TRACKING_ID}');
+                window.gtag = gtag;
+                
+                // Track initial page load
+                gtag('event', 'page_view', {
+                  page_title: document.title,
+                  page_location: window.location.href,
+                  page_path: window.location.pathname
+                });
+              `}
+            </Script>
+          </>
+        )}
       </head>
       <body className={`${inter.className} !bg-black !text-white`} style={{ 
         backgroundColor: '#000000', 
@@ -69,6 +97,7 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} forcedTheme="dark" disableTransitionOnChange>
           <StatsigProvider>
             <Suspense>
+              <GoogleAnalytics />
               {children}
               <Analytics />
               <SpeedInsights />

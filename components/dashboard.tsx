@@ -22,6 +22,7 @@ import PlayerCountChart from "./player-count-chart"
 import ServerStatsCards from "./server-stats-cards"
 import { MultiServerSelect } from "./multi-server-select"
 import { supabase } from "@/lib/supabase"
+import { trackServerSelect, trackTimeRangeSelect } from "@/lib/gtag"
 
 // Local storage key for saving server selection
 const SELECTED_SERVERS_KEY = "selectedServers"
@@ -160,10 +161,21 @@ export default function Dashboard() {
 
   const handleServerChange = (servers: string[]) => {
     setSelectedServers(servers)
+    
+    // Track server selection in Google Analytics
+    if (servers.length > 0) {
+      const serverNames = servers.map(serverId => 
+        getServerNameById(serverId)
+      ).join(', ')
+      trackServerSelect(servers.join(','), serverNames)
+    }
   }
 
   const handleTimeRangeChange = (value: string) => {
     setTimeRange(value as TimeRange)
+    
+    // Track time range selection in Google Analytics
+    trackTimeRangeSelect(value)
   }
 
   const handleRefresh = () => {
