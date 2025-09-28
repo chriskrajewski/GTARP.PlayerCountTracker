@@ -53,6 +53,13 @@ export type ServerResourceChange = {
   removed_resources: string[] | null
 }
 
+export type ServerResourceSnapshot = {
+  id: number
+  server_id: string
+  timestamp: string
+  resources: string[] | null
+}
+
 export type AggregatedData = {
   timestamp: string
   [key: string]: number | string | null
@@ -370,6 +377,47 @@ export async function getServerResourceChanges(serverIds: string[], limit = 50):
   }
 
   return data
+}
+
+export async function getLatestServerResourceSnapshots(serverIds: string[], limit = 200): Promise<ServerResourceSnapshot[]> {
+  const isClient = typeof window !== "undefined"
+  const client = isClient ? supabase : createServerClient()
+
+  let query = client
+    .from("server_resource_snapshots")
+    .select("id, server_id, timestamp, resources")
+    .order("timestamp", { ascending: false })
+
+  if (serverIds.length > 0) {
+    // Fetch a few recent entries per server to ensure we get the latest snapshot for each selected server
+    query = query.in("server_id", serverIds).limit(Math.max(serverIds.length * 5, 25))
+  } else {
+    query = query.limit(limit)
+  }
+
+  const { data, error } = await query
+
+  if (error || !data) {
+    if (error) {
+      console.error("Error fetching latest server resource snapshots:", error)
+    }
+    return []
+  }
+
+  const seen = new Set<string>()
+  const latest: ServerResourceSnapshot[] = []
+
+  for (const snapshot of data) {
+    if (!seen.has(snapshot.server_id)) {
+      latest.push(snapshot)
+      seen.add(snapshot.server_id)
+    }
+    if (serverIds.length > 0 && latest.length === serverIds.length) {
+      break
+    }
+  }
+
+  return latest
 }
 
 export async function getPlayerCounts(serverIds: string[], timeRange: TimeRange): Promise<PlayerCountData[]> {
