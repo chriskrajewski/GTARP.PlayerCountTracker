@@ -19,6 +19,38 @@ export type Database = {
           created_at?: string
         }
       }
+      server_resource_snapshots: {
+        Row: {
+          id: number
+          server_id: string
+          timestamp: string
+          resources: string[] | null
+          created_at: string
+        }
+        Insert: {
+          server_id: string
+          timestamp: string
+          resources?: string[] | null
+          created_at?: string
+        }
+      }
+      server_resource_changes: {
+        Row: {
+          id: number
+          server_id: string
+          timestamp: string
+          added_resources: string[] | null
+          removed_resources: string[] | null
+          created_at: string
+        }
+        Insert: {
+          server_id: string
+          timestamp: string
+          added_resources?: string[] | null
+          removed_resources?: string[] | null
+          created_at?: string
+        }
+      }
       server_xref: {
         Row: {
           id: number

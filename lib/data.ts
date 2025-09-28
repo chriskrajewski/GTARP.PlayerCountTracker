@@ -45,6 +45,14 @@ export type ViewerCountData = {
   server_id: string
 }
 
+export type ServerResourceChange = {
+  id: number
+  server_id: string
+  timestamp: string
+  added_resources: string[] | null
+  removed_resources: string[] | null
+}
+
 export type AggregatedData = {
   timestamp: string
   [key: string]: number | string | null
@@ -336,6 +344,32 @@ export async function getServerName(serverId: string): Promise<string> {
   }
 
   return data.server_name
+}
+
+export async function getServerResourceChanges(serverIds: string[], limit = 50): Promise<ServerResourceChange[]> {
+  const isClient = typeof window !== "undefined"
+  const client = isClient ? supabase : createServerClient()
+
+  let query = client
+    .from("server_resource_changes")
+    .select("id, server_id, timestamp, added_resources, removed_resources")
+    .order("timestamp", { ascending: false })
+    .limit(limit)
+
+  if (serverIds.length > 0) {
+    query = query.in("server_id", serverIds)
+  }
+
+  const { data, error } = await query
+
+  if (error || !data) {
+    if (error) {
+      console.error("Error fetching server resource changes:", error)
+    }
+    return []
+  }
+
+  return data
 }
 
 export async function getPlayerCounts(serverIds: string[], timeRange: TimeRange): Promise<PlayerCountData[]> {
