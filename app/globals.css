@@ -85,7 +85,8 @@
   }
   body {
     @apply bg-background text-foreground;
-    background-color: #000000 !important;
+    background: radial-gradient(circle at 20% 20%, #141623 0%, #06070b 45%, #010103 100%) !important;
+    background-attachment: fixed;
     color: #FFFFFF !important;
   }
 }

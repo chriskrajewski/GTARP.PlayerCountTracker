@@ -1,36 +1,156 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
-import { RefreshCw, Loader2 } from "lucide-react"
+import { RefreshCw, Loader2, Share2 } from "lucide-react"
 import {
   getServers,
-  getPlayerCounts,
   getPlayerCountsSmart,
   aggregateDataForChart,
   getStreamCounts,
   getViewerCounts,
+  getServerResourceChanges,
+  getServerResourceSnapshot,
   type TimeRange,
   type ServerData,
   type PlayerCountData,
   type StreamCountData,
-  type ViewerCountData
+  type ViewerCountData,
+  type ServerResourceChange,
+  type ServerResourceSnapshot
 } from "@/lib/data"
 import PlayerCountChart from "./player-count-chart"
 import ServerStatsCards from "./server-stats-cards"
 import { MultiServerSelect } from "./multi-server-select"
-import { supabase } from "@/lib/supabase"
 import { trackServerSelect, trackTimeRangeSelect } from "@/lib/gtag"
+import { ServerLatestAssetsCard, ServerResourceChangesCard, ServerResourceListCard } from "./server-resource-panels"
+import { useRouter, usePathname } from "next/navigation"
+import {
+  buildServerSlugMaps,
+  buildServerPrefixes,
+  buildSlugLookup,
+  resolveServerTokens,
+  encodeServerTokens,
+  decodeServerTokenString,
+} from "@/lib/server-slugs"
 
 // Local storage key for saving server selection
 const SELECTED_SERVERS_KEY = "selectedServers"
+const DEFAULT_TIME_RANGE: TimeRange = "8h"
+const VALID_TIME_RANGES: TimeRange[] = [
+  "1h",
+  "2h",
+  "4h",
+  "6h",
+  "8h",
+  "24h",
+  "7d",
+  "30d",
+  "90d",
+  "180d",
+  "365d",
+  "all",
+]
+
+const SHORT_LINK_PARAM = "s"
+
+type ShareStatus = "copied" | "shared" | "error" | null
+
+const TIME_RANGE_CODES: Record<TimeRange, string> = {
+  "1h": "1h",
+  "2h": "2h",
+  "4h": "4h",
+  "6h": "6h",
+  "8h": "8h",
+  "24h": "1d",
+  "7d": "7d",
+  "30d": "30d",
+  "90d": "3m",
+  "180d": "6m",
+  "365d": "1y",
+  all: "all",
+}
+
+const CODE_TO_TIME_RANGE = Object.fromEntries(
+  Object.entries(TIME_RANGE_CODES).map(([range, code]) => [code.toLowerCase(), range as TimeRange]),
+) as Record<string, TimeRange>
+
+const encodeSharePayload = (
+  serverIds: string[],
+  timeRange: TimeRange,
+  prefixMap: Record<string, string>,
+): string => {
+  if (serverIds.length === 0) {
+    return ""
+  }
+
+  const tokenPart = encodeServerTokens(serverIds, prefixMap)
+
+  const timeToken = (TIME_RANGE_CODES[timeRange] ?? timeRange).toLowerCase()
+
+  return `${tokenPart}.${timeToken}`
+}
+
+const normalizeUrlSafeBase64 = (value: string): string => {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/")
+  const padding = normalized.length % 4 === 0 ? 0 : 4 - (normalized.length % 4)
+  return normalized + "=".repeat(padding)
+}
+
+const decodeSharePayload = (
+  value: string,
+): { tokens: string[]; timeRange: TimeRange | null } | null => {
+  if (!value) return null
+
+  let serversPart = value
+  let rangePart = ""
+
+  if (value.includes(".")) {
+    const lastDot = value.lastIndexOf(".")
+    serversPart = value.slice(0, lastDot)
+    rangePart = value.slice(lastDot + 1)
+  } else if (value.includes("@")) {
+    const [servers, range] = value.split("@")
+    serversPart = servers || ""
+    rangePart = range || ""
+  }
+
+  let tokens = decodeServerTokenString(serversPart)
+
+  let timeRange: TimeRange | null = null
+  if (rangePart) {
+    const normalizedRange = rangePart.toLowerCase()
+    timeRange =
+      CODE_TO_TIME_RANGE[normalizedRange] ??
+      (VALID_TIME_RANGES.includes(rangePart as TimeRange) ? (rangePart as TimeRange) : null)
+  }
+
+  if (tokens.length === 0 && typeof window !== "undefined") {
+    try {
+      const decoded = window.atob(normalizeUrlSafeBase64(value))
+      const parsed = JSON.parse(decoded) as { s?: unknown; r?: unknown }
+
+      if (Array.isArray(parsed.s)) {
+        tokens = parsed.s.filter((id): id is string => typeof id === "string")
+      }
+
+      if (!timeRange && typeof parsed.r === "string" && VALID_TIME_RANGES.includes(parsed.r as TimeRange)) {
+        timeRange = parsed.r as TimeRange
+      }
+    } catch (error) {
+      // Ignore legacy decoding errors
+    }
+  }
+
+  return { tokens, timeRange }
+}
 
 export default function Dashboard() {
   const [servers, setServers] = useState<ServerData[]>([])
   const [selectedServers, setSelectedServers] = useState<string[]>([])
-  const [timeRange, setTimeRange] = useState<TimeRange>("8h")
+  const [timeRange, setTimeRange] = useState<TimeRange>(DEFAULT_TIME_RANGE)
   const [playerData, setPlayerData] = useState<PlayerCountData[]>([])
   // Always current (24h) stream and view data - not affected by time range
   const [currentStreamData, setCurrentStreamData] = useState<StreamCountData[]>([])
@@ -39,45 +159,102 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [chartLoading, setChartLoading] = useState(false)
+  const [resourceChanges, setResourceChanges] = useState<ServerResourceChange[]>([])
+  const [resourceSnapshot, setResourceSnapshot] = useState<ServerResourceSnapshot | null>(null)
+  const [resourceLoading, setResourceLoading] = useState(false)
+  const [resourceError, setResourceError] = useState<string | null>(null)
+  const [shareStatus, setShareStatus] = useState<ShareStatus>(null)
+  const shareResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const router = useRouter()
+  const pathname = usePathname()
+
+  const slugMaps = useMemo(() => buildServerSlugMaps(servers), [servers])
+  const slugLookup = useMemo(() => buildSlugLookup(servers, slugMaps), [servers, slugMaps])
+  const serverPrefixes = useMemo(() => buildServerPrefixes(servers, slugLookup), [servers, slugLookup])
 
   useEffect(() => {
     async function loadServers() {
       try {
         const serverData = await getServers()
         setServers(serverData)
-        
-        // Attempt to load saved server selection from localStorage
-        const savedSelection = localStorage.getItem(SELECTED_SERVERS_KEY)
-        
-        if (savedSelection) {
-          try {
-            const parsedSelection = JSON.parse(savedSelection)
-            // Verify the saved servers still exist in our current server list
-            const validSavedServers = parsedSelection.filter(
-              (id: string) => serverData.some(server => server.server_id === id)
-            )
-            
-            if (validSavedServers.length > 0) {
-              setSelectedServers(validSavedServers)
-            } else {
-              // If no valid servers from saved selection, default to first server
-              if (serverData.length > 0) {
-                setSelectedServers([serverData[0].server_id])
+
+        let selectionApplied = false
+        let pendingTimeRange: TimeRange | null = null
+        const maps = buildServerSlugMaps(serverData)
+        const slugLookupForData = buildSlugLookup(serverData, maps)
+
+        if (typeof window !== "undefined") {
+          const url = new URL(window.location.href)
+          const shortParam = url.searchParams.get(SHORT_LINK_PARAM)
+          const serversParam = url.searchParams.get("servers")
+          const rangeParam = url.searchParams.get("range")
+
+          if (shortParam) {
+            const decoded = decodeSharePayload(shortParam)
+            if (decoded) {
+              const resolvedFromShort = resolveServerTokens(
+                decoded.tokens,
+                maps,
+                serverData,
+                slugLookupForData,
+              )
+
+              if (resolvedFromShort.length > 0) {
+                setSelectedServers(resolvedFromShort)
+                selectionApplied = true
+              }
+
+              if (decoded.timeRange) {
+                pendingTimeRange = decoded.timeRange
               }
             }
-          } catch (e) {
-            // If parsing fails, default to first server
-            if (serverData.length > 0) {
-              setSelectedServers([serverData[0].server_id])
+          }
+
+          if (!selectionApplied && serversParam) {
+            const tokens = serversParam
+              .split(",")
+              .map((token) => token.trim())
+              .filter(Boolean)
+            const resolved = resolveServerTokens(tokens, maps, serverData, slugLookupForData)
+            if (resolved.length > 0) {
+              setSelectedServers(resolved)
+              selectionApplied = true
             }
           }
-        } else {
-          // No saved selection, default to first server
-        if (serverData.length > 0) {
-          setSelectedServers([serverData[0].server_id])
+
+          if (!pendingTimeRange && rangeParam && VALID_TIME_RANGES.includes(rangeParam as TimeRange)) {
+            pendingTimeRange = rangeParam as TimeRange
+          }
+
+          if (!selectionApplied) {
+            const savedSelection = localStorage.getItem(SELECTED_SERVERS_KEY)
+            if (savedSelection) {
+              try {
+                const parsedSelection = JSON.parse(savedSelection)
+                const validSavedServers = parsedSelection.filter((id: string) =>
+                  serverData.some((server) => server.server_id === id),
+                )
+
+                if (validSavedServers.length > 0) {
+                  setSelectedServers(validSavedServers)
+                  selectionApplied = true
+                }
+              } catch (e) {
+                console.warn("Failed to parse saved server selection", e)
+              }
+            }
+          }
+
+          if (pendingTimeRange && pendingTimeRange !== timeRange) {
+            setTimeRange(pendingTimeRange)
           }
         }
-        
+
+        if (!selectionApplied && serverData.length > 0) {
+          setSelectedServers([serverData[0].server_id])
+        }
+
         setLoading(false)
       } catch (err) {
         console.error("Error loading servers:", err)
@@ -137,12 +314,102 @@ export default function Dashboard() {
     loadStreamAndViewData()
   }, [selectedServers])
 
+  useEffect(() => {
+    let isMounted = true
+
+    const loadServerResources = async (serverId: string) => {
+      setResourceLoading(true)
+      setResourceError(null)
+
+      const [changesResult, snapshotResult] = await Promise.allSettled([
+        getServerResourceChanges(serverId, 25),
+        getServerResourceSnapshot(serverId)
+      ])
+
+      if (!isMounted) {
+        return
+      }
+
+      let errorMessage: string | null = null
+
+      if (changesResult.status === "fulfilled") {
+        setResourceChanges(changesResult.value)
+      } else {
+        console.error("Error loading server resource changes:", changesResult.reason)
+        setResourceChanges([])
+        errorMessage = "Failed to load recent server changes."
+      }
+
+      if (snapshotResult.status === "fulfilled") {
+        setResourceSnapshot(snapshotResult.value)
+      } else {
+        console.error("Error loading server resource snapshot:", snapshotResult.reason)
+        setResourceSnapshot(null)
+        errorMessage = errorMessage
+          ? "Failed to load some server resource information."
+          : "Failed to load server resource list."
+      }
+
+      setResourceError(errorMessage)
+      setResourceLoading(false)
+    }
+
+    if (selectedServers.length === 1) {
+      loadServerResources(selectedServers[0])
+    } else if (isMounted) {
+      setResourceChanges([])
+      setResourceSnapshot(null)
+      setResourceError(null)
+      setResourceLoading(false)
+    }
+
+    return () => {
+      isMounted = false
+    }
+  }, [selectedServers])
+
   // Save selected servers to localStorage whenever they change
   useEffect(() => {
     if (selectedServers.length > 0) {
       localStorage.setItem(SELECTED_SERVERS_KEY, JSON.stringify(selectedServers))
     }
   }, [selectedServers])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (servers.length === 0) return
+
+    const params = new URLSearchParams(window.location.search)
+    let updated = false
+
+    if (selectedServers.length > 0) {
+      const encoded = encodeSharePayload(selectedServers, timeRange, serverPrefixes)
+      if (encoded && params.get(SHORT_LINK_PARAM) !== encoded) {
+        params.set(SHORT_LINK_PARAM, encoded)
+        updated = true
+      }
+    } else if (params.has(SHORT_LINK_PARAM)) {
+      params.delete(SHORT_LINK_PARAM)
+      updated = true
+    }
+
+    if (params.has("servers")) {
+      params.delete("servers")
+      updated = true
+    }
+
+    if (params.has("range")) {
+      params.delete("range")
+      updated = true
+    }
+
+    if (!updated) {
+      return
+    }
+
+    const nextSearch = params.toString()
+    router.replace(`${pathname}${nextSearch ? `?${nextSearch}` : ""}`, { scroll: false })
+  }, [selectedServers, timeRange, pathname, router, servers.length, serverPrefixes])
 
   // Update parent component with servers and selected servers
   useEffect(() => {
@@ -158,6 +425,14 @@ export default function Dashboard() {
       window.dispatchEvent(event);
     }
   }, [servers, selectedServers]);
+
+  useEffect(() => {
+    return () => {
+      if (shareResetTimeout.current) {
+        clearTimeout(shareResetTimeout.current)
+      }
+    }
+  }, [])
 
   const handleServerChange = (servers: string[]) => {
     setSelectedServers(servers)
@@ -183,14 +458,99 @@ export default function Dashboard() {
     loadStreamAndViewData()
   }
 
+  const buildShareableUrl = (): string => {
+    if (typeof window === "undefined") return ""
+
+    const url = new URL(window.location.href)
+    if (selectedServers.length === 0) {
+      url.searchParams.delete(SHORT_LINK_PARAM)
+      url.searchParams.delete("servers")
+      url.searchParams.delete("range")
+      return url.toString()
+    }
+    const encoded = encodeSharePayload(selectedServers, timeRange, serverPrefixes)
+    if (encoded) {
+      url.searchParams.set(SHORT_LINK_PARAM, encoded)
+    } else {
+      url.searchParams.delete(SHORT_LINK_PARAM)
+    }
+    url.searchParams.delete("servers")
+    url.searchParams.delete("range")
+
+    return url.toString()
+  }
+
+  const scheduleShareReset = (status: ShareStatus, duration = 2500) => {
+    if (shareResetTimeout.current) {
+      clearTimeout(shareResetTimeout.current)
+    }
+    setShareStatus(status)
+
+    if (status) {
+      shareResetTimeout.current = setTimeout(() => {
+        setShareStatus(null)
+        shareResetTimeout.current = null
+      }, duration)
+    }
+  }
+
+  const handleShare = async () => {
+    const shareUrl = buildShareableUrl()
+    if (!shareUrl) return
+
+    const canUseNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function"
+
+    if (canUseNativeShare) {
+      try {
+        await navigator.share({ url: shareUrl, title: "GTA RP Player Count Tracker" })
+        scheduleShareReset("shared")
+        return
+      } catch (error: any) {
+        if (error?.name === "AbortError") {
+          scheduleShareReset(null)
+          return
+        }
+        console.warn("Native share failed, using clipboard fallback", error)
+      }
+    }
+
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(shareUrl)
+        scheduleShareReset("copied")
+      } else {
+        window.prompt("Copy this link", shareUrl)
+        scheduleShareReset("copied")
+      }
+    } catch (error) {
+      console.error("Error copying share link:", error)
+      scheduleShareReset("error", 4000)
+    }
+  }
+
   const chartData = aggregateDataForChart(playerData, selectedServers, timeRange)
 
+  const singleServerId = selectedServers.length === 1 ? selectedServers[0] : null
+  const singleServerName = singleServerId ? getServerNameById(singleServerId) : ""
+  const latestResourceChange = resourceChanges.length > 0 ? resourceChanges[0] : null
+
+  const shareStatusMessage =
+    shareStatus === "copied"
+      ? "Link ready—copied to your clipboard when supported."
+      : shareStatus === "shared"
+        ? "Share dialog opened—send it to a friend."
+        : shareStatus === "error"
+          ? "Couldn't share the link. Please try again."
+          : ""
+
+  const shareStatusClass =
+    shareStatus === "error" ? "text-red-400" : shareStatus ? "text-emerald-400" : ""
 
   
 
 
   // Get server name by ID
-  const getServerNameById = (serverId: string): string => {
+  function getServerNameById(serverId: string): string {
     const server = servers.find(s => s.server_id === serverId)
     return server ? server.server_name : `Server ${serverId}`
   }
@@ -221,18 +581,35 @@ export default function Dashboard() {
             onChange={handleServerChange}
             disabled={loading || servers.length === 0}
           />
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={handleRefresh} 
-              disabled={loading || refreshing || chartLoading || selectedServers.length === 0}
-              title="Refresh data"
-              className="bg-[#18181b] border-[#26262c] text-[#EFEFF1] hover:bg-[#26262c] hover:border-[#343438]"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing || chartLoading ? 'animate-spin' : ''}`} />
-              <span className="sr-only">Refresh data</span>
-            </Button>
+          <div className="flex flex-col gap-1">
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="icon" 
+                onClick={handleRefresh} 
+                disabled={loading || refreshing || chartLoading || selectedServers.length === 0}
+                title="Refresh data"
+                className="bg-[#18181b] border-[#26262c] text-[#EFEFF1] hover:bg-[#26262c] hover:border-[#343438]"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing || chartLoading ? 'animate-spin' : ''}`} />
+                <span className="sr-only">Refresh data</span>
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleShare}
+                disabled={selectedServers.length === 0}
+                title={shareStatusMessage || "Share this view"}
+                className="flex items-center gap-2 bg-[#18181b] border-[#26262c] text-[#EFEFF1] hover:bg-[#26262c] hover:border-[#343438]"
+              >
+                <Share2 className={`h-4 w-4 ${shareStatus === 'copied' || shareStatus === 'shared' ? 'text-[#22c55e]' : shareStatus === 'error' ? 'text-red-400' : ''}`} />
+                <span className="text-sm">Share</span>
+              </Button>
+            </div>
+            {shareStatusMessage && (
+              <span className={`text-xs ${shareStatusClass}`} aria-live="polite">
+                {shareStatusMessage}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -254,7 +631,7 @@ export default function Dashboard() {
       )}
 
       <div className="w-full overflow-x-auto">
-      <Tabs defaultValue="8h" value={timeRange} onValueChange={handleTimeRangeChange} className="w-full">
+      <Tabs defaultValue={DEFAULT_TIME_RANGE} value={timeRange} onValueChange={handleTimeRangeChange} className="w-full">
         <div className="flex flex-col gap-2 mb-2">
           <div className="text-sm text-gray-400">Time Range:</div>
           
@@ -394,6 +771,29 @@ export default function Dashboard() {
           )}
         </CardContent>
       </Card>
+      
+      {singleServerId && (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <div className="space-y-4">
+            <ServerLatestAssetsCard
+              serverName={singleServerName}
+              latestChange={latestResourceChange}
+              loading={resourceLoading}
+              error={resourceError}
+            />
+            <ServerResourceChangesCard
+              changes={resourceChanges}
+              loading={resourceLoading}
+              error={resourceError}
+            />
+          </div>
+          <ServerResourceListCard
+            snapshot={resourceSnapshot}
+            loading={resourceLoading}
+            error={resourceError}
+          />
+        </div>
+      )}
     </div>
   )
 }
