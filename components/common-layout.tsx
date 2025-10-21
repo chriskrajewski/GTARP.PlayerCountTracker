@@ -151,14 +151,6 @@ export function CommonLayout({
               CSV Export
             </button>
           )}
-
-          <button
-            onClick={() => setShowResourceDialog(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
-          >
-            <History className="h-3.5 w-3.5 text-[#EFEFF1]" />
-            Server Changes
-          </button>
           
           <Link 
             href="/multi-stream" 

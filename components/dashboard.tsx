@@ -774,24 +774,6 @@ export default function Dashboard() {
       
       {singleServerId && (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-          <div className="space-y-4">
-            <ServerLatestAssetsCard
-              serverName={singleServerName}
-              latestChange={latestResourceChange}
-              loading={resourceLoading}
-              error={resourceError}
-            />
-            <ServerResourceChangesCard
-              changes={resourceChanges}
-              loading={resourceLoading}
-              error={resourceError}
-            />
-          </div>
-          <ServerResourceListCard
-            snapshot={resourceSnapshot}
-            loading={resourceLoading}
-            error={resourceError}
-          />
         </div>
       )}
     </div>
