@@ -215,7 +215,7 @@ export default function AdminUsersPage() {
         permissions: roles.find(r => r.id === userForm.role_id)?.permissions || [],
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        last_login: null,
+        last_login: undefined,
         login_attempts: 0,
         profile_image: '',
         two_factor_enabled: false,
@@ -653,7 +653,7 @@ export default function AdminUsersPage() {
                                     </span>
                                     <span className="flex items-center">
                                       <Clock className="h-3 w-3 mr-1" />
-                                      Active: {new Date(session.last_activity).toLocaleString()}
+                                      Active: {session.last_activity ? new Date(session.last_activity).toLocaleString() : 'Unknown'}
                                     </span>
                                   </div>
                                 </div>

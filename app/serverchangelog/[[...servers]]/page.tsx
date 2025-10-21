@@ -41,7 +41,7 @@ import {
 type PageProps = {
   params: {
     servers?: string[]
-  }
+  } | Promise<{ servers?: string[] }>
 }
 
 function arraysEqual(a: string[], b: string[]) {
@@ -337,6 +337,14 @@ export default function ServerChangelogPage({ params }: PageProps) {
 
   const searchKey = searchParams ? searchParams.toString() : ""
 
+  const routeSegments = useMemo(() => {
+    if (!params) return [] as string[]
+    if (typeof (params as any).then === "function") {
+      return [] as string[]
+    }
+    return (params as { servers?: string[] }).servers ?? []
+  }, [params])
+
   useEffect(() => {
     if (loadingServers) return
 
@@ -365,7 +373,7 @@ export default function ServerChangelogPage({ params }: PageProps) {
     }
 
     if (!nextServers) {
-      const routeServers = params.servers ?? []
+      const routeServers = routeSegments
       if (routeServers.length > 0) {
         const resolvedRoute = resolveServerTokens(
           routeServers.map((segment) => segment.trim()).filter((segment) => segment.length > 0),
@@ -394,7 +402,7 @@ export default function ServerChangelogPage({ params }: PageProps) {
     if (nextHorizon && nextHorizon !== timeHorizon) {
       setTimeHorizon(nextHorizon)
     }
-  }, [loadingServers, servers, slugMaps, slugLookup, params.servers, searchKey, selectedServers, timeHorizon])
+  }, [loadingServers, servers, slugMaps, slugLookup, routeSegments, searchKey, selectedServers, timeHorizon])
 
   useEffect(() => {
     if (selectedServers.length === 0) {

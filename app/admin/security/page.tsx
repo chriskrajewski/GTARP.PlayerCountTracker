@@ -439,6 +439,8 @@ export default function AdminSecurityPage() {
                               <TableBody>
                                 {auditLogs.map((log) => {
                                   const Icon = getActionIcon(log.action);
+                                  const timestamp = log.timestamp || log.created_at;
+                                  const timestampDate = timestamp ? new Date(timestamp) : null;
                                   
                                   return (
                                     <TableRow key={log.id} className="border-[#26262c] hover:bg-[#26262c]/30">
@@ -447,10 +449,10 @@ export default function AdminSecurityPage() {
                                           <Clock className="h-4 w-4" />
                                           <div>
                                             <div className="text-white text-sm">
-                                              {new Date(log.timestamp).toLocaleTimeString()}
+                                              {timestampDate ? timestampDate.toLocaleTimeString() : 'N/A'}
                                             </div>
                                             <div className="text-xs">
-                                              {new Date(log.timestamp).toLocaleDateString()}
+                                              {timestampDate ? timestampDate.toLocaleDateString() : 'N/A'}
                                             </div>
                                           </div>
                                         </div>
@@ -495,9 +497,9 @@ export default function AdminSecurityPage() {
                                       <TableCell>
                                         <Badge variant="outline" className={cn(
                                           "border text-xs",
-                                          getSeverityColor(log.severity)
+                                          getSeverityColor(log.severity || 'low')
                                         )}>
-                                          {log.severity}
+                                          {log.severity || 'low'}
                                         </Badge>
                                       </TableCell>
                                       
@@ -505,23 +507,27 @@ export default function AdminSecurityPage() {
                                         <div className="flex items-center space-x-2">
                                           <MapPin className="h-4 w-4 text-[#ADADB8]" />
                                           <span className="text-white text-sm">
-                                            {log.ip_address}
+                                            {log.ip_address || 'N/A'}
                                           </span>
                                         </div>
                                       </TableCell>
                                       
                                       <TableCell>
                                         <div className="max-w-xs">
-                                          {log.details && Object.keys(log.details).length > 0 && (
+                                          {typeof log.details === 'object' && log.details !== null ? (
                                             <div className="text-xs text-[#ADADB8]">
-                                              {Object.entries(log.details)
+                                              {Object.entries(log.details as Record<string, any>)
                                                 .slice(0, 2)
                                                 .map(([key, value]) => (
                                                   <div key={key}>
-                                                    <span className="font-medium">{key}:</span> {String(value)}
+                                                    <span className="font-medium text-white">{key}:</span> {String(value)}
                                                   </div>
                                                 ))}
                                             </div>
+                                          ) : log.details ? (
+                                            <span className="text-[#ADADB8] text-xs">{String(log.details)}</span>
+                                          ) : (
+                                            <span className="text-[#ADADB8] text-xs">No details provided</span>
                                           )}
                                         </div>
                                       </TableCell>

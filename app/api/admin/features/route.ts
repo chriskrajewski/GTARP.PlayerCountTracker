@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
     const newFeatureFlag: FeatureFlag = {
       id: Date.now().toString(),
       name: body.name,
+      key: body.key || (typeof body.name === 'string' ? body.name.toLowerCase().replace(/\s+/g, '_') : `feature_${Date.now()}`),
       description: body.description,
       is_enabled: body.is_enabled || false,
       environment: body.environment || 'development',

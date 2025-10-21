@@ -15,7 +15,7 @@ import {
   type ServerData,
   type ServerResourceChange,
   type ServerResourceSnapshot,
-  getServerResourceChanges,
+  getServerResourceChangesBulk,
   getLatestServerResourceSnapshots
 } from "@/lib/data";
 
@@ -66,7 +66,7 @@ export function ServerResourceChanges({
     setError(null);
     try {
       const [changesResult, snapshotsResult] = await Promise.allSettled([
-        getServerResourceChanges(selectedServers ?? [], 100),
+        getServerResourceChangesBulk(selectedServers ?? [], 100),
         getLatestServerResourceSnapshots(selectedServers ?? [], 200)
       ]);
 

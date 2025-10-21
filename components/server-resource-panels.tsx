@@ -23,6 +23,9 @@ export function ServerLatestAssetsCard({
   loading,
   error,
 }: LatestAssetsCardProps) {
+  const addedResources = latestChange?.added_resources ?? []
+  const removedResources = latestChange?.removed_resources ?? []
+
   return (
     <Card className="bg-[#0e0e10] border-[#26262c] h-full">
       <CardHeader className="border-b border-[#26262c]">
@@ -60,12 +63,12 @@ export function ServerLatestAssetsCard({
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <h3 className="text-sm font-semibold text-[#EFEFF1] mb-2">Added ({latestChange.added_resources.length})</h3>
-                {latestChange.added_resources.length === 0 ? (
+                <h3 className="text-sm font-semibold text-[#EFEFF1] mb-2">Added ({addedResources.length})</h3>
+                {addedResources.length === 0 ? (
                   <p className="text-xs text-[#9CA3AF]">No new assets</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {latestChange.added_resources.map((resource, index) => (
+                    {addedResources.map((resource, index) => (
                       <Badge key={`added-${index}-${resource}`} variant="secondary" className="bg-[#1f1f23] border-[#2d2d33] text-[#EFEFF1]">
                         {resource}
                       </Badge>
@@ -74,12 +77,12 @@ export function ServerLatestAssetsCard({
                 )}
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-[#EFEFF1] mb-2">Removed ({latestChange.removed_resources.length})</h3>
-                {latestChange.removed_resources.length === 0 ? (
+                <h3 className="text-sm font-semibold text-[#EFEFF1] mb-2">Removed ({removedResources.length})</h3>
+                {removedResources.length === 0 ? (
                   <p className="text-xs text-[#9CA3AF]">No removals</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {latestChange.removed_resources.map((resource, index) => (
+                    {removedResources.map((resource, index) => (
                       <Badge key={`removed-${index}-${resource}`} variant="outline" className="border-[#ef4444]/60 text-[#ef4444] bg-[#2a0f12]">
                         {resource}
                       </Badge>

@@ -11,13 +11,17 @@ import {
   AuditLog,
   BackupRecord,
   DatabaseHealth,
+  DatabaseBackup,
+  DatabaseStatus,
+  DatabaseTable,
   AdminDashboardData,
   StreamAnalytics,
   ServerFormData,
   ConfigurationFormData,
   NotificationTemplate,
   FeatureFlag,
-  SystemAlert
+  SystemAlert,
+  MaintenanceTask,
 } from '@/lib/admin-types';
 import { getStoredAdminToken } from '@/lib/admin-auth';
 
@@ -219,6 +223,24 @@ class AdminAPI {
     return this.delete(`/config/${configId}`);
   }
 
+  // ==================== MAINTENANCE ====================
+  async getMaintenanceTasks(): Promise<AdminAPIResponse<MaintenanceTask[]>> {
+    return this.get<MaintenanceTask[]>('/maintenance/tasks');
+  }
+
+  async getMaintenanceMode(): Promise<AdminAPIResponse<{ enabled: boolean; message?: string }>> {
+    return this.get<{ enabled: boolean; message?: string }>('/maintenance/mode');
+  }
+
+  async setMaintenanceMode(payload: boolean | { enabled: boolean; message?: string }): Promise<AdminAPIResponse<{ enabled: boolean; message?: string }>> {
+    const body = typeof payload === 'boolean' ? { enabled: payload } : payload;
+    return this.put<{ enabled: boolean; message?: string }>('/maintenance/mode', body);
+  }
+
+  async runMaintenanceTask(taskId: string): Promise<AdminAPIResponse<{ status: string }>> {
+    return this.post<{ status: string }>(`/maintenance/tasks/${taskId}/run`);
+  }
+
   // ==================== AUDIT & SECURITY ====================
   async getAuditLogs(params?: {
     page?: number;
@@ -259,9 +281,25 @@ class AdminAPI {
     return this.delete(`/backups/${backupId}`);
   }
 
+  async getDatabaseBackups(): Promise<AdminAPIResponse<DatabaseBackup[]>> {
+    return this.get<DatabaseBackup[]>('/database/backups');
+  }
+
+  async createDatabaseBackup(type: 'full' | 'incremental' | 'config' = 'full'): Promise<AdminAPIResponse<DatabaseBackup>> {
+    return this.post<DatabaseBackup>('/database/backups', { backup_type: type });
+  }
+
   // ==================== DATABASE MANAGEMENT ====================
   async getDatabaseHealth(): Promise<AdminAPIResponse<DatabaseHealth[]>> {
     return this.get<DatabaseHealth[]>('/database/health');
+  }
+
+  async getDatabaseStatus(): Promise<AdminAPIResponse<DatabaseStatus>> {
+    return this.get<DatabaseStatus>('/database/status');
+  }
+
+  async getDatabaseTables(): Promise<AdminAPIResponse<DatabaseTable[]>> {
+    return this.get<DatabaseTable[]>('/database/tables');
   }
 
   async optimizeDatabase(): Promise<AdminAPIResponse<{ message: string }>> {

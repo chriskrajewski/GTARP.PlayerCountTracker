@@ -98,7 +98,10 @@ export function RecentActivitiesCard({ activities, limit = 10 }: RecentActivitie
         <div className="space-y-3">
           {displayedActivities.map((activity) => {
             const Icon = getActivityIcon(activity.action, activity.resource_type);
-            const timeAgo = formatTimeAgo(activity.timestamp);
+            const timeAgo = formatTimeAgo(activity.timestamp || activity.created_at);
+            const detailEntries = typeof activity.details === 'object' && activity.details !== null
+              ? Object.entries(activity.details as Record<string, any>)
+              : undefined;
             
             return (
               <div 
@@ -107,7 +110,7 @@ export function RecentActivitiesCard({ activities, limit = 10 }: RecentActivitie
               >
                 <div className={cn(
                   "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-                  getActivityColor(activity.severity)
+                  getActivityColor(activity.severity || 'low')
                 )}>
                   <Icon className="h-4 w-4" />
                 </div>
@@ -134,17 +137,21 @@ export function RecentActivitiesCard({ activities, limit = 10 }: RecentActivitie
                         )}
                       </div>
                       
-                      {activity.details && Object.keys(activity.details).length > 0 && (
+                      {detailEntries && detailEntries.length > 0 ? (
                         <div className="mt-2 text-xs text-[#ADADB8]">
-                          {Object.entries(activity.details)
+                          {detailEntries
                             .slice(0, 2)
                             .map(([key, value]) => (
                               <div key={key} className="inline-block mr-3">
-                                <span className="font-medium">{key}:</span> {String(value)}
+                                <span className="font-medium text-white">{key}:</span> {String(value)}
                               </div>
                             ))}
                         </div>
-                      )}
+                      ) : activity.details ? (
+                        <div className="mt-2 text-xs text-[#ADADB8]">
+                          {String(activity.details)}
+                        </div>
+                      ) : null}
                     </div>
                     
                     <div className="flex flex-col items-end space-y-1">
@@ -152,10 +159,10 @@ export function RecentActivitiesCard({ activities, limit = 10 }: RecentActivitie
                         variant="outline" 
                         className={cn(
                           "text-xs border",
-                          getSeverityBadgeColor(activity.severity)
+                          getSeverityBadgeColor(activity.severity || 'low')
                         )}
                       >
-                        {activity.severity}
+                        {activity.severity || 'low'}
                       </Badge>
                       
                       <div className="flex items-center text-xs text-[#ADADB8]">

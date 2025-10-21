@@ -58,6 +58,7 @@ export type ServerResourceSnapshot = {
   server_id: string
   timestamp: string
   resources: string[] | null
+  created_at?: string
 }
 
 export type AggregatedData = {
@@ -353,7 +354,7 @@ export async function getServerName(serverId: string): Promise<string> {
   return data.server_name
 }
 
-export async function getServerResourceChanges(serverIds: string[], limit = 50): Promise<ServerResourceChange[]> {
+export async function getServerResourceChangesBulk(serverIds: string[], limit = 50): Promise<ServerResourceChange[]> {
   const isClient = typeof window !== "undefined"
   const client = isClient ? supabase : createServerClient()
 
