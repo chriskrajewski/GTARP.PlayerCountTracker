@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, Download, ClipboardList, MessageSquare, Menu, X, Heart, Bot, Video, History } from 'lucide-react';
 import FeedbackForm from '@/components/feedback-form';
 import { CSVExport } from '@/components/csv-export';
+import ServerResourceChanges from '@/components/server-resource-changes';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { DataStartPopup } from '@/components/data-start-popup';
@@ -38,6 +39,7 @@ export function CommonLayout({
   selectedServers = []
 }: CommonLayoutProps) {
   const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showResourceDialog, setShowResourceDialog] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   // Feature gates - Temporarily force to true for debugging
@@ -149,6 +151,14 @@ export function CommonLayout({
               CSV Export
             </button>
           )}
+
+          <button
+            onClick={() => setShowResourceDialog(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+          >
+            <History className="h-3.5 w-3.5 text-[#EFEFF1]" />
+            Server Changes
+          </button>
           
           <Link 
             href="/multi-stream" 
@@ -225,7 +235,7 @@ export function CommonLayout({
                   <span className="text-[#EFEFF1]">Server Changes</span>
                 </Link>
                 
-                {isCsvExportEnabled && (
+               {isCsvExportEnabled && (
                   <button 
                     onClick={() => {
                       setShowExportDialog(true);
@@ -237,6 +247,17 @@ export function CommonLayout({
                     CSV Export
                   </button>
                 )}
+
+                <button
+                  onClick={() => {
+                    setShowResourceDialog(true);
+                    setMobileMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+                >
+                  <History className="h-3.5 w-3.5 text-[#EFEFF1]" />
+                  Server Changes
+                </button>
                 
                <Link 
                   href="/multi-stream" 
@@ -311,6 +332,16 @@ export function CommonLayout({
           </DialogContent>
         </Dialog>
       )}
+
+      <Dialog open={showResourceDialog} onOpenChange={setShowResourceDialog}>
+        <DialogContent className="bg-[#0e0e10] border-[#26262c] text-white max-w-[95vw] sm:max-w-3xl">
+          <ServerResourceChanges 
+            isOpen={showResourceDialog}
+            servers={servers}
+            selectedServers={selectedServers}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 
