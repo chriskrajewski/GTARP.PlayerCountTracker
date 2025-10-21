@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js"
-import type { Database } from "./supabase"
+import type { Database } from "./supabase.types"
 
 // This client should only be used in server components or server actions
 export function createServerClient() {

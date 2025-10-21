@@ -58,6 +58,7 @@ export type ServerResourceSnapshot = {
   server_id: string
   timestamp: string
   resources: string[] | null
+  created_at?: string
 }
 
 export type AggregatedData = {
@@ -353,7 +354,7 @@ export async function getServerName(serverId: string): Promise<string> {
   return data.server_name
 }
 
-export async function getServerResourceChanges(serverIds: string[], limit = 50): Promise<ServerResourceChange[]> {
+export async function getServerResourceChangesBulk(serverIds: string[], limit = 50): Promise<ServerResourceChange[]> {
   const isClient = typeof window !== "undefined"
   const client = isClient ? supabase : createServerClient()
 
@@ -836,13 +837,13 @@ export function getStreamerStats(streamData: StreamCountData[], serverId: string
 export function getViewerStats(streamData: ViewerCountData[], serverId: string) {
   if (!Array.isArray(streamData)) {
     console.error("getViewStats: Invalid or undefined data provided - ", streamData);
-    return { viewerurrent: 0, viewerPeak: 0, viewerAverage: 0 };
+    return { viewerCurrent: 0, viewerPeak: 0, viewerAverage: 0 };
   }
 
   const serverData = streamData.filter((item) => item.server_id === serverId);
 
   if (serverData.length === 0) {
-    return { viewerurrent: 0, viewerPeak: 0, viewerAverage: 0 };
+    return { viewerCurrent: 0, viewerPeak: 0, viewerAverage: 0 };
   }
 
   const counts = serverData.map((item) => item.viewcount);
@@ -852,6 +853,71 @@ export function getViewerStats(streamData: ViewerCountData[], serverId: string) 
 
 
   return { viewerCurrent, viewerPeak, viewerAverage };
+}
+
+export async function getServerResourceChanges(serverId: string, limit = 20): Promise<ServerResourceChange[]> {
+  if (!serverId) return []
+
+  const isClient = typeof window !== "undefined"
+  const client = isClient ? supabase : createServerClient()
+
+  const { data, error } = await client
+    .from("server_resource_changes")
+    .select("id, server_id, timestamp, added_resources, removed_resources, created_at")
+    .eq("server_id", serverId)
+    .order("timestamp", { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.error("Error fetching server resource changes:", error)
+    return []
+  }
+
+  if (!data) {
+    return []
+  }
+
+  return data.map((change) => ({
+    id: change.id,
+    server_id: change.server_id,
+    timestamp: change.timestamp,
+    added_resources: Array.isArray(change.added_resources) ? change.added_resources : [],
+    removed_resources: Array.isArray(change.removed_resources) ? change.removed_resources : [],
+    created_at: change.created_at,
+  }))
+}
+
+export async function getServerResourceSnapshot(serverId: string): Promise<ServerResourceSnapshot | null> {
+  if (!serverId) return null
+
+  const isClient = typeof window !== "undefined"
+  const client = isClient ? supabase : createServerClient()
+
+  const { data, error } = await client
+    .from("server_resource_snapshots")
+    .select("id, server_id, timestamp, resources, created_at")
+    .eq("server_id", serverId)
+    .order("timestamp", { ascending: false })
+    .limit(1)
+
+  if (error) {
+    console.error("Error fetching server resource snapshot:", error)
+    return null
+  }
+
+  if (!data || data.length === 0) {
+    return null
+  }
+
+  const snapshot = data[0]
+
+  return {
+    id: snapshot.id,
+    server_id: snapshot.server_id,
+    timestamp: snapshot.timestamp,
+    resources: Array.isArray(snapshot.resources) ? snapshot.resources : [],
+    created_at: snapshot.created_at,
+  }
 }
 
 export async function getDataStartTimes(): Promise<DataStartInfo[]> {

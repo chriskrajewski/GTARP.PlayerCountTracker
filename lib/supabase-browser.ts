@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js"
-import type { Database } from "./supabase"
+import type { Database } from "./supabase.types"
 
 // This is to ensure we don't instantiate multiple Supabase clients on the client side
 let clientInstance: ReturnType<typeof createClient<Database>> | null = null

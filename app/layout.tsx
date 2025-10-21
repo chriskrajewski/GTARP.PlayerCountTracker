@@ -9,6 +9,13 @@ import { SpeedInsights } from "@vercel/speed-insights/react"
 import Script from "next/script";
 import StatsigProvider from "@/components/statsig-provider";
 import GoogleAnalytics from "@/components/google-analytics";
+import mixpanel from "mixpanel-browser";
+
+// Create an instance of the Mixpanel object, your token is already added to this snippet
+      mixpanel.init('13440c630224bb2155944bc8de971af7', {
+      autocapture: true,
+      record_sessions_percent: 100,
+    })
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -23,27 +30,33 @@ export default function RootLayout({
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <html lang="en" className="dark !bg-black" style={{ 
+    
+    <html lang="en" className="dark" style={{ 
       colorScheme: 'dark', 
-      backgroundColor: '#000000',
       color: '#FFFFFF'
     }}>
+
+      
       <head>
       {(process.env.NODE_ENV === "development" || process.env.VERCEL_ENV === "preview") && (
        // eslint-disable-next-line @next/next/no-sync-scripts
+       //Import Mixpanel SDK
+
       <script
       data-recording-token="PSW2hFNYWiRq1mWWr7bv4nKfgD9aY45suYTDZVLi"
       data-is-production-environment="false"
       src="https://snippet.meticulous.ai/v1/meticulous.js"
       />
       )}
+      
         {/* Force dark mode */}
         <meta name="color-scheme" content="dark" />
-        <meta name="theme-color" content="#000000" />
+        <meta name="theme-color" content="#06070b" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
         <style dangerouslySetInnerHTML={{ __html: `
           body {
-            background-color: #000000 !important;
+            background: radial-gradient(circle at 20% 20%, #141623 0%, #06070b 45%, #010103 100%) !important;
+            background-attachment: fixed;
             color: #FFFFFF !important;
           }
           .dark {
@@ -88,9 +101,7 @@ export default function RootLayout({
           </>
         )}
       </head>
-      <body className={`${inter.className} !bg-black !text-white`} style={{ 
-        backgroundColor: '#000000', 
-        color: '#FFFFFF',
+      <body className={`${inter.className} text-white`} style={{ 
         margin: 0,
         padding: 0
       }}>

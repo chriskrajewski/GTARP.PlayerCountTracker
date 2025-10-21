@@ -14,6 +14,13 @@ import { useFeatureGate, FEATURE_GATES } from '@/lib/statsig';
 import Image from 'next/image';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { NotificationBannerList, useNotificationBanners } from '@/components/notification-banner';
+import mixpanel from "mixpanel-browser";
+
+// Create an instance of the Mixpanel object, your token is already added to this snippet
+      mixpanel.init('13440c630224bb2155944bc8de971af7', {
+      autocapture: true,
+      record_sessions_percent: 100,
+    })
 
 interface CommonLayoutProps {
   children: React.ReactNode;
@@ -62,7 +69,7 @@ export function CommonLayout({
   }, [mobileMenuOpen]);
 
   return (
-    <div className="flex flex-col min-h-screen bg-black" style={{ backgroundColor: '#000000' }}>
+    <div className="flex flex-col min-h-screen">
       {/* Header with controls - Responsive design */}
       <div 
         className="twitch-dark-bg text-white px-2 sm:px-4 flex items-center justify-between sticky top-0 z-10 flex-wrap"
@@ -85,7 +92,7 @@ export function CommonLayout({
               className="h-7 w-7 sm:h-9 sm:w-9 mr-2" 
               style={{ color: '#004D61' }} 
             />
-            <span className="mt-0.5 truncate max-w-[160px] sm:max-w-none">{pageTitle || "GTA RP Player Count Tracker"}</span>
+            <span className="mt-0.5 truncate max-w-[160px] sm:max-w-none">{pageTitle || "Discover, Track, and Watch GTA Roleplay"}</span>
           </h1>
         </div>
         
@@ -126,6 +133,14 @@ export function CommonLayout({
               <span className="text-[#EFEFF1]">Changelog</span>
             </Link>
           )}
+
+          <Link 
+            href="/serverchangelog" 
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+          >
+            <History className="h-3.5 w-3.5 text-[#EFEFF1]" />
+            <span className="text-[#EFEFF1]">Server Changes</span>
+          </Link>
           
           {isCsvExportEnabled && (
             <button 
@@ -210,6 +225,15 @@ export function CommonLayout({
                     <span className="text-[#EFEFF1]">Changelog</span>
                   </Link>
                 )}
+
+                <Link 
+                  href="/serverchangelog" 
+                  className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <History className="h-3.5 w-3.5 text-[#EFEFF1]" />
+                  <span className="text-[#EFEFF1]">Server Changes</span>
+                </Link>
                 
                {isCsvExportEnabled && (
                   <button 
@@ -282,7 +306,7 @@ export function CommonLayout({
       )}
 
       {/* Main content */}
-      <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#000000' }}>
+      <div className="flex-1 overflow-y-auto">
         <div className="max-w-7xl mx-auto p-2 sm:p-4 md:p-6">
           {children}
         </div>

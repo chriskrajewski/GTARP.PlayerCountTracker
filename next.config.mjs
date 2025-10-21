@@ -53,6 +53,11 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'featureassets.org/v1',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'mixpanel.com',
+        pathname: '/**',
       }
     ],
   },

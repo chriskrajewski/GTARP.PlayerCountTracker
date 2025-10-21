@@ -1,21 +1,55 @@
 // Admin Portal Type Definitions
+export interface AdminRole {
+  id: string;
+  name: string;
+  description?: string;
+  permissions: string[];
+  created_at?: string;
+  updated_at?: string;
+  created_by?: string;
+}
+
+export interface AdminPermissionObject {
+  id?: string;
+  name?: string;
+  description?: string;
+  resource?: string;
+  actions?: string[];
+}
+
+export type AdminPermission = string | AdminPermissionObject
+
 export interface AdminUser {
   id: string;
   username: string;
   email?: string;
-  role: 'super_admin' | 'admin' | 'moderator';
-  permissions: AdminPermission[];
-  created_at: string;
+  full_name?: string;
+  role?: AdminRole;
+  role_id?: string;
+  role_name?: string;
+  permissions?: AdminPermission[];
+  created_at?: string;
+  updated_at?: string;
   last_login?: string;
   is_active: boolean;
+  login_attempts?: number;
+  phone?: string;
+  department?: string;
+  profile_image?: string;
+  two_factor_enabled?: boolean;
+  created_by?: string;
+  updated_by?: string;
 }
 
-export interface AdminPermission {
+export interface UserSession {
   id: string;
-  name: string;
-  description: string;
-  resource: string;
-  actions: string[];
+  user_id: string;
+  ip_address: string;
+  user_agent: string;
+  created_at: string;
+  expires_at?: string;
+  is_active: boolean;
+  last_activity?: string;
 }
 
 export interface SystemMetrics {
@@ -92,22 +126,27 @@ export interface SystemConfiguration {
   description: string;
   is_sensitive: boolean;
   requires_restart: boolean;
-  updated_by: string;
-  updated_at: string;
+  updated_by?: string;
+  updated_at?: string;
+  is_readonly?: boolean;
+  created_at?: string;
+  validation_rules?: Record<string, any>;
 }
 
 export interface AuditLog {
   id: string;
-  user_id: string;
+  user_id?: string;
   user_email?: string;
   action: string;
   resource_type: string;
   resource_id?: string;
-  details: Record<string, any>;
-  ip_address: string;
-  user_agent: string;
-  timestamp: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
+  details?: Record<string, any> | string;
+  ip_address?: string;
+  user_agent?: string;
+  timestamp?: string;
+  created_at?: string;
+  severity?: 'low' | 'medium' | 'high' | 'critical';
+  location?: string;
 }
 
 export interface BackupRecord {
@@ -123,13 +162,16 @@ export interface BackupRecord {
 }
 
 export interface DatabaseHealth {
-  table_name: string;
-  row_count: number;
-  size_bytes: number;
+  table_name?: string;
+  row_count?: number;
+  size_bytes?: number;
   last_vacuum?: string;
   last_analyze?: string;
-  index_health: 'good' | 'warning' | 'critical';
-  performance_score: number;
+  index_health?: 'good' | 'warning' | 'critical';
+  performance_score?: number;
+  component?: string;
+  status?: 'healthy' | 'warning' | 'critical';
+  message?: string;
 }
 
 export interface NotificationTemplate {
@@ -161,6 +203,7 @@ export interface FeatureFlag {
   created_by: string;
   created_at: string;
   updated_at: string;
+  environment?: string | null;
 }
 
 export interface AdminDashboardData {
@@ -339,16 +382,6 @@ export interface SystemHealth {
   database_status: 'healthy' | 'warning' | 'critical';
   api_status: 'healthy' | 'warning' | 'critical';
   uptime: string;
-}
-
-export interface AuditLog {
-  id: string;
-  action: string;
-  user_email: string;
-  resource_type: string;
-  ip_address: string;
-  details?: string;
-  created_at: string;
 }
 
 export interface SecurityEvent {

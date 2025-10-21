@@ -83,7 +83,8 @@ export default function AdminSystemPage() {
     try {
       const response = await adminAPI.createSystemConfiguration(formData);
       if (response.success && response.data) {
-        setConfigurations(prev => [response.data, ...prev]);
+        const createdConfig = response.data;
+        setConfigurations(prev => [createdConfig, ...prev]);
         setConfigDialog(false);
         resetForm();
         toast({
@@ -108,7 +109,8 @@ export default function AdminSystemPage() {
     try {
       const response = await adminAPI.updateSystemConfiguration(selectedConfig.id, formData);
       if (response.success && response.data) {
-        setConfigurations(prev => prev.map(c => c.id === selectedConfig.id ? response.data : c));
+        const updatedConfig = response.data;
+        setConfigurations(prev => prev.map(c => (c.id === selectedConfig.id ? updatedConfig : c)));
         setConfigDialog(false);
         setSelectedConfig(null);
         resetForm();
@@ -486,7 +488,7 @@ export default function AdminSystemPage() {
                               </div>
                             </TableCell>
                             <TableCell className="text-[#ADADB8] text-sm">
-                              {new Date(config.updated_at).toLocaleDateString()}
+                              {config.updated_at ? new Date(config.updated_at).toLocaleDateString() : 'N/A'}
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center space-x-2">

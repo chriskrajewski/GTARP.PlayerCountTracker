@@ -5,6 +5,13 @@ import Dashboard from "@/components/dashboard"
 import { DashboardSkeleton } from "@/components/dashboard-skeleton"
 import "@/styles/globals.css"
 import { CommonLayout } from "@/components/common-layout"
+import mixpanel from "mixpanel-browser";
+
+// Create an instance of the Mixpanel object, your token is already added to this snippet
+      mixpanel.init('13440c630224bb2155944bc8de971af7', {
+      autocapture: true,
+      record_sessions_percent: 100,
+    })
 
 declare global {
   interface Window {
