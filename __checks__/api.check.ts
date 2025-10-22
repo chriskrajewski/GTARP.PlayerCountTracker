@@ -2,7 +2,7 @@ import { ApiCheck, AssertionBuilder } from 'checkly/constructs'
 
 const BASE_URL =
   process.env.PLAYER_TRACKER_BASE_URL?.replace(/\/$/, '') ??
-  'https://fivemstats.krtech.io'
+  'https://rpstats.com'
 
 new ApiCheck('changelog-api', {
   name: 'Changelog API responds with commits payload',
