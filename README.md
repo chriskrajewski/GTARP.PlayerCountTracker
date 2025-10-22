@@ -16,6 +16,15 @@ Check it out at https://fivemstats.krtech.io
 - Admin panel for banner management with real-time preview
 - User dismissal tracking and analytics
 
+## Monitoring
+
+- Synthetic monitoring is configured with Checkly definitions under `__checks__`.
+- HTTP checks cover the public changelog and notification banner APIs.
+- Refresh latency API (`/api/status/refresh`) verifies all servers updated within the configured threshold.
+- Browser checks exercise the homepage, changelog navigation, and multi-stream viewer.
+- Set `PLAYER_TRACKER_BASE_URL` (defaults to `https://fivemstats.krtech.io`) when running `npx checkly test`.
+- Optional `PLAYER_TRACKER_REFRESH_THRESHOLD_MINUTES` controls the staleness threshold (default 20).
+
 ## How to Build and Run
 
 ### Prerequisites
