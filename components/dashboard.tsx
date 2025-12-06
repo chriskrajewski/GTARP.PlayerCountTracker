@@ -13,13 +13,16 @@ import {
   getViewerCounts,
   getServerResourceChanges,
   getServerResourceSnapshot,
+  getServerCapacities,
+  calculateTimeAtMaxCapacity,
   type TimeRange,
   type ServerData,
   type PlayerCountData,
   type StreamCountData,
   type ViewerCountData,
   type ServerResourceChange,
-  type ServerResourceSnapshot
+  type ServerResourceSnapshot,
+  type ServerCapacityData
 } from "@/lib/data"
 import PlayerCountChart from "./player-count-chart"
 import ServerStatsCards from "./server-stats-cards"
@@ -152,6 +155,8 @@ export default function Dashboard() {
   const [selectedServers, setSelectedServers] = useState<string[]>([])
   const [timeRange, setTimeRange] = useState<TimeRange>(DEFAULT_TIME_RANGE)
   const [playerData, setPlayerData] = useState<PlayerCountData[]>([])
+  const [capacityData, setCapacityData] = useState<ServerCapacityData[]>([])
+  const [showCapacity, setShowCapacity] = useState(false)
   // Always current (24h) stream and view data - not affected by time range
   const [currentStreamData, setCurrentStreamData] = useState<StreamCountData[]>([])
   const [currentViewData, setCurrentViewData] = useState<ViewerCountData[]>([])
@@ -282,7 +287,7 @@ export default function Dashboard() {
     }
   }
 
-  // Load player data - affected by time range
+  // Load player data and capacity data - affected by time range
   const loadPlayerData = async () => {
     if (selectedServers.length === 0) return
 
@@ -290,9 +295,14 @@ export default function Dashboard() {
       setChartLoading(true);
       setRefreshing(true);
       
-      // Player counts are affected by time range - use smart fetching for large datasets
-      const data = await getPlayerCountsSmart(selectedServers, timeRange);
-      setPlayerData(data);
+      // Fetch both player counts and capacity data in parallel
+      const [playerCountsData, capacitiesData] = await Promise.all([
+        getPlayerCountsSmart(selectedServers, timeRange),
+        getServerCapacities(selectedServers, timeRange)
+      ]);
+      
+      setPlayerData(playerCountsData);
+      setCapacityData(capacitiesData);
       
       setChartLoading(false);
       setRefreshing(false);
@@ -529,6 +539,50 @@ export default function Dashboard() {
   }
 
   const chartData = aggregateDataForChart(playerData, selectedServers, timeRange)
+  
+  // Aggregate capacity data with forward-filling (use last known capacity)
+  const capacityChartData = useMemo(() => {
+    if (capacityData.length === 0 || chartData.length === 0) return []
+    
+    // Create a map of last known capacity for each server
+    const lastKnownCapacity: Record<string, number> = {}
+    
+    // Initialize with the most recent capacity before the chart time range
+    selectedServers.forEach(serverId => {
+      const serverCapacities = capacityData
+        .filter(d => d.server_id === serverId)
+        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+      
+      if (serverCapacities.length > 0) {
+        lastKnownCapacity[serverId] = serverCapacities[0].max_capacity
+      }
+    })
+    
+    // Build capacity data for each timestamp in chartData
+    return chartData.map(chartPoint => {
+      const result: Record<string, any> = {
+        timestamp: chartPoint.timestamp
+      }
+      
+      selectedServers.forEach(serverId => {
+        // Find capacity data at this timestamp
+        const capacityAtTimestamp = capacityData.find(
+          c => c.server_id === serverId && c.timestamp === chartPoint.timestamp
+        )
+        
+        if (capacityAtTimestamp) {
+          // Update last known capacity
+          lastKnownCapacity[serverId] = capacityAtTimestamp.max_capacity
+          result[`${serverId}_capacity`] = capacityAtTimestamp.max_capacity
+        } else if (lastKnownCapacity[serverId]) {
+          // Forward-fill with last known capacity
+          result[`${serverId}_capacity`] = lastKnownCapacity[serverId]
+        }
+      })
+      
+      return result
+    })
+  }, [capacityData, chartData, selectedServers])
 
   const singleServerId = selectedServers.length === 1 ? selectedServers[0] : null
   const singleServerName = singleServerId ? getServerNameById(singleServerId) : ""
@@ -619,7 +673,8 @@ export default function Dashboard() {
           {selectedServers.map((serverId) => (
             <ServerStatsCards 
               key={serverId} 
-              playerData={playerData} 
+              playerData={playerData}
+              capacityData={capacityData}
               serverId={serverId} 
               serverName={getServerNameById(serverId)}
               loading={loading} 
@@ -733,7 +788,21 @@ export default function Dashboard() {
         
       <Card className="bg-[#0e0e10] border-[#26262c] rounded-md shadow-md">
         <CardHeader className="border-b border-[#26262c]">
-          <CardTitle className="text-[#EFEFF1]">Player Count Over Time</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-[#EFEFF1]">Player Count Over Time</CardTitle>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="showCapacity"
+                checked={showCapacity}
+                onChange={(e) => setShowCapacity(e.target.checked)}
+                className="w-4 h-4 text-[#004D61] bg-[#18181b] border-[#26262c] rounded focus:ring-[#004D61] focus:ring-2"
+              />
+              <label htmlFor="showCapacity" className="text-sm text-[#EFEFF1] cursor-pointer">
+                Show Max Capacity
+              </label>
+            </div>
+          </div>
           {/* Data availability warnings - only show when not loading */}
           {!chartLoading && playerData.length === 0 && (
             <div className="text-sm text-yellow-400 bg-yellow-900/20 p-2 rounded mt-2">
@@ -763,10 +832,12 @@ export default function Dashboard() {
           ) : (
             <PlayerCountChart 
               data={chartData} 
+              capacityData={capacityChartData}
               serverIds={selectedServers} 
               serverNames={serverNameMap}
               loading={loading} 
-              timeRange={timeRange} 
+              timeRange={timeRange}
+              showCapacity={showCapacity}
             />
           )}
         </CardContent>

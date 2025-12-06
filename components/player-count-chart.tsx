@@ -13,10 +13,12 @@ const Chart = dynamic(() => import('react-apexcharts'), { ssr: false })
 
 interface PlayerCountChartProps {
   data: Array<Record<string, any>>
+  capacityData: Array<Record<string, any>>
   serverIds: string[]
   serverNames: Record<string, string>
   loading: boolean
   timeRange: TimeRange
+  showCapacity: boolean
 }
 
 type ChartConfigItem = {
@@ -27,10 +29,12 @@ type ChartConfig = Record<string, ChartConfigItem>
 
 export default function PlayerCountChart({ 
   data, 
+  capacityData,
   serverIds, 
   serverNames, 
   loading, 
-  timeRange
+  timeRange,
+  showCapacity
 }: PlayerCountChartProps) {
   
   // Initialize color cache
@@ -177,16 +181,51 @@ export default function PlayerCountChart({
               }
             },
             colors: (() => {
-              // Color mapping for each server ID
-              const colors = serverIds.map(serverId => {
+              // Color mapping for each server ID (player count)
+              const playerColors = serverIds.map(serverId => {
                 const color = getServerColor(serverId);
                 return color;
               });
-              return colors;
+              
+              // If showing capacity, add dashed/lighter versions of the same colors for capacity lines
+              if (showCapacity) {
+                const capacityColors = serverIds.map(serverId => {
+                  const color = getServerColor(serverId);
+                  // Convert HSL to a lighter/more transparent version for capacity line
+                  const hslMatch = color.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
+                  if (hslMatch) {
+                    const [, h, s, l] = hslMatch;
+                    // Increase lightness by 15% for capacity line
+                    const newL = Math.min(100, parseInt(l) + 15);
+                    return `hsl(${h}, ${s}%, ${newL}%)`;
+                  }
+                  return color;
+                });
+                return [...playerColors, ...capacityColors];
+              }
+              
+              return playerColors;
             })(),
             stroke: {
-              width: 3,
-              curve: 'straight'
+              width: (() => {
+                // Solid lines for player counts, thinner for capacity
+                const playerWidths = serverIds.map(() => 3);
+                if (showCapacity) {
+                  const capacityWidths = serverIds.map(() => 2);
+                  return [...playerWidths, ...capacityWidths];
+                }
+                return playerWidths;
+              })(),
+              curve: 'straight',
+              dashArray: (() => {
+                // Solid lines for player counts (0), dashed for capacity (5)
+                const playerDash = serverIds.map(() => 0);
+                if (showCapacity) {
+                  const capacityDash = serverIds.map(() => 5);
+                  return [...playerDash, ...capacityDash];
+                }
+                return playerDash;
+              })()
             },
             xaxis: {
               type: 'datetime',
@@ -277,20 +316,38 @@ export default function PlayerCountChart({
               }
             }
           }}
-          series={serverIds.map(serverId => ({
-            name: serverNames[serverId] || `Server ${serverId}`,
-            data: data
-              .map(d => {
-                const value = d[serverId]
-                const numericValue = value === null || value === undefined ? null : (typeof value === 'number' ? value : 0)
-                
-                return {
-                  x: new Date(d.timestamp).getTime(),
-                  y: numericValue
-                }
-              })
-              .filter(point => point.y !== null) // Remove null data points to prevent chart gaps
-          }))}
+          series={[
+            // Player count series for each server
+            ...serverIds.map(serverId => ({
+              name: serverNames[serverId] || `Server ${serverId}`,
+              data: data
+                .map(d => {
+                  const value = d[serverId]
+                  const numericValue = value === null || value === undefined ? null : (typeof value === 'number' ? value : 0)
+                  
+                  return {
+                    x: new Date(d.timestamp).getTime(),
+                    y: numericValue
+                  }
+                })
+                .filter(point => point.y !== null) // Remove null data points to prevent chart gaps
+            })),
+            // Max capacity series for each server (if enabled)
+            ...(showCapacity ? serverIds.map(serverId => ({
+              name: `${serverNames[serverId] || `Server ${serverId}`} - Max Capacity`,
+              data: capacityData
+                .map(d => {
+                  const value = d[`${serverId}_capacity`]
+                  const numericValue = value === null || value === undefined ? null : (typeof value === 'number' ? value : 0)
+                  
+                  return {
+                    x: new Date(d.timestamp).getTime(),
+                    y: numericValue
+                  }
+                })
+                .filter(point => point.y !== null)
+            })) : [])
+          ]}
           type="line"
           height="400"
         />

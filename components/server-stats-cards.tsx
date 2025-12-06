@@ -1,11 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
-import { type PlayerCountData, StreamCountData, ViewerCountData, getServerStats, getStreamerStats, getViewerStats } from "@/lib/data"
-import { Users, Twitch } from 'lucide-react'
+import { type PlayerCountData, StreamCountData, ViewerCountData, ServerCapacityData, getServerStats, getStreamerStats, getViewerStats, calculateTimeAtMaxCapacity } from "@/lib/data"
+import { Users, Twitch, TrendingUp } from 'lucide-react'
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
 interface ServerStatsCardsProps {
   playerData: PlayerCountData[]
+  capacityData: ServerCapacityData[]
   streamerData: StreamCountData[]
   viewerData: ViewerCountData[]
   serverId: string
@@ -14,10 +15,18 @@ interface ServerStatsCardsProps {
 }
 
 
-export default function ServerStatsCards({ playerData, streamerData, viewerData, serverId, serverName, loading }: ServerStatsCardsProps) {
+export default function ServerStatsCards({ playerData, capacityData, streamerData, viewerData, serverId, serverName, loading }: ServerStatsCardsProps) {
   const { current, peak, average } = getServerStats(playerData, serverId)
   const { streamCurrent, streamPeak, streamAverage  } = getStreamerStats(streamerData, serverId)
   const { viewerCurrent, viewerPeak, viewerAverage  } = getViewerStats(viewerData, serverId)
+  
+  // Get latest max capacity for this server
+  const latestCapacity = capacityData
+    .filter(d => d.server_id === serverId)
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]?.max_capacity || null
+  
+  // Calculate % time at max capacity
+  const timeAtMaxPercent = calculateTimeAtMaxCapacity(playerData, capacityData, serverId)
 
   return (
     <Card className="col-span-1 bg-gray-800 border-gray-700">
@@ -29,7 +38,12 @@ export default function ServerStatsCards({ playerData, streamerData, viewerData,
           <span className="text-xs text-gray-400 flex items-center gap-1">
             <Users className="h-3 w-3" /> Current Players
           </span>
-          <span className="text-xl font-bold text-white">{loading ? "-" : current}</span>
+          <div className="flex items-baseline gap-1">
+            <span className="text-xl font-bold text-white">{loading ? "-" : current}</span>
+            {!loading && latestCapacity && (
+              <span className="text-sm text-gray-400">/ {latestCapacity}</span>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-col">
@@ -41,6 +55,15 @@ export default function ServerStatsCards({ playerData, streamerData, viewerData,
           <span className="text-xs text-gray-400">Average Players</span>
           <span className="text-xl font-bold text-white">{loading ? "-" : average}</span>
         </div>
+        
+        {!loading && latestCapacity && timeAtMaxPercent > 0 && (
+          <div className="flex flex-col col-span-3 pt-2 border-t border-gray-700">
+            <span className="text-xs text-gray-400 flex items-center gap-1">
+              <TrendingUp className="h-3 w-3" /> Time at Max Capacity
+            </span>
+            <span className="text-xl font-bold text-white">{timeAtMaxPercent}%</span>
+          </div>
+        )}
         <div className="flex flex-col">
           <span className="text-xs text-gray-400 flex items-center gap-1">
             <Twitch className="h-3 w-3 text-purple-400" /> Current Streams

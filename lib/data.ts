@@ -33,6 +33,12 @@ export type PlayerCountData = {
   server_id: string
 }
 
+export type ServerCapacityData = {
+  timestamp: string
+  max_capacity: number
+  server_id: string
+}
+
 export type StreamCountData = {
   timestamp: string
   streamercount: number
@@ -631,6 +637,163 @@ export async function getViewerCounts(serverIds: string[], timeRange: TimeRange)
   }
 
   return data || []; // Ensure we always return an array
+}
+
+/**
+ * Fetch server capacity data for the specified servers and time range
+ * @param serverIds Array of server IDs to fetch capacity for
+ * @param timeRange Time range to fetch data for
+ * @returns Array of capacity data points
+ */
+export async function getServerCapacities(serverIds: string[], timeRange: TimeRange): Promise<ServerCapacityData[]> {
+  const isClient = typeof window !== "undefined";
+  const client = isClient ? supabase : createServerClient();
+
+  let query = client
+    .from("server_capacity")
+    .select("server_id, timestamp, max_capacity")
+    .order("timestamp", { ascending: true })
+    .limit(50000);
+
+  if (serverIds.length > 0) {
+    query = query.in("server_id", serverIds);
+  }
+
+  // Apply time filter
+  const now = new Date();
+  if (timeRange !== "all") {
+    let startDate: Date;
+    switch (timeRange) {
+      case "1h":
+        startDate = new Date(now.getTime() - 1 * 60 * 60 * 1000)
+        break
+      case "2h":
+        startDate = new Date(now.getTime() - 2 * 60 * 60 * 1000)
+        break
+      case "4h":
+        startDate = new Date(now.getTime() - 4 * 60 * 60 * 1000)
+        break
+      case "6h":
+        startDate = new Date(now.getTime() - 6 * 60 * 60 * 1000)
+        break
+      case "8h":
+        startDate = new Date(now.getTime() - 8 * 60 * 60 * 1000)
+        break
+      case "24h":
+        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+        break
+      case "7d":
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        break
+      case "30d":
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+        break
+      case "90d":
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+        break
+      case "180d":
+        startDate = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000)
+        break
+      case "365d":
+        startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+        break
+      default:
+        startDate = new Date(0)
+    }
+    query = query.gte("timestamp", startDate.toISOString());
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("Error fetching server capacities:", error);
+    return [];
+  }
+
+  return data || [];
+}
+
+/**
+ * Get the most recent max capacity for a server
+ * @param serverId Server ID to fetch capacity for
+ * @returns Latest capacity value or null if not found
+ */
+export async function getLatestServerCapacity(serverId: string): Promise<number | null> {
+  const isClient = typeof window !== "undefined";
+  const client = isClient ? supabase : createServerClient();
+
+  const { data, error } = await client
+    .from("server_capacity")
+    .select("max_capacity")
+    .eq("server_id", serverId)
+    .order("timestamp", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return data.max_capacity;
+}
+
+/**
+ * Calculate percentage of time server was at max capacity
+ * @param playerData Array of player count data
+ * @param capacityData Array of capacity data
+ * @param serverId Server ID to calculate for
+ * @returns Percentage (0-100) of time at max capacity
+ */
+export function calculateTimeAtMaxCapacity(
+  playerData: PlayerCountData[],
+  capacityData: ServerCapacityData[],
+  serverId: string
+): number {
+  const serverPlayerData = playerData.filter(d => d.server_id === serverId);
+  const serverCapacityData = capacityData.filter(d => d.server_id === serverId);
+
+  if (serverPlayerData.length === 0 || serverCapacityData.length === 0) {
+    return 0;
+  }
+
+  // Create a map of timestamps to capacity values
+  const capacityMap = new Map<string, number>();
+  serverCapacityData.forEach(c => {
+    capacityMap.set(c.timestamp, c.max_capacity);
+  });
+
+  // Count data points where player count equals max capacity
+  let atMaxCount = 0;
+  let totalCount = 0;
+
+  serverPlayerData.forEach(playerPoint => {
+    // Find the capacity at this timestamp or the most recent capacity before it
+    let capacity = capacityMap.get(playerPoint.timestamp);
+    
+    if (!capacity) {
+      // Find the most recent capacity before this timestamp
+      const sortedCapacities = serverCapacityData
+        .filter(c => new Date(c.timestamp) <= new Date(playerPoint.timestamp))
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      
+      if (sortedCapacities.length > 0) {
+        capacity = sortedCapacities[0].max_capacity;
+      }
+    }
+
+    if (capacity) {
+      totalCount++;
+      if (playerPoint.player_count >= capacity) {
+        atMaxCount++;
+      }
+    }
+  });
+
+  if (totalCount === 0) {
+    return 0;
+  }
+
+  return Math.round((atMaxCount / totalCount) * 100);
 }
 
 // Helper function to fill missing data points with intelligent interpolation
