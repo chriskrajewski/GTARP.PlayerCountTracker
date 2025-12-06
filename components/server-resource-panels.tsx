@@ -122,6 +122,7 @@ export function ServerResourceChangesCard({
   const emptyStateMessage =
     emptyMessage ?? "No resource change history is available yet for this server."
   const scrollClass = maxHeightClass ?? "max-h-[360px]"
+  const containerClass = `${scrollClass} overflow-y-auto`
 
   return (
     <Card className="bg-[#0e0e10] border-[#26262c]">
@@ -158,7 +159,7 @@ export function ServerResourceChangesCard({
             {emptyStateMessage}
           </p>
         ) : (
-          <ScrollArea className={`${scrollClass} pr-2`}>
+          <div className={containerClass}>
             <div className="space-y-4">
               {changes.map((change) => {
                 const added = change.added_resources ?? []
@@ -194,7 +195,7 @@ export function ServerResourceChangesCard({
                 )
               })}
             </div>
-          </ScrollArea>
+          </div>
         )}
       </CardContent>
     </Card>
