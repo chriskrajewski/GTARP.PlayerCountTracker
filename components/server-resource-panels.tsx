@@ -158,43 +158,45 @@ export function ServerResourceChangesCard({
             {emptyStateMessage}
           </p>
         ) : (
-          <ScrollArea className={`${scrollClass} pr-2`}>
-            <div className="space-y-4">
-              {changes.map((change) => {
-                const added = change.added_resources ?? []
-                const removed = change.removed_resources ?? []
+          <div className={`${scrollClass} overflow-hidden rounded-md border border-[#26262c]`}>
+            <ScrollArea className="h-full w-full">
+              <div className="space-y-4 pr-4">
+                {changes.map((change) => {
+                  const added = change.added_resources ?? []
+                  const removed = change.removed_resources ?? []
 
-                const formatList = (items: string[]) => {
-                  if (items.length === 0) return "None"
-                  if (items.length <= 5) return items.join(", ")
-                  const preview = items.slice(0, 5).join(", ")
-                  const remaining = items.length - 5
-                  return `${preview} +${remaining} more`
-                }
+                  const formatList = (items: string[]) => {
+                    if (items.length === 0) return "None"
+                    if (items.length <= 5) return items.join(", ")
+                    const preview = items.slice(0, 5).join(", ")
+                    const remaining = items.length - 5
+                    return `${preview} +${remaining} more`
+                  }
 
-                return (
-                  <div key={change.id} className="rounded-md border border-[#26262c] bg-[#111113] p-3 text-sm text-[#EFEFF1]">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs text-[#9CA3AF]">
-                        {formatDistanceToNow(new Date(change.timestamp), { addSuffix: true })}
-                      </span>
-                      <div className="flex flex-col gap-2">
-                        <div>
-                          <span className="text-xs uppercase tracking-wide text-[#9CA3AF]">Added</span>
-                          <p className="text-sm text-[#C4F1F9]">{formatList(added)}</p>
-                        </div>
-                        <Separator className="bg-[#1f1f23]" />
-                        <div>
-                          <span className="text-xs uppercase tracking-wide text-[#9CA3AF]">Removed</span>
-                          <p className="text-sm text-[#FCA5A5]">{formatList(removed)}</p>
+                  return (
+                    <div key={change.id} className="rounded-md border border-[#26262c] bg-[#111113] p-3 text-sm text-[#EFEFF1]">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs text-[#9CA3AF]">
+                          {formatDistanceToNow(new Date(change.timestamp), { addSuffix: true })}
+                        </span>
+                        <div className="flex flex-col gap-2">
+                          <div>
+                            <span className="text-xs uppercase tracking-wide text-[#9CA3AF]">Added</span>
+                            <p className="text-sm text-[#C4F1F9]">{formatList(added)}</p>
+                          </div>
+                          <Separator className="bg-[#1f1f23]" />
+                          <div>
+                            <span className="text-xs uppercase tracking-wide text-[#9CA3AF]">Removed</span>
+                            <p className="text-sm text-[#FCA5A5]">{formatList(removed)}</p>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                )
-              })}
-            </div>
-          </ScrollArea>
+                  )
+                })}
+              </div>
+            </ScrollArea>
+          </div>
         )}
       </CardContent>
     </Card>
