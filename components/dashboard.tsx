@@ -24,7 +24,7 @@ import {
   type ServerResourceSnapshot,
   type ServerCapacityData
 } from "@/lib/data"
-import PlayerCountChart from "./player-count-chart"
+import PlayerCountChart from "./player-count-chart-lw"
 import ServerStatsCards from "./server-stats-cards"
 import { MultiServerSelect } from "./multi-server-select"
 import { trackServerSelect, trackTimeRangeSelect } from "@/lib/gtag"

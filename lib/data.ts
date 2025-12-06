@@ -435,11 +435,16 @@ export async function getPlayerCounts(serverIds: string[], timeRange: TimeRange)
   // Note: This function is now mainly for shorter time ranges
   // Longer ranges (30d+) should use getPlayerCountsSmart() instead
   
+  // When fetching "all" data, we want newest first with a reasonable limit
+  // For specific time ranges, we want chronological order
+  const fetchingAll = timeRange === "all"
+  const recordLimit = fetchingAll ? 100000 : 50000 // Higher limit for "all" to get more history
+  
   let query = client
     .from("player_counts")
     .select("server_id, timestamp, player_count")
-    .order("timestamp", { ascending: true })
-    .limit(50000) // High limit for detailed shorter ranges
+    .order("timestamp", { ascending: !fetchingAll }) // Descending for "all", ascending for time ranges
+    .limit(recordLimit)
 
   if (serverIds.length > 0) {
     query = query.in("server_id", serverIds)
@@ -498,7 +503,10 @@ export async function getPlayerCounts(serverIds: string[], timeRange: TimeRange)
     return []
   }
 
-
+  // If we fetched "all" data in descending order, reverse it to chronological order for the chart
+  if (fetchingAll && data) {
+    return data.reverse()
+  }
 
   return data
 }
@@ -649,11 +657,15 @@ export async function getServerCapacities(serverIds: string[], timeRange: TimeRa
   const isClient = typeof window !== "undefined";
   const client = isClient ? supabase : createServerClient();
 
+  // When fetching "all" data, we want newest first with a reasonable limit
+  const fetchingAll = timeRange === "all"
+  const recordLimit = fetchingAll ? 100000 : 50000
+
   let query = client
     .from("server_capacity")
     .select("server_id, timestamp, max_capacity")
-    .order("timestamp", { ascending: true })
-    .limit(50000);
+    .order("timestamp", { ascending: !fetchingAll }) // Descending for "all", ascending for time ranges
+    .limit(recordLimit);
 
   if (serverIds.length > 0) {
     query = query.in("server_id", serverIds);
@@ -708,6 +720,11 @@ export async function getServerCapacities(serverIds: string[], timeRange: TimeRa
   if (error) {
     console.error("Error fetching server capacities:", error);
     return [];
+  }
+
+  // If we fetched "all" data in descending order, reverse it to chronological order for the chart
+  if (fetchingAll && data) {
+    return data.reverse()
   }
 
   return data || [];
