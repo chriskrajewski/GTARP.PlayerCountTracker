@@ -158,9 +158,9 @@ export function ServerResourceChangesCard({
             {emptyStateMessage}
           </p>
         ) : (
-          <div className={`${scrollClass} overflow-hidden rounded-md border border-[#26262c]`}>
+          <div className={`${scrollClass} rounded-md border border-[#26262c]`}>
             <ScrollArea className="h-full w-full">
-              <div className="space-y-4 pr-4">
+              <div className="space-y-4 pr-4 p-3">
                 {changes.map((change) => {
                   const added = change.added_resources ?? []
                   const removed = change.removed_resources ?? []
