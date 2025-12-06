@@ -167,10 +167,7 @@ export function ServerResourceChangesCard({
 
                 const formatList = (items: string[]) => {
                   if (items.length === 0) return "None"
-                  if (items.length <= 5) return items.join(", ")
-                  const preview = items.slice(0, 5).join(", ")
-                  const remaining = items.length - 5
-                  return `${preview} +${remaining} more`
+                  return items.join(", ")
                 }
 
                 return (
