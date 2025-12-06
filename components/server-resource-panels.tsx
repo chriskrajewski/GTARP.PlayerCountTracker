@@ -167,29 +167,48 @@ export function ServerResourceChangesCard({
 
                 const formatList = (items: string[]) => {
                   if (items.length === 0) return "None"
-                  if (items.length <= 5) return items.join(", ")
-                  const preview = items.slice(0, 5).join(", ")
-                  const remaining = items.length - 5
-                  return `${preview} +${remaining} more`
+                  return items.join(", ")
                 }
 
                 return (
-                  <div key={change.id} className="rounded-md border border-[#26262c] bg-[#111113] p-3 text-sm text-[#EFEFF1]">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs text-[#9CA3AF]">
+                  <div key={change.id} className="rounded-md border border-[#26262c] bg-[#111113] p-4 text-sm text-[#EFEFF1]">
+                    <div className="flex flex-col gap-3">
+                      {/* Timestamp */}
+                      <span className="text-xs font-medium text-[#9CA3AF] bg-[#1f1f23] px-2 py-1 rounded w-fit">
                         {formatDistanceToNow(new Date(change.timestamp), { addSuffix: true })}
                       </span>
-                      <div className="flex flex-col gap-2">
-                        <div>
-                          <span className="text-xs uppercase tracking-wide text-[#9CA3AF]">Added</span>
-                          <p className="text-sm text-[#C4F1F9]">{formatList(added)}</p>
+                      
+                      {/* Added Section */}
+                      {added.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                          <span className="text-xs font-semibold uppercase tracking-wider text-[#22c55e]">
+                            ✓ Added ({added.length})
+                          </span>
+                          <div className="flex flex-col gap-1 pl-3 border-l-2 border-[#22c55e]/30">
+                            {added.map((item, idx) => (
+                              <span key={`added-${idx}`} className="text-sm text-[#C4F1F9] break-words">
+                                • {item}
+                              </span>
+                            ))}
+                          </div>
                         </div>
-                        <Separator className="bg-[#1f1f23]" />
-                        <div>
-                          <span className="text-xs uppercase tracking-wide text-[#9CA3AF]">Removed</span>
-                          <p className="text-sm text-[#FCA5A5]">{formatList(removed)}</p>
+                      )}
+                      
+                      {/* Removed Section */}
+                      {removed.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                          <span className="text-xs font-semibold uppercase tracking-wider text-[#ef4444]">
+                            ✗ Removed ({removed.length})
+                          </span>
+                          <div className="flex flex-col gap-1 pl-3 border-l-2 border-[#ef4444]/30">
+                            {removed.map((item, idx) => (
+                              <span key={`removed-${idx}`} className="text-sm text-[#FCA5A5] break-words">
+                                • {item}
+                              </span>
+                            ))}
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 )

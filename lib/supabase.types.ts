@@ -16,6 +16,21 @@ export type Database = {
           created_at?: string
         }
       }
+      server_capacity: {
+        Row: {
+          id: number
+          server_id: string
+          timestamp: string
+          max_capacity: number
+          created_at: string
+        }
+        Insert: {
+          server_id: string
+          timestamp: string
+          max_capacity: number
+          created_at?: string
+        }
+      }
       server_resource_snapshots: {
         Row: {
           id: number

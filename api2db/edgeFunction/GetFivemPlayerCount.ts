@@ -12,23 +12,22 @@ const SERVER_IDS = [
   "46pb7q",
   "l7o9o4",
   "7pkv5d",
-  "k8px4v",
   "vqkmaq",
   "ypq96k",
   "77qvev",
   "r8q73g",
   "775kda",
   "68oab8",
-  "ak44p9"
+  "ak44p9",
+  "6j7je6"
 ];
 function sleep(ms) {
   return new Promise((resolve)=>setTimeout(resolve, ms));
 }
 const BASE_API_URL = "https://servers-frontend.fivem.net/api/servers/single/";
-
-function normalizeResources(resources: unknown): string[] {
+function normalizeResources(resources) {
   if (!Array.isArray(resources)) return [];
-  const unique = new Set<string>();
+  const unique = new Set();
   for (const entry of resources){
     if (typeof entry === "string" && entry.trim()) {
       unique.add(entry.trim());
@@ -36,18 +35,17 @@ function normalizeResources(resources: unknown): string[] {
       try {
         unique.add(JSON.stringify(entry));
       } catch (_err) {
-        // ignore serialization issues for non-JSON-safe entries
+      // ignore serialization issues for non-JSON-safe entries
       }
     }
   }
   return Array.from(unique).sort((a, b)=>a.localeCompare(b));
 }
-
-function diffResources(previous: string[], current: string[]) {
+function diffResources(previous, current) {
   const prevSet = new Set(previous);
   const currSet = new Set(current);
-  const added: string[] = [];
-  const removed: string[] = [];
+  const added = [];
+  const removed = [];
   for (const value of currSet){
     if (!prevSet.has(value)) added.push(value);
   }
@@ -59,15 +57,13 @@ function diffResources(previous: string[], current: string[]) {
     removed: removed.sort((a, b)=>a.localeCompare(b))
   };
 }
-
-function resourcesChanged(previous: string[], current: string[]): boolean {
+function resourcesChanged(previous, current) {
   if (previous.length !== current.length) return true;
-  for (let i = 0; i < previous.length; i++){
+  for(let i = 0; i < previous.length; i++){
     if (previous[i] !== current[i]) return true;
   }
   return false;
 }
-
 serve(async (req)=>{
   console.log(`Received ${req.method} request to fetch FiveM server player counts`);
   if (req.method !== "GET") {
@@ -112,69 +108,81 @@ serve(async (req)=>{
         const data = await response.json();
         const current_players = data?.Data?.selfReportedClients || 0;
         console.log(`Server ${server_id}: Fetched player count: ${current_players}`);
-        const record = {
+        
+        // Extract max capacity from multiple possible sources for robustness
+        // Priority: vars.sv_maxClients (string) -> svMaxclients (number) -> sv_maxclients (number)
+        let max_capacity = 0;
+        if (data?.Data?.vars?.sv_maxClients) {
+          max_capacity = parseInt(data.Data.vars.sv_maxClients, 10) || 0;
+        } else if (typeof data?.Data?.svMaxclients === 'number') {
+          max_capacity = data.Data.svMaxclients;
+        } else if (typeof data?.Data?.sv_maxclients === 'number') {
+          max_capacity = data.Data.sv_maxclients;
+        }
+        console.log(`Server ${server_id}: Fetched max capacity: ${max_capacity}`);
+        
+        // Insert player count record
+        const playerRecord = {
           timestamp,
           player_count: current_players,
           server_id
         };
-        const { error } = await supabase.from("player_counts").insert(record);
-        if (error) {
-          const errorMessage = `Supabase error for server ${server_id}: ${error.message}`;
+        const { error: playerError } = await supabase.from("player_counts").insert(playerRecord);
+        if (playerError) {
+          const errorMessage = `Supabase error for server ${server_id} player_counts: ${playerError.message}`;
           console.error(errorMessage);
           throw new Error(errorMessage);
         }
         console.log(`Server ${server_id}: Successfully saved player count: ${current_players}`);
-
+        
+        // Insert capacity record if we have a valid capacity
+        if (max_capacity > 0) {
+          const capacityRecord = {
+            timestamp,
+            max_capacity: max_capacity,
+            server_id
+          };
+          const { error: capacityError } = await supabase.from("server_capacity").insert(capacityRecord);
+          if (capacityError) {
+            // Log error but don't fail the entire operation
+            console.error(`Server ${server_id}: Failed to save capacity: ${capacityError.message}`);
+          } else {
+            console.log(`Server ${server_id}: Successfully saved max capacity: ${max_capacity}`);
+          }
+        } else {
+          console.warn(`Server ${server_id}: No valid max capacity found in API response`);
+        }
         const normalizedResources = normalizeResources(data?.Data?.resources);
         try {
-          const { data: snapshotData, error: snapshotError } = await supabase
-            .from("server_resource_snapshots")
-            .select("id, resources")
-            .eq("server_id", server_id)
-            .order("timestamp", {
-              ascending: false
-            })
-            .limit(1);
-
+          const { data: snapshotData, error: snapshotError } = await supabase.from("server_resource_snapshots").select("id, resources").eq("server_id", server_id).order("timestamp", {
+            ascending: false
+          }).limit(1);
           if (snapshotError) {
             console.error(`Server ${server_id}: Failed to load previous resource snapshot: ${snapshotError.message}`);
           }
-
           const hasPreviousSnapshot = Array.isArray(snapshotData) && snapshotData.length > 0;
-          const previousResources = hasPreviousSnapshot && Array.isArray(snapshotData?.[0]?.resources)
-            ? normalizeResources(snapshotData[0].resources)
-            : [];
-
+          const previousResources = hasPreviousSnapshot && Array.isArray(snapshotData?.[0]?.resources) ? normalizeResources(snapshotData[0].resources) : [];
           const shouldInsertSnapshot = !snapshotError && (!hasPreviousSnapshot || resourcesChanged(previousResources, normalizedResources));
-
           if (shouldInsertSnapshot) {
-            const { error: snapshotInsertError } = await supabase
-              .from("server_resource_snapshots")
-              .insert({
-                server_id,
-                timestamp,
-                resources: normalizedResources
-              });
-
+            const { error: snapshotInsertError } = await supabase.from("server_resource_snapshots").insert({
+              server_id,
+              timestamp,
+              resources: normalizedResources
+            });
             if (snapshotInsertError) {
               console.error(`Server ${server_id}: Failed to insert resource snapshot: ${snapshotInsertError.message}`);
             } else {
               console.log(`Server ${server_id}: Stored new resource snapshot with ${normalizedResources.length} entries`);
             }
-
             if (hasPreviousSnapshot) {
               const { added, removed } = diffResources(previousResources, normalizedResources);
-
               if (added.length > 0 || removed.length > 0) {
-                const { error: changeInsertError } = await supabase
-                  .from("server_resource_changes")
-                  .insert({
-                    server_id,
-                    timestamp,
-                    added_resources: added,
-                    removed_resources: removed
-                  });
-
+                const { error: changeInsertError } = await supabase.from("server_resource_changes").insert({
+                  server_id,
+                  timestamp,
+                  added_resources: added,
+                  removed_resources: removed
+                });
                 if (changeInsertError) {
                   console.error(`Server ${server_id}: Failed to insert resource change log: ${changeInsertError.message}`);
                 } else {
@@ -187,7 +195,6 @@ serve(async (req)=>{
           const errorMessage = resourceError instanceof Error ? resourceError.message : String(resourceError);
           console.error(`Server ${server_id}: Error processing resource changes: ${errorMessage}`);
         }
-
         results.push(`[${timestamp}] Server ${server_id}: Successfully saved player count: ${current_players}`);
       } catch (serverError) {
         const errorMessage = serverError instanceof Error ? serverError.message : String(serverError);
