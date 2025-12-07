@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { Octokit } from 'octokit';
+import { verifyBotID, logBotIDVerification } from '@/lib/botid';
 
-// Interface for the feedback submission
+/**
+ * Feedback submission interface
+ */
 interface FeedbackRequest {
   title: string;
   description: string;
@@ -10,8 +13,33 @@ interface FeedbackRequest {
   serverName?: string;
 }
 
+/**
+ * POST /api/feedback
+ * 
+ * Submits user feedback as a GitHub issue.
+ * Protected with BotID to prevent automated spam submissions.
+ * 
+ * @param request - The incoming request
+ * @returns JSON response with issue details or error
+ */
 export async function POST(request: Request) {
   try {
+    // Verify request is from a real user using BotID
+    const botidResult = await verifyBotID();
+    logBotIDVerification(botidResult, { route: '/api/feedback', method: 'POST' });
+
+    // Reject if detected as bot (but allow verified bots if needed)
+    if (botidResult.isBot && !botidResult.isVerifiedBot) {
+      return NextResponse.json(
+        { 
+          error: 'Access denied',
+          message: 'This request appears to be from an automated bot',
+          code: 'BOT_DETECTED'
+        },
+        { status: 403 }
+      );
+    }
+
     // Get environment variables
     const githubToken = process.env.GITHUB_ACCESS_TOKEN;
     const githubRepo = process.env.GITHUB_REPO || 'GTARP.PlayerCountTracker';
@@ -78,4 +106,4 @@ Submitted via website feedback form (mobile)
       { status: 500 }
     );
   }
-} 
+}
