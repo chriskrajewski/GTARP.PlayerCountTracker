@@ -53,6 +53,7 @@
     "ai": "^4.3.16",
     "analytics": "^0.8.16",
     "autoprefixer": "^10.4.20",
+    "botid": "^1.5.10",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
