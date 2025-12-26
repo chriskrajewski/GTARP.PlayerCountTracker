@@ -28,9 +28,6 @@ const config = defineConfig({
     checkMatch: '**/__checks__/**/*.check.ts',
     /* Global configuration option for Playwright-powered chenpmcks. See https://www.checklyhq.com/docs/browser-checks/playwright-test/#global-configuration */
     playwrightConfig: {},
-    env: {
-      PLAYER_TRACKER_BASE_URL: 'https://rpstats.com',
-    },
     browserChecks: {
       /* A glob pattern matches any Playwright .spec.ts files and automagically creates a Browser Check. This way, you
       * can just write native Playwright code. See https://www.checklyhq.com/docs/cli/using-check-test-match/

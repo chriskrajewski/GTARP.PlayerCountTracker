@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { Database } from '@/lib/supabase';
+import type { Database } from '@/lib/supabase.types';
 import { validateAdminRequest } from '@/lib/admin-auth-server';
 import { z } from 'zod';
 
 // Type definitions
 type NotificationBanner = Database['public']['Tables']['notification_banners']['Row'];
 type NotificationBannerInsert = Database['public']['Tables']['notification_banners']['Insert'];
-type NotificationBannerUpdate = Database['public']['Tables']['notification_banners']['Update'];
+type NotificationBannerUpdate = Partial<NotificationBannerInsert>;
 
 // Much simpler approach - preprocess data to clean empty strings
 function cleanBannerData(data: any) {

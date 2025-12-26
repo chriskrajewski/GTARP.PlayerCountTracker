@@ -28,8 +28,8 @@ export async function GET(request: NextRequest) {
         is_readonly: true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        created_by: 'system',
         updated_by: 'system',
+        requires_restart: false,
       },
       {
         id: 'twitch_client_secret',
@@ -42,8 +42,8 @@ export async function GET(request: NextRequest) {
         is_readonly: true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        created_by: 'system',
         updated_by: 'system',
+        requires_restart: false,
       },
       {
         id: 'supabase_url',
@@ -56,8 +56,8 @@ export async function GET(request: NextRequest) {
         is_readonly: true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        created_by: 'system',
         updated_by: 'system',
+        requires_restart: false,
       },
       {
         id: 'admin_token',
@@ -70,8 +70,8 @@ export async function GET(request: NextRequest) {
         is_readonly: true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        created_by: 'system',
         updated_by: 'system',
+        requires_restart: false,
       },
     ];
 
@@ -120,8 +120,8 @@ export async function POST(request: NextRequest) {
       validation_rules: body.validation_rules,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      created_by: 'admin',
       updated_by: 'admin',
+      requires_restart: false,
     };
 
     return NextResponse.json({

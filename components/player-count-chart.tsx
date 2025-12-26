@@ -4,12 +4,12 @@ import { useState, useEffect, useMemo } from "react"
 import { ChartContainer } from "@/components/ui/chart"
 import type { TimeRange, ServerColor } from "@/lib/data"
 import "../app/globals.css"
-import { ApexOptions } from "apexcharts"
+import type { ApexOptions } from "apexcharts"
 import dynamic from 'next/dynamic'
 import { getServerColors } from "@/lib/data"
 
 // Dynamically import ApexCharts to prevent SSR issues
-const Chart = dynamic(() => import('react-apexcharts'), { ssr: false })
+const Chart = dynamic(() => import('react-apexcharts'), { ssr: false }) as any
 
 interface PlayerCountChartProps {
   data: Array<Record<string, any>>
@@ -284,7 +284,7 @@ export default function PlayerCountChart({
                 style: {
                   colors: '#EFEFF1'
                 },
-                formatter: function(value) {
+                formatter: function(value: any) {
                   return Math.round(value).toString();
                 }
               }
@@ -302,7 +302,7 @@ export default function PlayerCountChart({
                 format: 'MMM dd, yyyy h:mm TT'
               },
               y: {
-                formatter: function(value) {
+                formatter: function(value: any) {
                   return value + ' players';
                 }
               }

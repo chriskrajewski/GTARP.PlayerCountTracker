@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Info, AlertTriangle, CheckCircle, Megaphone, AlertCircle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Database } from '@/lib/supabase';
+import type { Database } from '@/lib/supabase.types';
 
 // Type definitions
 type NotificationBanner = Database['public']['Tables']['notification_banners']['Row'];
@@ -58,7 +58,7 @@ export function NotificationBanner({ banner, onDismiss, className }: Notificatio
   const [isVisible, setIsVisible] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
 
-  const config = BANNER_CONFIGS[banner.type];
+  const config = BANNER_CONFIGS[banner.type as keyof typeof BANNER_CONFIGS];
   const Icon = config.icon;
 
   // Use custom colors if provided, otherwise use defaults

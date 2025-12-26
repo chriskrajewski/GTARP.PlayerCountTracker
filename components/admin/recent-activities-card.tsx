@@ -98,7 +98,7 @@ export function RecentActivitiesCard({ activities, limit = 10 }: RecentActivitie
         <div className="space-y-3">
           {displayedActivities.map((activity) => {
             const Icon = getActivityIcon(activity.action, activity.resource_type);
-            const timeAgo = formatTimeAgo(activity.timestamp || activity.created_at);
+            const timeAgo = formatTimeAgo((activity.timestamp || activity.created_at) ?? new Date().toISOString());
             const detailEntries = typeof activity.details === 'object' && activity.details !== null
               ? Object.entries(activity.details as Record<string, any>)
               : undefined;
