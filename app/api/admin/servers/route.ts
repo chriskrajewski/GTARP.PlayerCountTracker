@@ -3,6 +3,10 @@ import { validateAdminRequest } from '@/lib/admin-auth-server';
 import { createServerClient } from '@/lib/supabase-server';
 import { ServerConfiguration, ServerFormData, PaginatedResponse } from '@/lib/admin-types';
 import { z } from 'zod';
+import { rateLimit, RATE_LIMIT_TIERS } from '@/lib/rate-limiter';
+import { createCachedResponse, parsePaginationParams, createErrorResponse } from '@/lib/api-utils';
+import { auditAdminAction, auditConfigChange } from '@/lib/audit';
+import { logger } from '@/lib/logger';
 
 // Validation schema for server data
 const ServerFormSchema = z.object({
@@ -24,22 +28,33 @@ const ServerFormSchema = z.object({
 
 // GET - Fetch servers with pagination and filtering
 export async function GET(request: NextRequest) {
+  const reqLogger = logger.child({ endpoint: '/api/admin/servers', method: 'GET' });
+  
   try {
-    console.log('Admin servers API called');
+    reqLogger.debug('Admin servers API called');
+    
+    // Apply rate limiting
+    const rateLimitResponse = await rateLimit(request, {
+      ...RATE_LIMIT_TIERS.standard,
+      identifier: 'admin-servers',
+    });
+    if (rateLimitResponse) return rateLimitResponse;
     
     if (!validateAdminRequest(request)) {
-      console.log('Admin authentication failed');
-      return NextResponse.json(
-        { success: false, error: 'Admin authentication required' },
-        { status: 401 }
-      );
+      reqLogger.warn('Admin authentication failed');
+      await auditAdminAction(request, 'unauthorized_access', 'Failed admin authentication attempt on servers endpoint', {
+        success: false,
+      });
+      return createErrorResponse('Admin authentication required', 401);
     }
     
-    console.log('Admin authentication successful');
+    reqLogger.debug('Admin authentication successful');
+    
+    // Audit the access
+    await auditAdminAction(request, 'admin_access', 'Admin accessed servers list');
 
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '20');
+    const pagination = parsePaginationParams(request, { limit: 20, maxLimit: 100 });
     const search = searchParams.get('search');
     const status = searchParams.get('status');
 
@@ -67,25 +82,20 @@ export async function GET(request: NextRequest) {
       .select('*', { count: 'exact', head: true });
 
     // Apply pagination and ordering
-    const offset = (page - 1) * limit;
     query = query
       .order('"order"', { ascending: true })
-      .range(offset, offset + limit - 1);
+      .range(pagination.offset, pagination.offset + pagination.limit - 1);
 
     const { data: servers, error } = await query;
     
-    console.log('Database query result:', { servers, error, count: servers?.length });
+    reqLogger.debug('Database query result', { count: servers?.length, error: error?.message });
 
     if (error) {
-      console.error('Error fetching servers:', error);
-      return NextResponse.json(
-        { success: false, error: 'Failed to fetch servers' },
-        { status: 500 }
-      );
+      reqLogger.error('Error fetching servers', error);
+      return createErrorResponse('Failed to fetch servers', 500);
     }
 
     // Transform server data to match ServerConfiguration interface
-    console.log('Raw server data sample:', servers?.[0]);
     const transformedServers: ServerConfiguration[] = (servers || []).map(server => ({
       id: server.id,
       server_id: server.server_id || '',
@@ -113,34 +123,46 @@ export async function GET(request: NextRequest) {
     const response: PaginatedResponse<ServerConfiguration> = {
       items: transformedServers,
       total: totalCount || 0,
-      page,
-      limit,
-      totalPages: Math.ceil((totalCount || 0) / limit),
+      page: pagination.page,
+      limit: pagination.limit,
+      totalPages: Math.ceil((totalCount || 0) / pagination.limit),
     };
 
-    return NextResponse.json({
+    const responseData = {
       success: true,
       data: response,
       timestamp: new Date().toISOString(),
+    };
+
+    // Return cached response with ETag support
+    return createCachedResponse(responseData, request, {
+      maxAge: 30, // Cache for 30 seconds
+      staleWhileRevalidate: 60,
     });
 
   } catch (error) {
-    console.error('Servers API error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    reqLogger.error('Servers API error', error);
+    return createErrorResponse('Internal server error', 500);
   }
 }
 
 // POST - Create new server
 export async function POST(request: NextRequest) {
+  const reqLogger = logger.child({ endpoint: '/api/admin/servers', method: 'POST' });
+  
   try {
+    // Apply stricter rate limiting for write operations
+    const rateLimitResponse = await rateLimit(request, {
+      ...RATE_LIMIT_TIERS.strict,
+      identifier: 'admin-servers-create',
+    });
+    if (rateLimitResponse) return rateLimitResponse;
+    
     if (!validateAdminRequest(request)) {
-      return NextResponse.json(
-        { success: false, error: 'Admin authentication required' },
-        { status: 401 }
-      );
+      await auditAdminAction(request, 'unauthorized_access', 'Failed admin authentication attempt on server creation', {
+        success: false,
+      });
+      return createErrorResponse('Admin authentication required', 401);
     }
 
     const body = await request.json();
@@ -156,10 +178,12 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (existingServer) {
-      return NextResponse.json(
-        { success: false, error: 'Server ID already exists' },
-        { status: 400 }
-      );
+      await auditConfigChange(request, 'data_create', 'Attempted to create server with duplicate ID', {
+        resource: 'server',
+        resourceId: validatedData.server_id,
+        success: false,
+      });
+      return createErrorResponse('Server ID already exists', 400);
     }
 
     // Prepare server data for insertion
@@ -191,11 +215,14 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error('Error creating server:', error);
-      return NextResponse.json(
-        { success: false, error: 'Failed to create server' },
-        { status: 500 }
-      );
+      reqLogger.error('Error creating server', error);
+      await auditConfigChange(request, 'data_create', `Failed to create server: ${error.message}`, {
+        resource: 'server',
+        resourceId: validatedData.server_id,
+        success: false,
+        errorMessage: error.message,
+      });
+      return createErrorResponse('Failed to create server', 500);
     }
 
     // Also create a server_colors entry if colors were provided
@@ -215,6 +242,17 @@ export async function POST(request: NextRequest) {
         server_id: validatedData.server_id,
         start_date: new Date().toISOString(),
       });
+
+    // Audit the successful creation
+    await auditConfigChange(request, 'data_create', `Created new server: ${validatedData.server_name}`, {
+      resource: 'server',
+      resourceId: validatedData.server_id,
+      metadata: {
+        serverName: validatedData.server_name,
+        isActive: validatedData.is_active,
+        dataCollectionEnabled: validatedData.data_collection_enabled,
+      },
+    });
 
     // Transform response to match ServerConfiguration interface
     // @ts-ignore
@@ -253,6 +291,8 @@ export async function POST(request: NextRequest) {
       updated_at: newServer.updated_at,
     };
 
+    reqLogger.info('Server created successfully', { serverId: validatedData.server_id });
+
     return NextResponse.json({
       success: true,
       data: transformedServer,
@@ -272,10 +312,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.error('Server creation error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    reqLogger.error('Server creation error', error);
+    return createErrorResponse('Internal server error', 500);
   }
 }
