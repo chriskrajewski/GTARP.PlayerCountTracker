@@ -9,7 +9,7 @@ import { SpeedInsights } from "@vercel/speed-insights/react"
 import Script from "next/script";
 import StatsigProvider from "@/components/statsig-provider";
 import GoogleAnalytics from "@/components/google-analytics";
-import { ServiceWorkerProvider } from "@/components/service-worker-provider";
+import { BotIDProvider } from "@/components/botid-provider"
 import mixpanel from "mixpanel-browser";
 
 // Create an instance of the Mixpanel object, your token is already added to this snippet
@@ -109,8 +109,8 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} forcedTheme="dark" disableTransitionOnChange>
           <StatsigProvider>
             <Suspense>
+              <BotIDProvider />
               <GoogleAnalytics />
-              <ServiceWorkerProvider />
               {children}
               <Analytics />
               <SpeedInsights />

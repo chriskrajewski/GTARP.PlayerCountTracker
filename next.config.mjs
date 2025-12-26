@@ -1,3 +1,5 @@
+import { withBotId } from 'botid/next/config'
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   eslint: {
@@ -93,7 +95,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://www.googletagmanager.com https://cdn.7tv.app https://www.google-analytics.com https://cdn.jsdelivr.net https://statsig.com https://cdn.statsig.com https://*.twitch.tv https://embed.twitch.tv https://player.twitch.tv https://*.nightdev.com https://nightdev.com https://snippet.meticulous.ai https://va.vercel-scripts.com/ https://*.amazonaws.com https://*.s3-accelerate.amazonaws.com; style-src 'self' 'unsafe-inline' https://*.nightdev.com https://nightdev.com; img-src 'self' data: https://cdn.7tv.app https://*.fivem.net https://*.cfx.re https://static-cdn.jtvnw.net https://*.twimg.com https://*.twitch.tv https://i.ytimg.com https://jst.cdn.scaleengine.net https://*.nightdev.com https://nightdev.com; font-src 'self' data:; connect-src 'self' https://cognito-identity.us-west-2.amazonaws.com/ https://servers-live.fivem.net https://*.supabase.co https://api.github.com https://www.google-analytics.com https://*.statsig.com https://*.twitch.tv https://api.twitch.tv https://prodregistryv2.org https://featureassets.org https://*.nightdev.com https://nightdev.com https://*.amazonaws.com; frame-src 'self' https://*.twitch.tv https://player.twitch.tv https://embed.twitch.tv https://*.nightdev.com https://nightdev.com; media-src 'self' https://*.twitch.tv https://player.twitch.tv https://*.nightdev.com https://nightdev.com; frame-ancestors 'none';"
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://www.googletagmanager.com https://cdn.7tv.app https://www.google-analytics.com https://cdn.jsdelivr.net https://statsig.com https://cdn.statsig.com https://*.twitch.tv https://embed.twitch.tv https://player.twitch.tv https://*.nightdev.com https://nightdev.com https://snippet.meticulous.ai https://va.vercel-scripts.com/ https://*.amazonaws.com https://*.s3-accelerate.amazonaws.com https://vercel.com; style-src 'self' 'unsafe-inline' https://*.nightdev.com https://nightdev.com; img-src 'self' data: https://cdn.7tv.app https://*.fivem.net https://*.cfx.re https://static-cdn.jtvnw.net https://*.twimg.com https://*.twitch.tv https://i.ytimg.com https://jst.cdn.scaleengine.net https://*.nightdev.com https://nightdev.com; font-src 'self' data:; connect-src 'self' https://cognito-identity.us-west-2.amazonaws.com/ https://servers-live.fivem.net https://*.supabase.co https://api.github.com https://www.google-analytics.com https://*.statsig.com https://*.twitch.tv https://api.twitch.tv https://prodregistryv2.org https://featureassets.org https://*.nightdev.com https://nightdev.com https://*.amazonaws.com https://vercel.com; frame-src 'self' https://*.twitch.tv https://player.twitch.tv https://embed.twitch.tv https://*.nightdev.com https://nightdev.com; media-src 'self' https://*.twitch.tv https://player.twitch.tv https://*.nightdev.com https://nightdev.com; frame-ancestors 'none';"
           }
         ]
       }
@@ -101,4 +103,4 @@ const nextConfig = {
   }
 }
 
-export default nextConfig
+export default withBotId(nextConfig)
