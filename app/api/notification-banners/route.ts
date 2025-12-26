@@ -231,7 +231,7 @@ export async function PUT(request: NextRequest) {
     const { data, error } = await supabase
       .from('notification_banners')
       .update(validated)
-      .eq('id', bannerId)
+      .eq('id', parseInt(bannerId))
       .select()
       .single();
 
@@ -295,7 +295,7 @@ export async function DELETE(request: NextRequest) {
     const { error } = await supabase
       .from('notification_banners')
       .delete()
-      .eq('id', bannerId);
+      .eq('id', parseInt(bannerId));
 
     if (error) {
       console.error('Error deleting banner:', error);
