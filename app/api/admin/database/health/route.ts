@@ -26,7 +26,6 @@ export async function GET(request: NextRequest) {
         component: 'database_connection',
         status: 'healthy',
         message: 'Database connection successful',
-        last_checked: new Date().toISOString(),
         response_time_ms: 50, // Mock response time
         details: {
           connection_pool_size: 10,
@@ -38,7 +37,6 @@ export async function GET(request: NextRequest) {
         component: 'database_connection',
         status: 'critical',
         message: 'Database connection failed',
-        last_checked: new Date().toISOString(),
         response_time_ms: null,
         details: { error: error instanceof Error ? error.message : 'Unknown error' }
       });
@@ -55,7 +53,6 @@ export async function GET(request: NextRequest) {
         component: 'player_counts_table',
         status: 'healthy',
         message: `${playerCountRecords || 0} records`,
-        last_checked: new Date().toISOString(),
         response_time_ms: 25,
         details: {
           total_records: playerCountRecords || 0,
@@ -72,7 +69,6 @@ export async function GET(request: NextRequest) {
         component: 'server_xref_table',
         status: 'healthy',
         message: `${serverRecords || 0} servers configured`,
-        last_checked: new Date().toISOString(),
         response_time_ms: 15,
         details: {
           total_records: serverRecords || 0,
@@ -89,7 +85,6 @@ export async function GET(request: NextRequest) {
         component: 'twitch_streams_table',
         status: 'healthy',
         message: `${streamRecords || 0} stream records`,
-        last_checked: new Date().toISOString(),
         response_time_ms: 20,
         details: {
           total_records: streamRecords || 0,
@@ -102,7 +97,6 @@ export async function GET(request: NextRequest) {
         component: 'table_statistics',
         status: 'warning',
         message: 'Unable to fetch table statistics',
-        last_checked: new Date().toISOString(),
         response_time_ms: null,
         details: { error: error instanceof Error ? error.message : 'Unknown error' }
       });
@@ -114,7 +108,6 @@ export async function GET(request: NextRequest) {
         component: 'query_performance',
         status: 'healthy',
         message: 'Average query response time within normal range',
-        last_checked: new Date().toISOString(),
         response_time_ms: 45,
         details: {
           avg_query_time_ms: 45,
@@ -126,7 +119,6 @@ export async function GET(request: NextRequest) {
         component: 'storage_usage',
         status: 'healthy',
         message: 'Storage usage is within acceptable limits',
-        last_checked: new Date().toISOString(),
         response_time_ms: 10,
         details: {
           total_size_mb: 1024,
@@ -139,7 +131,6 @@ export async function GET(request: NextRequest) {
         component: 'replication_status',
         status: 'healthy',
         message: 'Database replication is functioning normally',
-        last_checked: new Date().toISOString(),
         response_time_ms: 5,
         details: {
           replication_lag_ms: 150,
@@ -151,7 +142,6 @@ export async function GET(request: NextRequest) {
         component: 'index_health',
         status: 'healthy',
         message: 'All database indexes are optimized',
-        last_checked: new Date().toISOString(),
         response_time_ms: 30,
         details: {
           total_indexes: 8,

@@ -1,10 +1,10 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, Page } from '@playwright/test'
 
 const BASE_URL =
   process.env.PLAYER_TRACKER_BASE_URL?.replace(/\/$/, '') ??
   'https://rpstats.com'
 
-test('Multi-stream viewer loads manual entry form', async ({ page }) => {
+test('Multi-stream viewer loads manual entry form', async ({ page }: { page: Page }) => {
   const response = await page.goto(`${BASE_URL}/multi-stream`, {
     waitUntil: 'domcontentloaded',
   })

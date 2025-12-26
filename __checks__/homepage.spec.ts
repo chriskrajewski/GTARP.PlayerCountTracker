@@ -1,11 +1,11 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, Page } from '@playwright/test'
 
 const BASE_URL =
   process.env.PLAYER_TRACKER_BASE_URL?.replace(/\/$/, '') ??
   'https://rpstats.com'
 
 test.describe('Homepage experience', () => {
-  test('renders dashboard navigation and hero', async ({ page }) => {
+  test('renders dashboard navigation and hero', async ({ page }: { page: Page }) => {
     const response = await page.goto(`${BASE_URL}/`, {
       waitUntil: 'networkidle',
     })
@@ -22,7 +22,7 @@ test.describe('Homepage experience', () => {
     await expect(page.getByText(/Player Count Over Time/i)).toBeVisible()
   })
 
-  test('navigates to changelog section', async ({ page }) => {
+  test('navigates to changelog section', async ({ page }: { page: Page }) => {
     await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle' })
 
     await page.getByRole('link', { name: /Changelog/i }).click()

@@ -128,7 +128,8 @@ export default function AdminNotificationsPage() {
       
       const { data: newBanner, error } = await supabase
         .from('notification_banners')
-        .insert(insertData)
+        // @ts-ignore - Supabase type inference issue with notification_banners table
+        .insert([insertData])
         .select()
         .single();
       

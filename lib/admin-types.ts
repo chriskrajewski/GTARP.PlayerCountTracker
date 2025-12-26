@@ -172,6 +172,8 @@ export interface DatabaseHealth {
   component?: string;
   status?: 'healthy' | 'warning' | 'critical';
   message?: string;
+  response_time_ms?: number | null;
+  details?: Record<string, any>;
 }
 
 export interface NotificationTemplate {

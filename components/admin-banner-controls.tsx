@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { NotificationBanner } from '@/components/notification-banner';
-import { Database } from '@/lib/supabase';
+import type { Database } from '@/lib/supabase.types';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAdminAuth } from '@/lib/admin-auth';
