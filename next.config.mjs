@@ -13,6 +13,11 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
+        hostname: 'cdn.7tv.app',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
         hostname: 'static-cdn.jtvnw.net',
         pathname: '/**',
       },
