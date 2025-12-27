@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Twitch, Maximize, Minimize, Grid3X3, Grid2X2, LayoutGrid, Copy, Check, ChevronDown, Users, PanelLeft, PanelRight, PanelBottom, RotateCcw, Lock, Unlock, LayoutPanelTop, MonitorUp, PictureInPicture, Rows3, Rows2, Columns, Table2, Layers, ClipboardList, MessageSquare, Heart } from 'lucide-react';
+import { ArrowLeft, Twitch, Maximize, Minimize, Grid3X3, Grid2X2, LayoutGrid, Copy, Check, ChevronDown, Users, PanelLeft, PanelRight, PanelBottom, RotateCcw, Lock, Unlock, LayoutPanelTop, MonitorUp, PictureInPicture, Rows3, Rows2, Columns, Table2, Layers, ClipboardList, MessageSquare, Heart, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
@@ -15,7 +15,63 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 // Create responsive grid layout with width provider
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
+// Kick icon component
+function KickIcon({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg 
+      viewBox="0 0 24 24" 
+      fill="currentColor" 
+      className={className}
+      style={style}
+    >
+      <path d="M1.333 0v24h21.334V0H1.333zm17.12 18.347h-4.32l-3.093-4.907-1.653 1.76v3.147H5.654V5.653h3.733v5.28l4.48-5.28h4.427l-4.907 5.44 4.986 7.254h.08z"/>
+    </svg>
+  );
+}
+
+// Kick stream panel with iframe embedding
+// Note: CORS errors for stats.live-video.net are expected and don't affect playback
+function KickStreamPanel({ slug }: { slug: string }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  
+  // Use player.kick.com for embedding, kick.com for fallback link
+  const playerUrl = `https://player.kick.com/${encodeURIComponent(slug.toLowerCase())}`;
+  const fallbackUrl = `https://kick.com/${encodeURIComponent(slug.toLowerCase())}`;
+
+  return (
+    <>
+      {/* Kick iframe - CORS errors for analytics are expected and don't affect playback */}
+      <iframe
+        ref={iframeRef}
+        src={playerUrl}
+        height="100%"
+        width="100%"
+        allowFullScreen={true}
+        frameBorder="0"
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        allow="autoplay; encrypted-media; fullscreen"
+        title={`Kick stream: ${slug}`}
+      />
+      
+      {/* Always show a small "Open on Kick" button overlay for easy access */}
+      <div className="absolute bottom-2 right-2 z-30 opacity-0 hover:opacity-100 transition-opacity">
+        <a
+          href={fallbackUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 px-2 py-1 bg-[#53FC18] hover:bg-[#45D015] text-black rounded text-xs font-medium transition-colors"
+          title="Open on Kick"
+        >
+          <ExternalLink className="h-3 w-3" />
+          <span className="hidden sm:inline">Kick</span>
+        </a>
+      </div>
+    </>
+  );
+}
+
 interface StreamInfo {
+  platform: 'twitch' | 'kick';
   username: string;
   position: number;
 }
@@ -181,8 +237,20 @@ export default function MultiStreamPage() {
   // Return parent domain for Twitch embed
   const parentDomain = typeof window !== "undefined" ? window.location.hostname : 'localhost';
   
-  // Get active chat username from state
-  const activeChatUsername = streams[activeChatIndex]?.username || streams[0]?.username;
+  // Get active chat username from state (Twitch streams only)
+  const twitchStreams = streams.filter(s => s.platform === 'twitch');
+  const hasTwitchStreams = twitchStreams.length > 0;
+  
+  // Ensure activeChatIndex stays within bounds of Twitch streams
+  useEffect(() => {
+    if (hasTwitchStreams && activeChatIndex >= twitchStreams.length) {
+      setActiveChatIndex(0);
+    } else if (!hasTwitchStreams) {
+      setActiveChatIndex(0);
+    }
+  }, [twitchStreams.length, hasTwitchStreams, activeChatIndex]);
+  
+  const activeChatUsername = twitchStreams[activeChatIndex]?.username || twitchStreams[0]?.username;
   
   // Check if we're on a mobile device
   const [isMobile, setIsMobile] = useState(false);
@@ -199,23 +267,61 @@ export default function MultiStreamPage() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
   
-  // Initialize and configure layouts
-  useEffect(() => {
-    // Extract streamers from URL parameters
-    const streamersParam = searchParams.get('streamers');
-    if (streamersParam) {
+  // Parse streams parameter (platform-aware)
+  const parseStreamsParam = (searchParams: URLSearchParams): StreamInfo[] => {
+    const streamsParam = searchParams.get('streams');
+    const streamersParam = searchParams.get('streamers'); // Legacy support
+    
+    if (streamsParam) {
+      // New format: streams=twitch:username,kick:slug
+      const tokens = streamsParam.split(',').filter(Boolean);
+      return tokens.map((token, index) => {
+        const trimmed = token.trim();
+        const colonIndex = trimmed.indexOf(':');
+        
+        if (colonIndex > 0) {
+          const platform = trimmed.substring(0, colonIndex).toLowerCase() as 'twitch' | 'kick';
+          const identifier = decodeURIComponent(trimmed.substring(colonIndex + 1).trim());
+          
+          // Validate platform
+          if (platform === 'twitch' || platform === 'kick') {
+            return {
+              platform,
+              username: identifier,
+              position: index
+            };
+          }
+        }
+        
+        // Fallback: treat as Twitch if format is invalid
+        return {
+          platform: 'twitch' as const,
+          username: decodeURIComponent(trimmed),
+          position: index
+        };
+      });
+    } else if (streamersParam) {
+      // Legacy format: streamers=username1,username2 (all Twitch)
       const streamUsernames = streamersParam.split(',').filter(Boolean);
-      
-      // Create stream info objects with position
-      const streamInfos = streamUsernames.map((username, index) => ({
+      return streamUsernames.map((username, index) => ({
+        platform: 'twitch' as const,
         username: decodeURIComponent(username),
         position: index
       }));
-      
+    }
+    
+    return [];
+  };
+
+  // Initialize and configure layouts
+  useEffect(() => {
+    const streamInfos = parseStreamsParam(searchParams);
+    
+    if (streamInfos.length > 0) {
       setStreams(streamInfos);
       
-      // Generate a layout key based on the streamers (sorted to ensure consistency)
-      const layoutKey = `multistream_layout_${streamUsernames.sort().join('_')}`;
+      // Generate a layout key based on the streams (sorted to ensure consistency)
+      const layoutKey = `multistream_layout_${streamInfos.map(s => `${s.platform}:${s.username}`).sort().join('_')}`;
       
       // Try to load saved layout from localStorage
       if (typeof window !== 'undefined') {
@@ -751,8 +857,7 @@ export default function MultiStreamPage() {
     // Clear saved layout from localStorage
     if (typeof window !== 'undefined' && streams.length > 0) {
       try {
-        const streamUsernames = streams.map(stream => stream.username).sort();
-        const layoutKey = `multistream_layout_${streamUsernames.join('_')}`;
+        const layoutKey = `multistream_layout_${streams.map(s => `${s.platform}:${s.username}`).sort().join('_')}`;
         localStorage.removeItem(layoutKey);
       } catch (error) {
         // Silent error in production
@@ -833,37 +938,93 @@ export default function MultiStreamPage() {
     return twitchUsernameRegex.test(username);
   };
   
-  // Helper function to parse and validate manual input
-  const parseManualInput = (input: string): { valid: string[], invalid: string[], error: string | null } => {
+  // Helper function to validate Kick slugs
+  const isValidKickSlug = (slug: string): boolean => {
+    // Kick slugs are typically lowercase alphanumeric with hyphens
+    const kickSlugRegex = /^[a-z0-9-]+$/;
+    return kickSlugRegex.test(slug) && slug.length >= 1;
+  };
+  
+  // Helper function to parse and validate manual input (supports Twitch + Kick)
+  const parseManualInput = (input: string): { valid: Array<{ platform: 'twitch' | 'kick', identifier: string }>, invalid: string[], error: string | null } => {
     if (!input.trim()) {
       return { valid: [], invalid: [], error: 'Please enter at least one stream name' };
     }
     
     // Split by various delimiters (comma, space, newline, semicolon)
-    const usernames = input
+    const tokens = input
       .split(/[,\s;\n]+/)
-      .map(username => username.trim().toLowerCase())
-      .filter(username => username.length > 0);
+      .map(token => token.trim())
+      .filter(token => token.length > 0);
     
-    if (usernames.length === 0) {
+    if (tokens.length === 0) {
       return { valid: [], invalid: [], error: 'Please enter at least one valid stream name' };
     }
     
-    if (usernames.length > 8) {
+    if (tokens.length > 8) {
       return { valid: [], invalid: [], error: 'Maximum 8 streams allowed at once' };
     }
     
-    const valid: string[] = [];
+    const valid: Array<{ platform: 'twitch' | 'kick', identifier: string }> = [];
     const invalid: string[] = [];
     
-    usernames.forEach(username => {
-      if (isValidTwitchUsername(username)) {
+    tokens.forEach(token => {
+      const lowerToken = token.toLowerCase();
+      
+      // Check for explicit platform prefix: twitch:username or kick:slug
+      if (lowerToken.includes(':')) {
+        const [platform, identifier] = lowerToken.split(':', 2);
+        if (platform === 'twitch' && isValidTwitchUsername(identifier)) {
+          valid.push({ platform: 'twitch', identifier });
+        } else if (platform === 'kick' && isValidKickSlug(identifier)) {
+          valid.push({ platform: 'kick', identifier });
+        } else {
+          invalid.push(token);
+        }
+        return;
+      }
+      
+      // Check for URLs: https://www.twitch.tv/username or https://kick.com/slug
+      if (token.startsWith('http://') || token.startsWith('https://')) {
+        try {
+          const url = new URL(token);
+          const hostname = url.hostname.toLowerCase();
+          
+          if (hostname.includes('twitch.tv')) {
+            const pathParts = url.pathname.split('/').filter(Boolean);
+            const username = pathParts[0]?.toLowerCase();
+            if (username && isValidTwitchUsername(username)) {
+              valid.push({ platform: 'twitch', identifier: username });
+              return;
+            }
+          } else if (hostname.includes('kick.com')) {
+            const pathParts = url.pathname.split('/').filter(Boolean);
+            const slug = pathParts[0]?.toLowerCase();
+            if (slug && isValidKickSlug(slug)) {
+              valid.push({ platform: 'kick', identifier: slug });
+              return;
+            }
+          }
+        } catch (e) {
+          // Invalid URL
+        }
+        invalid.push(token);
+        return;
+      }
+      
+      // Default: treat as Twitch (backward compatibility)
+      if (isValidTwitchUsername(lowerToken)) {
         // Avoid duplicates
-        if (!valid.includes(username)) {
-          valid.push(username);
+        if (!valid.some(v => v.platform === 'twitch' && v.identifier === lowerToken)) {
+          valid.push({ platform: 'twitch', identifier: lowerToken });
+        }
+      } else if (isValidKickSlug(lowerToken)) {
+        // Also allow bare Kick slugs
+        if (!valid.some(v => v.platform === 'kick' && v.identifier === lowerToken)) {
+          valid.push({ platform: 'kick', identifier: lowerToken });
         }
       } else {
-        invalid.push(username);
+        invalid.push(token);
       }
     });
     
@@ -871,12 +1032,12 @@ export default function MultiStreamPage() {
       return { 
         valid, 
         invalid, 
-        error: `Invalid usernames: ${invalid.join(', ')}. Usernames must be 4-25 characters and contain only letters, numbers, and underscores.`
+        error: `Invalid entries: ${invalid.join(', ')}. Use format: twitch:username, kick:slug, or URLs like https://twitch.tv/username or https://kick.com/slug`
       };
     }
     
     if (valid.length === 0) {
-      return { valid: [], invalid: [], error: 'No valid usernames found' };
+      return { valid: [], invalid: [], error: 'No valid streams found' };
     }
     
     return { valid, invalid, error: null };
@@ -894,9 +1055,9 @@ export default function MultiStreamPage() {
     // Clear any previous errors
     setInputError(null);
     
-    // Redirect to multi-stream page with the entered streams
-    const streamers = valid.join(',');
-    window.location.href = `/multi-stream?streamers=${streamers}`;
+    // Build streams= parameter: platform:identifier,platform:identifier
+    const streamsParam = valid.map(v => `${v.platform}:${encodeURIComponent(v.identifier)}`).join(',');
+    window.location.href = `/multi-stream?streams=${streamsParam}`;
   };
   
   if (streams.length === 0) {
@@ -934,14 +1095,15 @@ export default function MultiStreamPage() {
                       // Clear error when user starts typing
                       if (inputError) setInputError(null);
                     }}
-                    placeholder="Enter Twitch usernames separated by commas, spaces, or new lines.&#10;&#10;Examples:&#10;shroud, summit1g, pokimane&#10;xqcow ninja&#10;asmongold&#10;lirik"
+                    placeholder="Enter Twitch usernames or Kick slugs separated by commas, spaces, or new lines.&#10;&#10;Examples:&#10;shroud, summit1g, pokimane&#10;twitch:xqcow kick:trainwreckstv&#10;https://www.twitch.tv/asmongold&#10;https://kick.com/some-slug"
                     className="w-full px-4 py-3 bg-[#18181b] border border-[#26262c] rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#004D61] focus:border-transparent resize-vertical min-h-[120px]"
                     rows={5}
                   />
                   <div className="mt-2 text-xs text-gray-400">
-                    <p>• Usernames must be 4-25 characters</p>
-                    <p>• Only letters, numbers, and underscores allowed</p>
-                    <p>• Separate multiple names with commas, spaces, or new lines</p>
+                    <p>• Twitch: 4-25 characters, letters/numbers/underscores only</p>
+                    <p>• Kick: Use format kick:slug or https://kick.com/slug</p>
+                    <p>• Prefix with twitch: or kick: to specify platform</p>
+                    <p>• Separate multiple streams with commas, spaces, or new lines</p>
                   </div>
                 </div>
                 
@@ -1205,19 +1367,31 @@ export default function MultiStreamPage() {
         
           <div className="text-xs text-gray-400 mb-1 px-2">Select Chat</div>
           <div className="space-y-1">
-            {streams.map((stream, index) => (
-              <button
-                key={index}
-                onClick={() => {
-                  setActiveChatIndex(index);
-                  setIsChatSelectorOpen(false);
-                }}
-                className={`w-full text-left px-3 py-2 rounded flex items-center ${index === activeChatIndex ? 'bg-[#004D61]' : 'hover:bg-black/40'}`}
-              >
-                <Twitch className="h-4 w-4 mr-2" />
-                <span className={`${isMobile ? 'text-sm' : 'text-xs'}`}>{stream.username}</span>
-              </button>
-            ))}
+            {hasTwitchStreams ? (
+              twitchStreams.map((stream, twitchIndex) => {
+                // Find the original index in the full streams array
+                const originalIndex = streams.findIndex(s => s.platform === 'twitch' && s.username === stream.username && s.position === stream.position);
+                const isActive = twitchStreams.findIndex(s => s.username === activeChatUsername) === twitchIndex;
+                
+                return (
+                  <button
+                    key={`twitch-${twitchIndex}`}
+                    onClick={() => {
+                      setActiveChatIndex(twitchIndex);
+                      setIsChatSelectorOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded flex items-center ${isActive ? 'bg-[#004D61]' : 'hover:bg-black/40'}`}
+                  >
+                    <Twitch className="h-4 w-4 mr-2" />
+                    <span className={`${isMobile ? 'text-sm' : 'text-xs'}`}>{stream.username}</span>
+                  </button>
+                );
+              })
+            ) : (
+              <div className="px-3 py-2 text-xs text-gray-400">
+                No Twitch streams available for chat
+              </div>
+            )}
           </div>
         </div>
       </div>,
@@ -1609,164 +1783,187 @@ export default function MultiStreamPage() {
           onDragStop={onDragStop}
         >
           {/* Stream panels */}
-          {streams.map((stream, index) => (
-            <div key={`s${index}`} className="bg-black stream-panel">
-              <div className="w-full h-full relative group">
-                <iframe
-                  src={`https://player.twitch.tv/?channel=${encodeURIComponent(stream.username)}&parent=${parentDomain}&muted=${index !== 0}`}
-                  height="100%"
-                  width="100%"
-                  allowFullScreen={true}
-                  frameBorder="0"
-                  style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-                ></iframe>
-                <div className="absolute top-0 left-0 text-white text-xs px-2 py-1 m-2 rounded z-10" style={{ backgroundColor: 'rgba(20, 20, 20, 0.95)' }}>
-                  {stream.username}
-                  {index === activeChatIndex && (
-                    <span className="ml-1 px-1 rounded-sm" style={{ backgroundColor: '#004D61' }}>Chat</span>
+          {streams.map((stream, index) => {
+            const isTwitch = stream.platform === 'twitch';
+            const isKick = stream.platform === 'kick';
+            const isActiveChat = isTwitch && twitchStreams.findIndex(s => s.username === stream.username) === activeChatIndex;
+            
+            return (
+              <div key={`s${index}`} className="bg-black stream-panel">
+                <div className="w-full h-full relative group">
+                  {isTwitch ? (
+                    // Twitch panel
+                    <>
+                      <iframe
+                        src={`https://player.twitch.tv/?channel=${encodeURIComponent(stream.username)}&parent=${parentDomain}&muted=${index !== 0}`}
+                        height="100%"
+                        width="100%"
+                        allowFullScreen={true}
+                        frameBorder="0"
+                        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+                      ></iframe>
+                    </>
+                  ) : (
+                    // Kick panel with iframe attempt + fallback
+                    <KickStreamPanel slug={stream.username} />
+                  )}
+                  
+                  {/* Stream label */}
+                  <div className="absolute top-0 left-0 text-white text-xs px-2 py-1 m-2 rounded z-10 flex items-center gap-1" style={{ backgroundColor: 'rgba(20, 20, 20, 0.95)' }}>
+                    {isKick ? (
+                      <KickIcon className="h-3 w-3" style={{ color: '#53FC18' }} />
+                    ) : (
+                      <Twitch className="h-3 w-3" style={{ color: '#9146FF' }} />
+                    )}
+                    {stream.username}
+                    {isActiveChat && (
+                      <span className="ml-1 px-1 rounded-sm" style={{ backgroundColor: '#004D61' }}>Chat</span>
+                    )}
+                  </div>
+                  
+                  {/* Improved drag handle */}
+                  <div className={`absolute top-0 right-0 left-0 ${isMobile ? 'h-16' : 'h-12'} bg-black/50 cursor-grab z-40 drag-handle flex items-center justify-center opacity-30 hover:opacity-80 transition-opacity`}>
+                    <div className={`px-2 py-0.5 rounded bg-[#004D61]/80 flex items-center justify-center text-white ${isMobile ? 'text-sm py-1' : 'text-xs'}`}>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1"><path d="M5 9h14M5 15h14"></path></svg>
+                      {isMobile ? 'Drag to Move' : 'Move'}
+                    </div>
+                  </div>
+                  
+                  {/* Simplified corner indicators - only render when hovering */}
+                  <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-[#004D61] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-[#004D61] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-[#004D61] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-[#004D61] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  
+                  {/* Mobile-specific resize indicator */}
+                  {isMobile && (
+                    <div className="absolute bottom-0 right-0 w-24 h-24 flex items-center justify-center pointer-events-none z-30 opacity-50">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M22 2L12 12M22 12L22 2L12 2" stroke="#004D61" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" transform="rotate(135 12 12)"/>
+                      </svg>
+                    </div>
                   )}
                 </div>
-                {/* Improved drag handle */}
-                <div className={`absolute top-0 right-0 left-0 ${isMobile ? 'h-16' : 'h-12'} bg-black/50 cursor-grab z-40 drag-handle flex items-center justify-center opacity-30 hover:opacity-80 transition-opacity`}>
-                  <div className={`px-2 py-0.5 rounded bg-[#004D61]/80 flex items-center justify-center text-white ${isMobile ? 'text-sm py-1' : 'text-xs'}`}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1"><path d="M5 9h14M5 15h14"></path></svg>
-                    {isMobile ? 'Drag to Move' : 'Move'}
-                  </div>
-                </div>
-                
-                {/* Simplified corner indicators - only render when hovering */}
-                <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-[#004D61] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-[#004D61] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-[#004D61] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-[#004D61] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                
-                {/* Mobile-specific resize indicator */}
-                {isMobile && (
-                  <div className="absolute bottom-0 right-0 w-24 h-24 flex items-center justify-center pointer-events-none z-30 opacity-50">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M22 2L12 12M22 12L22 2L12 2" stroke="#004D61" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" transform="rotate(135 12 12)"/>
-                    </svg>
-                  </div>
-                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
           
           {/* Chat panel */}
           <div key="chat" className="bg-black stream-panel">
             <div className="w-full h-full relative group">
-              {/* Custom HTML using iframe with srcDoc to force black background for chat */}
-              <iframe 
-                className="w-full h-full border-0 absolute inset-0"
-                srcDoc={`
-                  <!DOCTYPE html>
-                  <html style="background: #000000; height: 100%; width: 100%; overflow: hidden;">
-                    <head>
-                      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-                      <style>
-                        html, body {
-                          margin: 0;
-                          padding: 0;
-                          background-color: #000000;
-                          height: 100%;
-                          width: 100%;
-                          overflow: hidden;
-                        }
-                        
-                        /* Container for OBS chat */
-                        #chat-container {
-                          position: absolute;
-                          top: 0;
-                          left: 0;
-                          right: 0;
-                          bottom: 0;
-                          background-color: #000000;
-                          display: flex;
-                          flex-direction: column;
-                        }
-                        
-                        /* Style the iframe */
-                        #obs-chat {
-                          border: none;
-                          width: 100%;
-                          height: 100%;
-                          flex: 1;
-                          background-color: #000000;
-                          position: relative;
-                          z-index: 1;
-                        }
-                        
-                        /* Add black overlay */
-                        #black-overlay {
-                          position: absolute;
-                          top: 0;
-                          left: 0;
-                          width: 100%;
-                          height: 100%;
-                          background-color: #000000;
-                          opacity: 0.2;
-                          z-index: 2;
-                          pointer-events: none;
-                        }
-                        
-                        /* Chat title bar */
-                        #chat-title {
-                          position: relative;
-                          padding: 8px 12px;
-                          background-color: #0e0e10;
-                          color: white;
-                          font-size: 14px;
-                          font-family: Arial, sans-serif;
-                          z-index: 3;
-                          display: flex;
-                          justify-content: space-between;
-                          align-items: center;
-                          height: 36px;
-                          box-sizing: border-box;
-                        }
-                        
-                        #chat-title a {
-                          color: #004D61;
-                          text-decoration: none;
-                        }
-                        
-                        #chat-title a:hover {
-                          text-decoration: underline;
-                        }
-                        
-                        #obs-chat-container {
-                          position: relative;
-                          flex: 1;
-                          display: flex;
-                          overflow: hidden;
-                        }
-                        
-                        /* Mobile optimizations */
-                        @media (max-width: 768px) {
-                          #chat-title {
-                            height: 44px;
-                            font-size: 16px;
-                            padding: 10px 15px;
+              {hasTwitchStreams && activeChatUsername ? (
+                // Twitch chat iframe
+                <iframe 
+                  className="w-full h-full border-0 absolute inset-0"
+                  srcDoc={`
+                    <!DOCTYPE html>
+                    <html style="background: #000000; height: 100%; width: 100%; overflow: hidden;">
+                      <head>
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                        <style>
+                          html, body {
+                            margin: 0;
+                            padding: 0;
+                            background-color: #000000;
+                            height: 100%;
+                            width: 100%;
+                            overflow: hidden;
                           }
-                        }
-                      </style>
-                    </head>
-                    <body>
-                      <div id="chat-container">
-                        <div id="chat-title">
-                          <span>Chat: ${activeChatUsername}</span>
-                          <a href="https://www.twitch.tv/${activeChatUsername}" target="_blank">Open on Twitch</a>
+                          
+                          /* Container for OBS chat */
+                          #chat-container {
+                            position: absolute;
+                            top: 0;
+                            left: 0;
+                            right: 0;
+                            bottom: 0;
+                            background-color: #000000;
+                            display: flex;
+                            flex-direction: column;
+                          }
+                          
+                          /* Style the iframe */
+                          #obs-chat {
+                            border: none;
+                            width: 100%;
+                            height: 100%;
+                            flex: 1;
+                            background-color: #000000;
+                            position: relative;
+                            z-index: 1;
+                          }
+                          
+                          /* Add black overlay */
+                          #black-overlay {
+                            position: absolute;
+                            top: 0;
+                            left: 0;
+                            width: 100%;
+                            height: 100%;
+                            background-color: #000000;
+                            opacity: 0.2;
+                            z-index: 2;
+                            pointer-events: none;
+                          }
+                          
+                          /* Chat title bar */
+                          #chat-title {
+                            position: relative;
+                            padding: 8px 12px;
+                            background-color: #0e0e10;
+                            color: white;
+                            font-size: 14px;
+                            font-family: Arial, sans-serif;
+                            z-index: 3;
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            height: 36px;
+                            box-sizing: border-box;
+                          }
+                          
+                          #chat-title a {
+                            color: #004D61;
+                            text-decoration: none;
+                          }
+                          
+                          #chat-title a:hover {
+                            text-decoration: underline;
+                          }
+                          
+                          #obs-chat-container {
+                            position: relative;
+                            flex: 1;
+                            display: flex;
+                            overflow: hidden;
+                          }
+                          
+                          /* Mobile optimizations */
+                          @media (max-width: 768px) {
+                            #chat-title {
+                              height: 44px;
+                              font-size: 16px;
+                              padding: 10px 15px;
+                            }
+                          }
+                        </style>
+                      </head>
+                      <body>
+                        <div id="chat-container">
+                          <div id="chat-title">
+                            <span>Chat: ${activeChatUsername}</span>
+                            <a href="https://www.twitch.tv/${activeChatUsername}" target="_blank">Open on Twitch</a>
+                          </div>
+                          <div id="obs-chat-container">
+                            <iframe 
+                              id="obs-chat"
+                              src="https://nightdev.com/hosted/obschat/?theme=dark&channel=${activeChatUsername}&fade=false&bot_activity=true&prevent_clipping=true&background=000000&background_opacity=100&text_color=ffffff&text_opacity=100"
+                              allowfullscreen="true"
+                              style="width: 100%; height: 100%; border: none;"
+                            ></iframe>
+                            <div id="black-overlay"></div>
+                          </div>
                         </div>
-                        <div id="obs-chat-container">
-                          <iframe 
-                            id="obs-chat"
-                            src="https://nightdev.com/hosted/obschat/?theme=dark&channel=${activeChatUsername}&fade=false&bot_activity=true&prevent_clipping=true&background=000000&background_opacity=100&text_color=ffffff&text_opacity=100"
-                            allowfullscreen="true"
-                            style="width: 100%; height: 100%; border: none;"
-                          ></iframe>
-                          <div id="black-overlay"></div>
-                        </div>
-                      </div>
                       
                       <script>
                         // Add a script to force black background
@@ -1859,8 +2056,33 @@ export default function MultiStreamPage() {
                     </body>
                   </html>
                 `}
-                sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-              ></iframe>
+                  sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+                ></iframe>
+              ) : (
+                // Kick-only fallback: Chat unavailable
+                <div className="absolute inset-0 bg-[#0e0e10] flex flex-col items-center justify-center p-4 text-center">
+                  <KickIcon className="h-12 w-12 mb-4" style={{ color: '#53FC18' }} />
+                  <h3 className="text-white font-semibold mb-2">Chat Unavailable</h3>
+                  <p className="text-gray-400 text-sm mb-4">
+                    Chat is only available for Twitch streams
+                  </p>
+                  {streams.filter(s => s.platform === 'kick').length > 0 && (
+                    <div className="space-y-2">
+                      {streams.filter(s => s.platform === 'kick').map((kickStream) => (
+                        <a
+                          key={kickStream.username}
+                          href={`https://kick.com/${encodeURIComponent(kickStream.username.toLowerCase())}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block px-4 py-2 bg-[#53FC18] hover:bg-[#45D015] text-black rounded-md font-medium transition-colors"
+                        >
+                          Open {kickStream.username} on Kick
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               {/* Improved drag handle with visual indicator - make it larger */}
               <div className="absolute top-0 right-0 left-0 h-12 bg-black/50 cursor-grab z-40 drag-handle flex items-center justify-center opacity-30 hover:opacity-80 transition-opacity">
                 <div className="px-2 py-0.5 rounded bg-[#004D61]/80 flex items-center justify-center text-white text-xs">

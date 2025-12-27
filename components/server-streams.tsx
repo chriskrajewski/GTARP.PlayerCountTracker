@@ -199,23 +199,19 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
     });
   };
 
-  // Function to launch multi-stream view (Twitch only)
+  // Function to launch multi-stream view (Twitch + Kick)
   const launchMultiStream = () => {
     if (!isMultiStreamEnabled || selectedStreams.length === 0) {
       alert("Please select at least one stream");
       return;
     }
     
-    // Multi-stream only works with Twitch - filter out Kick streams
-    const twitchStreams = selectedStreams.filter(s => s.platform === 'twitch');
-    if (twitchStreams.length === 0) {
-      alert("Multi-stream only works with Twitch streams. Please select at least one Twitch stream.");
-      return;
-    }
+    // Build streams= parameter with platform:identifier format
+    const streamsParam = selectedStreams
+      .map(stream => `${stream.platform}:${encodeURIComponent(stream.user_name.toLowerCase())}`)
+      .join(',');
     
-    // Encode the selected Twitch stream usernames as a URL parameter
-    const streamers = twitchStreams.map(stream => encodeURIComponent(stream.user_name.toLowerCase())).join(',');
-    window.open(`/multi-stream?streamers=${streamers}`, "_blank");
+    window.open(`/multi-stream?streams=${streamsParam}`, "_blank");
   };
 
   // Toggle multi-select mode
@@ -367,30 +363,27 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
               <>
                 <button
                   onClick={launchMultiStream}
-                  disabled={selectedStreams.filter(s => s.platform === 'twitch').length === 0}
+                  disabled={selectedStreams.length === 0}
                   className="px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors"
                   style={{
-                    backgroundColor: selectedStreams.filter(s => s.platform === 'twitch').length === 0 ? '#26262c' : '#004D61',
-                    color: selectedStreams.filter(s => s.platform === 'twitch').length === 0 ? '#ADADB8' : '#FFFFFF',
-                    border: selectedStreams.filter(s => s.platform === 'twitch').length === 0 ? '1px solid #26262c' : '1px solid #004D61',
+                    backgroundColor: selectedStreams.length === 0 ? '#26262c' : '#004D61',
+                    color: selectedStreams.length === 0 ? '#ADADB8' : '#FFFFFF',
+                    border: selectedStreams.length === 0 ? '1px solid #26262c' : '1px solid #004D61',
                     borderRadius: '4px',
                     fontWeight: 600,
-                    cursor: selectedStreams.filter(s => s.platform === 'twitch').length === 0 ? 'not-allowed' : 'pointer',
-                    opacity: selectedStreams.filter(s => s.platform === 'twitch').length === 0 ? 0.7 : 1,
+                    cursor: selectedStreams.length === 0 ? 'not-allowed' : 'pointer',
+                    opacity: selectedStreams.length === 0 ? 0.7 : 1,
                     transition: 'background-color 0.2s ease'
                   }}
                 >
                   <span className="flex items-center gap-1">
                     <Twitch className="h-4 w-4" />
-                    Launch Multi-Stream ({selectedStreams.filter(s => s.platform === 'twitch').length})
+                    Launch Multi-Stream ({selectedStreams.length})
+                    {selectedStreams.filter(s => s.platform === 'kick').length > 0 && (
+                      <KickIcon className="h-3 w-3" style={{ color: '#53FC18' }} />
+                    )}
                   </span>
                 </button>
-                {selectedStreams.filter(s => s.platform === 'kick').length > 0 && (
-                  <span className="text-xs text-gray-400 flex items-center gap-1">
-                    <KickIcon className="h-3 w-3" style={{ color: '#53FC18' }} />
-                    {selectedStreams.filter(s => s.platform === 'kick').length} Kick stream{selectedStreams.filter(s => s.platform === 'kick').length !== 1 ? 's' : ''} (opens separately)
-                  </span>
-                )}
               </>
             )}
           </div>
