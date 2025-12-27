@@ -15,6 +15,7 @@ const STATIC_ASSETS = [
   '/placeholder-logo.svg',
   '/placeholder.jpg',
   '/placeholder.svg',
+  '/pepeRP.webp'
 ];
 
 /**

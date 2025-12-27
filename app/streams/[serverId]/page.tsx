@@ -19,7 +19,7 @@ export default async function ServerStreamsPage(props: ServerStreamsPageProps) {
     <CommonLayout showBackButton pageTitle={`Live Streams: ${serverName}`}>
       <div>
         <p className="text-gray-400 mb-6">
-          Watch live streamers currently playing on {serverName}, and multi-stream them! [feature is in beta 😄]
+          Watch live streamers currently playing on {serverName}, and multi-stream them!
         </p>
 
         <Suspense fallback={<div className="text-center py-20 text-gray-400">Loading streams...</div>}>

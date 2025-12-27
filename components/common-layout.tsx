@@ -113,7 +113,7 @@ export function CommonLayout({
           )}
           <h1 className="font-bold text-sm sm:text-base flex items-center whitespace-nowrap overflow-hidden text-ellipsis">
             <motion.img 
-              src="pepeRP.webp" 
+              src="/pepeRP.webp" 
               alt="pepeRP Logo" 
               className="h-7 w-7 sm:h-9 sm:w-9 mr-2" 
               style={{ color: '#004D61' }}
