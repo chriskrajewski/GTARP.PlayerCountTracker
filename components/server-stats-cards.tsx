@@ -104,20 +104,6 @@ export default function ServerStatsCards({
           >
             <CardTitle className="text-lg font-medium text-white flex items-center gap-2">
               {serverName}
-              {/* Online/Offline status */}
-              {isShowingLiveData && (
-                isOnline ? (
-                  <PulseIndicator className="w-2 h-2" color="#22c55e" />
-                ) : (
-                  <motion.span
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="flex items-center gap-1"
-                  >
-                    <WifiOff className="h-3 w-3 text-red-400" />
-                  </motion.span>
-                )
-              )}
               {/* Loading indicator for live data */}
               {liveLoading && (
                 <motion.span

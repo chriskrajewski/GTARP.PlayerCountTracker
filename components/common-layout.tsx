@@ -10,6 +10,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { DataStartPopup } from '@/components/data-start-popup';
 import { DataRefreshPopup } from '@/components/data-refresh-popup';
+import { DataStatusIndicator } from '@/components/data-status-indicator';
 import { useFeatureGate, FEATURE_GATES } from '@/lib/statsig';
 import Image from 'next/image';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -24,6 +25,14 @@ import { fadeInUp, springs } from '@/lib/motion';
       record_sessions_percent: 100,
     })
 
+interface LiveDataStatus {
+  isStreaming: boolean;
+  lastFetch: Date | null;
+  loading: boolean;
+  activeServerCount: number;
+  pollingInterval: number;
+}
+
 interface CommonLayoutProps {
   children: React.ReactNode;
   showBackButton?: boolean;
@@ -31,6 +40,9 @@ interface CommonLayoutProps {
   // Optional props for CSV export functionality
   servers?: any[];
   selectedServers?: string[];
+  // Live data status props
+  timeRange?: string;
+  liveDataStatus?: LiveDataStatus;
 }
 
 export function CommonLayout({ 
@@ -38,7 +50,9 @@ export function CommonLayout({
   showBackButton = false, 
   pageTitle,
   servers = [],
-  selectedServers = []
+  selectedServers = [],
+  timeRange = "8h",
+  liveDataStatus
 }: CommonLayoutProps) {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showResourceDialog, setShowResourceDialog] = useState(false);
@@ -112,9 +126,16 @@ export function CommonLayout({
           </h1>
         </motion.div>
         
-        {/* Data Refresh/Start Components - Hidden on smallest screens */}
+        {/* Data Status Indicator - Hidden on smallest screens */}
         <div className="hidden sm:flex items-center gap-1 text-xs text-[#ADADB8] ml-2 mr-auto order-3 sm:order-2">
-          <DataRefreshPopup /> | <DataStartPopup />
+          <DataStatusIndicator 
+            isLiveStreaming={liveDataStatus?.isStreaming}
+            lastLiveFetch={liveDataStatus?.lastFetch}
+            liveLoading={liveDataStatus?.loading}
+            timeRange={timeRange}
+            activeServerCount={liveDataStatus?.activeServerCount}
+            pollingInterval={liveDataStatus?.pollingInterval}
+          />
         </div>
 
         {/* Mobile menu button */}
@@ -265,7 +286,14 @@ export function CommonLayout({
             <div className="flex flex-col gap-2">
               {/* Mobile Data info */}
               <MobileMenuItem className="flex items-center gap-1 text-xs text-[#ADADB8] px-2 py-1">
-                <DataRefreshPopup /> | <DataStartPopup />
+                <DataStatusIndicator 
+                  isLiveStreaming={liveDataStatus?.isStreaming}
+                  lastLiveFetch={liveDataStatus?.lastFetch}
+                  liveLoading={liveDataStatus?.loading}
+                  timeRange={timeRange}
+                  activeServerCount={liveDataStatus?.activeServerCount}
+                  pollingInterval={liveDataStatus?.pollingInterval}
+                />
               </MobileMenuItem>
               
               <div className="h-px bg-[#26262c] my-1"></div>

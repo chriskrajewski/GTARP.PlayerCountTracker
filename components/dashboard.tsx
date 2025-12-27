@@ -436,20 +436,28 @@ export default function Dashboard() {
     router.replace(`${pathname}${nextSearch ? `?${nextSearch}` : ""}`, { scroll: false })
   }, [selectedServers, timeRange, pathname, router, servers.length, serverPrefixes])
 
-  // Update parent component with servers and selected servers
+  // Update parent component with servers, selected servers, and live data status
   useEffect(() => {
     if (typeof window !== 'undefined' && servers.length > 0) {
-      // This makes the servers and selectedServers available to the CommonLayout
+      // This makes the servers, selectedServers, and live data status available to the CommonLayout
       // Use a custom event to communicate with the parent component
       const event = new CustomEvent('dashboardDataLoaded', { 
         detail: { 
           servers,
-          selectedServers
+          selectedServers,
+          timeRange,
+          liveDataStatus: {
+            isStreaming: selectedServers.length > 0,
+            lastFetch: liveServers ? new Date() : null,
+            loading: liveLoading,
+            activeServerCount: Object.keys(liveServers).length,
+            pollingInterval: 30000
+          }
         } 
       });
       window.dispatchEvent(event);
     }
-  }, [servers, selectedServers]);
+  }, [servers, selectedServers, timeRange, liveServers, liveLoading]);
 
   useEffect(() => {
     return () => {
