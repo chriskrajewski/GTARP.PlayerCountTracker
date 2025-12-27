@@ -392,7 +392,6 @@ export default function PlayerCountChartLW({
         color: color,
         lineWidth: 3,
         lineStyle: LineStyle.Solid,
-        title: name,
         priceLineVisible: false,
         lastValueVisible: false,
       })
@@ -438,7 +437,6 @@ export default function PlayerCountChartLW({
           color: color,
           lineWidth: 2,
           lineStyle: LineStyle.Dashed,
-          title: name,
           priceLineVisible: false,
           lastValueVisible: false,
         })
