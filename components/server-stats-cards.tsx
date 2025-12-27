@@ -42,23 +42,18 @@ export default function ServerStatsCards({
   const { streamPeak, streamAverage } = getStreamerStats(streamerData, serverId)
   const { viewerPeak, viewerAverage } = getViewerStats(viewerData, serverId)
   
-  // Live data values (current from direct API)
-  const hasLiveData = !!(liveData?.fivem || liveData?.twitch)
-  const liveCurrentPlayers = liveData?.fivem?.currentPlayers ?? 0
+  // Live data values (current from direct API) - NO DATABASE FALLBACK
+  // Current values MUST come from live APIs to ensure accuracy
+  const hasLiveFiveMData = !!liveData?.fivem
+  const hasLiveTwitchData = !!liveData?.twitch
+  const hasLiveData = hasLiveFiveMData || hasLiveTwitchData
+  
+  // Current values - ONLY from live API, no database fallback
+  const currentPlayers = liveData?.fivem?.currentPlayers ?? 0
   const liveMaxCapacity = liveData?.fivem?.maxCapacity ?? 0
-  const liveStreamCount = liveData?.twitch?.streamCount ?? 0
-  const liveViewerCount = liveData?.twitch?.viewerCount ?? 0
+  const currentStreams = liveData?.twitch?.streamCount ?? 0
+  const currentViewers = liveData?.twitch?.viewerCount ?? 0
   const isOnline = liveData?.fivem?.online ?? false
-  
-  // Fallback to historical data if no live data available
-  const { current: historicalCurrent } = getServerStats(playerData, serverId)
-  const { streamCurrent: historicalStreamCurrent } = getStreamerStats(streamerData, serverId)
-  const { viewerCurrent: historicalViewerCurrent } = getViewerStats(viewerData, serverId)
-  
-  // Use live data for "current" values, fall back to historical if not available
-  const currentPlayers = hasLiveData ? liveCurrentPlayers : historicalCurrent
-  const currentStreams = hasLiveData ? liveStreamCount : historicalStreamCurrent
-  const currentViewers = hasLiveData ? liveViewerCount : historicalViewerCurrent
   
   // Get latest max capacity - prefer live data
   const latestCapacity = hasLiveData && liveMaxCapacity > 0 
