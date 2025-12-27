@@ -5,6 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { RefreshCw, Loader2, Share2 } from "lucide-react"
+import { motion, AnimatePresence } from "motion/react"
+import { ChartAnimation, StaggeredList, MotionItem, AnimatedSkeleton } from "@/components/ui/motion"
+import { fadeInUp, springs, staggerContainer } from "@/lib/motion"
 import {
   getServers,
   getPlayerCountsSmart,
@@ -24,6 +27,7 @@ import {
   type ServerResourceSnapshot,
   type ServerCapacityData
 } from "@/lib/data"
+import { useLiveServerData } from "@/hooks/use-live-server-data"
 import PlayerCountChart from "./player-count-chart-lw"
 import ServerStatsCards from "./server-stats-cards"
 import { MultiServerSelect } from "./multi-server-select"
@@ -173,6 +177,17 @@ export default function Dashboard() {
 
   const router = useRouter()
   const pathname = usePathname()
+
+  // Live data hook - fetches real-time data directly from FiveM and Twitch APIs
+  // This provides instant updates for the cards, bypassing the 10-minute ETL interval
+  const { 
+    servers: liveServers, 
+    loading: liveLoading, 
+    refresh: refreshLiveData 
+  } = useLiveServerData(selectedServers, {
+    pollingInterval: 30000, // Poll every 30 seconds
+    enabled: selectedServers.length > 0
+  })
 
   const slugMaps = useMemo(() => buildServerSlugMaps(servers), [servers])
   const slugLookup = useMemo(() => buildSlugLookup(servers, slugMaps), [servers, slugMaps])
@@ -421,20 +436,28 @@ export default function Dashboard() {
     router.replace(`${pathname}${nextSearch ? `?${nextSearch}` : ""}`, { scroll: false })
   }, [selectedServers, timeRange, pathname, router, servers.length, serverPrefixes])
 
-  // Update parent component with servers and selected servers
+  // Update parent component with servers, selected servers, and live data status
   useEffect(() => {
     if (typeof window !== 'undefined' && servers.length > 0) {
-      // This makes the servers and selectedServers available to the CommonLayout
+      // This makes the servers, selectedServers, and live data status available to the CommonLayout
       // Use a custom event to communicate with the parent component
       const event = new CustomEvent('dashboardDataLoaded', { 
         detail: { 
           servers,
-          selectedServers
+          selectedServers,
+          timeRange,
+          liveDataStatus: {
+            isStreaming: selectedServers.length > 0,
+            lastFetch: liveServers ? new Date() : null,
+            loading: liveLoading,
+            activeServerCount: Object.keys(liveServers).length,
+            pollingInterval: 30000
+          }
         } 
       });
       window.dispatchEvent(event);
     }
-  }, [servers, selectedServers]);
+  }, [servers, selectedServers, timeRange, liveServers, liveLoading]);
 
   useEffect(() => {
     return () => {
@@ -466,6 +489,7 @@ export default function Dashboard() {
   const handleRefresh = () => {
     loadPlayerData()
     loadStreamAndViewData()
+    refreshLiveData() // Also refresh live data
   }
 
   const buildShareableUrl = (): string => {
@@ -626,227 +650,326 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <motion.div 
+      className="space-y-6"
+      initial="hidden"
+      animate="visible"
+      variants={staggerContainer}
+    >
+      <motion.div 
+        className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+        variants={fadeInUp}
+      >
         <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
-          <MultiServerSelect
-            servers={servers}
-            selectedServers={selectedServers}
-            onChange={handleServerChange}
-            disabled={loading || servers.length === 0}
-          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={springs.smooth}
+          >
+            <MultiServerSelect
+              servers={servers}
+              selectedServers={selectedServers}
+              onChange={handleServerChange}
+              disabled={loading || servers.length === 0}
+            />
+          </motion.div>
           <div className="flex flex-col gap-1">
             <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                size="icon" 
-                onClick={handleRefresh} 
-                disabled={loading || refreshing || chartLoading || selectedServers.length === 0}
-                title="Refresh data"
-                className="bg-[#18181b] border-[#26262c] text-[#EFEFF1] hover:bg-[#26262c] hover:border-[#343438]"
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
               >
-                <RefreshCw className={`h-4 w-4 ${refreshing || chartLoading ? 'animate-spin' : ''}`} />
-                <span className="sr-only">Refresh data</span>
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleShare}
-                disabled={selectedServers.length === 0}
-                title={shareStatusMessage || "Share this view"}
-                className="flex items-center gap-2 bg-[#18181b] border-[#26262c] text-[#EFEFF1] hover:bg-[#26262c] hover:border-[#343438]"
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  onClick={handleRefresh} 
+                  disabled={loading || refreshing || chartLoading || selectedServers.length === 0}
+                  title="Refresh data"
+                  className="bg-[#18181b] border-[#26262c] text-[#EFEFF1] hover:bg-[#26262c] hover:border-[#343438]"
+                >
+                  <motion.span
+                    animate={refreshing || chartLoading ? { rotate: 360 } : { rotate: 0 }}
+                    transition={{ 
+                      duration: 1, 
+                      repeat: refreshing || chartLoading ? Infinity : 0,
+                      ease: "linear"
+                    }}
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </motion.span>
+                  <span className="sr-only">Refresh data</span>
+                </Button>
+              </motion.div>
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
-                <Share2 className={`h-4 w-4 ${shareStatus === 'copied' || shareStatus === 'shared' ? 'text-[#22c55e]' : shareStatus === 'error' ? 'text-red-400' : ''}`} />
-                <span className="text-sm">Share</span>
-              </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleShare}
+                  disabled={selectedServers.length === 0}
+                  title={shareStatusMessage || "Share this view"}
+                  className="flex items-center gap-2 bg-[#18181b] border-[#26262c] text-[#EFEFF1] hover:bg-[#26262c] hover:border-[#343438]"
+                >
+                  <motion.span
+                    animate={shareStatus === 'copied' || shareStatus === 'shared' ? { 
+                      scale: [1, 1.2, 1],
+                      rotate: [0, 10, -10, 0]
+                    } : {}}
+                    transition={{ duration: 0.4 }}
+                  >
+                    <Share2 className={`h-4 w-4 ${shareStatus === 'copied' || shareStatus === 'shared' ? 'text-[#22c55e]' : shareStatus === 'error' ? 'text-red-400' : ''}`} />
+                  </motion.span>
+                  <span className="text-sm">Share</span>
+                </Button>
+              </motion.div>
             </div>
-            {shareStatusMessage && (
-              <span className={`text-xs ${shareStatusClass}`} aria-live="polite">
-                {shareStatusMessage}
-              </span>
-            )}
+            <AnimatePresence>
+              {shareStatusMessage && (
+                <motion.span 
+                  className={`text-xs ${shareStatusClass}`} 
+                  aria-live="polite"
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -5 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {shareStatusMessage}
+                </motion.span>
+              )}
+            </AnimatePresence>
           </div>
         </div>
-      </div>
+      </motion.div>
 
-      {selectedServers.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {selectedServers.map((serverId) => (
-            <ServerStatsCards 
-              key={serverId} 
-              playerData={playerData}
-              capacityData={capacityData}
-              serverId={serverId} 
-              serverName={getServerNameById(serverId)}
-              loading={loading} 
-              streamerData={currentStreamData}
-              viewerData={currentViewData}
-            />
-          ))}
-        </div>
-      )}
+      <AnimatePresence mode="wait">
+        {selectedServers.length > 0 && (
+          <motion.div 
+            className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"
+            variants={fadeInUp}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+          >
+            {selectedServers.map((serverId, index) => (
+              <motion.div
+                key={serverId}
+                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.98 }}
+                transition={{
+                  delay: index * 0.1,
+                  ...springs.smooth
+                }}
+              >
+                <ServerStatsCards 
+                  playerData={playerData}
+                  capacityData={capacityData}
+                  serverId={serverId} 
+                  serverName={getServerNameById(serverId)}
+                  loading={loading} 
+                  streamerData={currentStreamData}
+                  viewerData={currentViewData}
+                  liveData={liveServers[serverId]}
+                  liveLoading={liveLoading}
+                />
+              </motion.div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <div className="w-full overflow-x-auto">
+      <motion.div 
+        className="w-full overflow-x-auto"
+        variants={fadeInUp}
+      >
       <Tabs defaultValue={DEFAULT_TIME_RANGE} value={timeRange} onValueChange={handleTimeRangeChange} className="w-full">
         <div className="flex flex-col gap-2 mb-2">
           <div className="text-sm text-gray-400">Time Range:</div>
           
           {/* Mobile touch-friendly time selector */}
           <div className="md:hidden flex overflow-x-auto pb-2 scrollbar-hide">
-            <div className="flex space-x-2 min-w-max">
-              <button 
-                onClick={() => handleTimeRangeChange("1h")}
-                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "1h" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
-              >
-                1h
-              </button>
-              <button 
-                onClick={() => handleTimeRangeChange("2h")}
-                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "2h" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
-              >
-                2h
-              </button>
-              <button 
-                onClick={() => handleTimeRangeChange("4h")}
-                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "4h" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
-              >
-                4h
-              </button>
-              <button 
-                onClick={() => handleTimeRangeChange("6h")}
-                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "6h" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
-              >
-                6h
-              </button>
-              <button 
-                onClick={() => handleTimeRangeChange("8h")}
-                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "8h" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
-              >
-                8h
-              </button>
-              <button 
-                onClick={() => handleTimeRangeChange("24h")}
-                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "24h" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
-              >
-                24h
-              </button>
-              <button 
-                onClick={() => handleTimeRangeChange("7d")}
-                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "7d" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
-              >
-                7d
-              </button>
-              <button 
-                onClick={() => handleTimeRangeChange("30d")}
-                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "30d" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
-              >
-                30d
-              </button>
-              <button 
-                onClick={() => handleTimeRangeChange("90d")}
-                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "90d" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
-              >
-                3m
-              </button>
-              <button 
-                onClick={() => handleTimeRangeChange("180d")}
-                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "180d" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
-              >
-                6m
-              </button>
-              <button 
-                onClick={() => handleTimeRangeChange("365d")}
-                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "365d" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
-              >
-                1y
-              </button>
-              <button 
-                onClick={() => handleTimeRangeChange("all")}
-                className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === "all" ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
-              >
-                All
-              </button>
-            </div>
+            <motion.div 
+              className="flex space-x-2 min-w-max"
+              initial="hidden"
+              animate="visible"
+              variants={{
+                hidden: { opacity: 0 },
+                visible: {
+                  opacity: 1,
+                  transition: { staggerChildren: 0.03 }
+                }
+              }}
+            >
+              {[
+                { value: "1h", label: "1h" },
+                { value: "2h", label: "2h" },
+                { value: "4h", label: "4h" },
+                { value: "6h", label: "6h" },
+                { value: "8h", label: "8h" },
+                { value: "24h", label: "24h" },
+                { value: "7d", label: "7d" },
+                { value: "30d", label: "30d" },
+                { value: "90d", label: "3m" },
+                { value: "180d", label: "6m" },
+                { value: "365d", label: "1y" },
+                { value: "all", label: "All" }
+              ].map((item) => (
+                <motion.button
+                  key={item.value}
+                  onClick={() => handleTimeRangeChange(item.value)}
+                  className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === item.value ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
+                  variants={{
+                    hidden: { opacity: 0, y: 10 },
+                    visible: { opacity: 1, y: 0 }
+                  }}
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  transition={springs.stiff}
+                >
+                  {item.label}
+                </motion.button>
+              ))}
+            </motion.div>
           </div>
           
           {/* Desktop - TabsList */}
           <TabsList className="hidden md:grid grid-cols-11 bg-[#18181b] border border-[#26262c] p-0.5 rounded-md">
-            <TabsTrigger value="1h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">1h</TabsTrigger>
-            <TabsTrigger value="2h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">2h</TabsTrigger>
-            <TabsTrigger value="4h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">4h</TabsTrigger>
-            <TabsTrigger value="6h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">6h</TabsTrigger>
-            <TabsTrigger value="8h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">8h</TabsTrigger>
-            <TabsTrigger value="24h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">24h</TabsTrigger>
-            <TabsTrigger value="7d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">7d</TabsTrigger>
-            <TabsTrigger value="30d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">30d</TabsTrigger>
-            <TabsTrigger value="90d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">3m</TabsTrigger>
-            <TabsTrigger value="180d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">6m</TabsTrigger>
-            <TabsTrigger value="365d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white">1y</TabsTrigger>
+            <TabsTrigger value="1h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">1h</TabsTrigger>
+            <TabsTrigger value="2h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">2h</TabsTrigger>
+            <TabsTrigger value="4h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">4h</TabsTrigger>
+            <TabsTrigger value="6h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">6h</TabsTrigger>
+            <TabsTrigger value="8h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">8h</TabsTrigger>
+            <TabsTrigger value="24h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">24h</TabsTrigger>
+            <TabsTrigger value="7d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">7d</TabsTrigger>
+            <TabsTrigger value="30d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">30d</TabsTrigger>
+            <TabsTrigger value="90d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">3m</TabsTrigger>
+            <TabsTrigger value="180d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">6m</TabsTrigger>
+            <TabsTrigger value="365d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">1y</TabsTrigger>
           </TabsList>
         </div>
       </Tabs>
-      </div>
+      </motion.div>
         
-      <Card className="bg-[#0e0e10] border-[#26262c] rounded-md shadow-md">
-        <CardHeader className="border-b border-[#26262c]">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-[#EFEFF1]">Player Count Over Time</CardTitle>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="showCapacity"
-                checked={showCapacity}
-                onChange={(e) => setShowCapacity(e.target.checked)}
-                className="w-4 h-4 text-[#004D61] bg-[#18181b] border-[#26262c] rounded focus:ring-[#004D61] focus:ring-2"
-              />
-              <label htmlFor="showCapacity" className="text-sm text-[#EFEFF1] cursor-pointer">
-                Show Max Capacity
-              </label>
+      <motion.div
+        variants={fadeInUp}
+        initial="hidden"
+        animate="visible"
+        transition={{ delay: 0.2 }}
+      >
+        <Card className="bg-[#0e0e10] border-[#26262c] rounded-md shadow-md overflow-hidden">
+          <CardHeader className="border-b border-[#26262c]">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-[#EFEFF1]">Player Count Over Time</CardTitle>
+              <motion.div 
+                className="flex items-center gap-2"
+                whileHover={{ scale: 1.02 }}
+              >
+                <input
+                  type="checkbox"
+                  id="showCapacity"
+                  checked={showCapacity}
+                  onChange={(e) => setShowCapacity(e.target.checked)}
+                  className="w-4 h-4 text-[#004D61] bg-[#18181b] border-[#26262c] rounded focus:ring-[#004D61] focus:ring-2"
+                />
+                <label htmlFor="showCapacity" className="text-sm text-[#EFEFF1] cursor-pointer">
+                  Show Max Capacity
+                </label>
+              </motion.div>
             </div>
-          </div>
-          {/* Data availability warnings - only show when not loading */}
-          {!chartLoading && playerData.length === 0 && (
-            <div className="text-sm text-yellow-400 bg-yellow-900/20 p-2 rounded mt-2">
-              ⚠️ No data available for {timeRange} range. Check "Data start information" below for available data periods.
-            </div>
-          )}
-          {!chartLoading && playerData.length > 0 && chartData.length < 7 && timeRange !== "1h" && timeRange !== "2h" && (
-            <div className="text-sm text-blue-400 bg-blue-900/20 p-2 rounded mt-2">
-              📊 Limited historical data: Only {chartData.length} data point{chartData.length === 1 ? '' : 's'} available for {timeRange} range. 
-              <br/>Consider using a shorter time range or check "Data start information" for data availability.
-            </div>
-          )}
-        </CardHeader>
-        <CardContent>
-          {chartLoading ? (
-            <div className="h-[400px] w-full flex flex-col items-center justify-center space-y-4">
-              <Loader2 className="h-8 w-8 animate-spin text-[#004D61]" />
-              <div className="text-center space-y-2">
-                <p className="text-[#EFEFF1] font-medium">Loading chart data...</p>
-                {["7d", "30d", "90d", "180d", "365d", "all"].includes(timeRange) && (
-                  <p className="text-sm text-[#9CA3AF]">
-                    Sampling data across {timeRange === "7d" ? "7 days" : timeRange === "30d" ? "30 days" : timeRange === "90d" ? "90 days" : timeRange === "180d" ? "6 months" : timeRange === "365d" ? "1 year" : "all time"} for optimal performance
-                  </p>
-                )}
-              </div>
-            </div>
-          ) : (
-            <PlayerCountChart 
-              data={chartData} 
-              capacityData={capacityChartData}
-              serverIds={selectedServers} 
-              serverNames={serverNameMap}
-              loading={loading} 
-              timeRange={timeRange}
-              showCapacity={showCapacity}
-            />
-          )}
-        </CardContent>
-      </Card>
+            {/* Data availability warnings - only show when not loading */}
+            <AnimatePresence>
+              {!chartLoading && playerData.length === 0 && (
+                <motion.div 
+                  className="text-sm text-yellow-400 bg-yellow-900/20 p-2 rounded mt-2"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  ⚠️ No data available for {timeRange} range. Check "Data start information" below for available data periods.
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <AnimatePresence>
+              {!chartLoading && playerData.length > 0 && chartData.length < 7 && timeRange !== "1h" && timeRange !== "2h" && (
+                <motion.div 
+                  className="text-sm text-blue-400 bg-blue-900/20 p-2 rounded mt-2"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  📊 Limited historical data: Only {chartData.length} data point{chartData.length === 1 ? '' : 's'} available for {timeRange} range. 
+                  <br/>Consider using a shorter time range or check "Data start information" for data availability.
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </CardHeader>
+          <CardContent>
+            <AnimatePresence mode="wait">
+              {chartLoading ? (
+                <motion.div 
+                  key="loading"
+                  className="h-[400px] w-full flex flex-col items-center justify-center space-y-4"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                  >
+                    <Loader2 className="h-8 w-8 text-[#004D61]" />
+                  </motion.div>
+                  <motion.div 
+                    className="text-center space-y-2"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                  >
+                    <p className="text-[#EFEFF1] font-medium">Loading chart data...</p>
+                    {["7d", "30d", "90d", "180d", "365d", "all"].includes(timeRange) && (
+                      <motion.p 
+                        className="text-sm text-[#9CA3AF]"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.4 }}
+                      >
+                        Sampling data across {timeRange === "7d" ? "7 days" : timeRange === "30d" ? "30 days" : timeRange === "90d" ? "90 days" : timeRange === "180d" ? "6 months" : timeRange === "365d" ? "1 year" : "all time"} for optimal performance
+                      </motion.p>
+                    )}
+                  </motion.div>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="chart"
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <PlayerCountChart 
+                    data={chartData} 
+                    capacityData={capacityChartData}
+                    serverIds={selectedServers} 
+                    serverNames={serverNameMap}
+                    loading={loading} 
+                    timeRange={timeRange}
+                    showCapacity={showCapacity}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </CardContent>
+        </Card>
+      </motion.div>
       
       {singleServerId && (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         </div>
       )}
-    </div>
+    </motion.div>
   )
 }
