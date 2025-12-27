@@ -27,6 +27,7 @@ import {
   type ServerResourceSnapshot,
   type ServerCapacityData
 } from "@/lib/data"
+import { useLiveServerData } from "@/hooks/use-live-server-data"
 import PlayerCountChart from "./player-count-chart-lw"
 import ServerStatsCards from "./server-stats-cards"
 import { MultiServerSelect } from "./multi-server-select"
@@ -176,6 +177,17 @@ export default function Dashboard() {
 
   const router = useRouter()
   const pathname = usePathname()
+
+  // Live data hook - fetches real-time data directly from FiveM and Twitch APIs
+  // This provides instant updates for the cards, bypassing the 10-minute ETL interval
+  const { 
+    servers: liveServers, 
+    loading: liveLoading, 
+    refresh: refreshLiveData 
+  } = useLiveServerData(selectedServers, {
+    pollingInterval: 30000, // Poll every 30 seconds
+    enabled: selectedServers.length > 0
+  })
 
   const slugMaps = useMemo(() => buildServerSlugMaps(servers), [servers])
   const slugLookup = useMemo(() => buildSlugLookup(servers, slugMaps), [servers, slugMaps])
@@ -469,6 +481,7 @@ export default function Dashboard() {
   const handleRefresh = () => {
     loadPlayerData()
     loadStreamAndViewData()
+    refreshLiveData() // Also refresh live data
   }
 
   const buildShareableUrl = (): string => {
@@ -749,6 +762,8 @@ export default function Dashboard() {
                   loading={loading} 
                   streamerData={currentStreamData}
                   viewerData={currentViewData}
+                  liveData={liveServers[serverId]}
+                  liveLoading={liveLoading}
                 />
               </motion.div>
             ))}

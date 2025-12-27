@@ -2,35 +2,72 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { type PlayerCountData, StreamCountData, ViewerCountData, ServerCapacityData, getServerStats, getStreamerStats, getViewerStats, calculateTimeAtMaxCapacity } from "@/lib/data"
-import { Users, Twitch, TrendingUp } from 'lucide-react'
+import { Users, Twitch, TrendingUp, Wifi, WifiOff, Radio } from 'lucide-react'
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { motion } from "motion/react"
 import { AnimatedNumber, PulseIndicator } from "@/components/ui/motion"
 import { cardHover, springs } from "@/lib/motion"
+import { type LiveServerData } from "@/hooks/use-live-server-data"
 
 interface ServerStatsCardsProps {
+  // Historical data (from Supabase) - used for peak/average calculations
   playerData: PlayerCountData[]
   capacityData: ServerCapacityData[]
   streamerData: StreamCountData[]
   viewerData: ViewerCountData[]
+  // Server identification
   serverId: string
   serverName: string
   loading: boolean
+  // Live data (from direct API calls) - used for current values
+  liveData?: LiveServerData | null
+  liveLoading?: boolean
 }
 
 
-export default function ServerStatsCards({ playerData, capacityData, streamerData, viewerData, serverId, serverName, loading }: ServerStatsCardsProps) {
-  const { current, peak, average } = getServerStats(playerData, serverId)
-  const { streamCurrent, streamPeak, streamAverage  } = getStreamerStats(streamerData, serverId)
-  const { viewerCurrent, viewerPeak, viewerAverage  } = getViewerStats(viewerData, serverId)
+export default function ServerStatsCards({ 
+  playerData, 
+  capacityData, 
+  streamerData, 
+  viewerData, 
+  serverId, 
+  serverName, 
+  loading,
+  liveData,
+  liveLoading = false
+}: ServerStatsCardsProps) {
+  // Historical stats (peak/average from Supabase data)
+  const { peak: historicalPeak, average: historicalAverage } = getServerStats(playerData, serverId)
+  const { streamPeak, streamAverage } = getStreamerStats(streamerData, serverId)
+  const { viewerPeak, viewerAverage } = getViewerStats(viewerData, serverId)
   
-  // Get latest max capacity for this server
-  const latestCapacity = capacityData
-    .filter(d => d.server_id === serverId)
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]?.max_capacity || null
+  // Live data values (current from direct API)
+  const hasLiveData = !!(liveData?.fivem || liveData?.twitch)
+  const liveCurrentPlayers = liveData?.fivem?.currentPlayers ?? 0
+  const liveMaxCapacity = liveData?.fivem?.maxCapacity ?? 0
+  const liveStreamCount = liveData?.twitch?.streamCount ?? 0
+  const liveViewerCount = liveData?.twitch?.viewerCount ?? 0
+  const isOnline = liveData?.fivem?.online ?? false
   
-  // Calculate % time at max capacity
+  // Fallback to historical data if no live data available
+  const { current: historicalCurrent } = getServerStats(playerData, serverId)
+  const { streamCurrent: historicalStreamCurrent } = getStreamerStats(streamerData, serverId)
+  const { viewerCurrent: historicalViewerCurrent } = getViewerStats(viewerData, serverId)
+  
+  // Use live data for "current" values, fall back to historical if not available
+  const currentPlayers = hasLiveData ? liveCurrentPlayers : historicalCurrent
+  const currentStreams = hasLiveData ? liveStreamCount : historicalStreamCurrent
+  const currentViewers = hasLiveData ? liveViewerCount : historicalViewerCurrent
+  
+  // Get latest max capacity - prefer live data
+  const latestCapacity = hasLiveData && liveMaxCapacity > 0 
+    ? liveMaxCapacity 
+    : capacityData
+        .filter(d => d.server_id === serverId)
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]?.max_capacity || null
+  
+  // Calculate % time at max capacity (historical data only)
   const timeAtMaxPercent = calculateTimeAtMaxCapacity(playerData, capacityData, serverId)
 
   // Animation variants for stat items
@@ -46,6 +83,9 @@ export default function ServerStatsCards({ playerData, capacityData, streamerDat
       }
     })
   }
+
+  // Determine if we're showing live or historical current data
+  const isShowingLiveData = hasLiveData && !liveLoading
 
   return (
     <motion.div
@@ -64,13 +104,35 @@ export default function ServerStatsCards({ playerData, capacityData, streamerDat
           >
             <CardTitle className="text-lg font-medium text-white flex items-center gap-2">
               {serverName}
-              {!loading && current > 0 && (
-                <PulseIndicator className="w-2 h-2" color="#22c55e" />
+              {/* Online/Offline status */}
+              {isShowingLiveData && (
+                isOnline ? (
+                  <PulseIndicator className="w-2 h-2" color="#22c55e" />
+                ) : (
+                  <motion.span
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="flex items-center gap-1"
+                  >
+                    <WifiOff className="h-3 w-3 text-red-400" />
+                  </motion.span>
+                )
+              )}
+              {/* Loading indicator for live data */}
+              {liveLoading && (
+                <motion.span
+                  animate={{ opacity: [0.5, 1, 0.5] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                  className="text-xs text-gray-400"
+                >
+                  updating...
+                </motion.span>
               )}
             </CardTitle>
           </motion.div>
         </CardHeader>
         <CardContent className="grid grid-cols-3 gap-4 pt-4">
+          {/* Current Players - LIVE DATA */}
           <motion.div 
             className="flex flex-col"
             variants={statItemVariants}
@@ -80,19 +142,32 @@ export default function ServerStatsCards({ playerData, capacityData, streamerDat
           >
             <span className="text-xs text-gray-400 flex items-center gap-1">
               <Users className="h-3 w-3" /> Current Players
+              {isShowingLiveData && (
+                <motion.span 
+                  className="text-green-400 text-[10px]"
+                  animate={{ opacity: [0.7, 1, 0.7] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  ●
+                </motion.span>
+              )}
             </span>
             <div className="flex items-baseline gap-1">
-              {loading ? (
+              {loading && !hasLiveData ? (
                 <span className="text-xl font-bold text-white">-</span>
               ) : (
-                <AnimatedNumber value={current} className="text-xl font-bold text-white" />
+                <AnimatedNumber 
+                  value={currentPlayers} 
+                  className={`text-xl font-bold ${isShowingLiveData ? 'text-green-400' : 'text-white'}`} 
+                />
               )}
-              {!loading && latestCapacity && (
+              {latestCapacity && (
                 <span className="text-sm text-gray-400">/ {latestCapacity}</span>
               )}
             </div>
           </motion.div>
 
+          {/* Peak Players - HISTORICAL DATA */}
           <motion.div 
             className="flex flex-col"
             variants={statItemVariants}
@@ -104,10 +179,11 @@ export default function ServerStatsCards({ playerData, capacityData, streamerDat
             {loading ? (
               <span className="text-xl font-bold text-white">-</span>
             ) : (
-              <AnimatedNumber value={peak} className="text-xl font-bold text-white" />
+              <AnimatedNumber value={historicalPeak} className="text-xl font-bold text-white" />
             )}
           </motion.div>
 
+          {/* Average Players - HISTORICAL DATA */}
           <motion.div 
             className="flex flex-col"
             variants={statItemVariants}
@@ -119,10 +195,11 @@ export default function ServerStatsCards({ playerData, capacityData, streamerDat
             {loading ? (
               <span className="text-xl font-bold text-white">-</span>
             ) : (
-              <AnimatedNumber value={average} className="text-xl font-bold text-white" />
+              <AnimatedNumber value={historicalAverage} className="text-xl font-bold text-white" />
             )}
           </motion.div>
           
+          {/* Time at Max Capacity - HISTORICAL DATA */}
           {!loading && latestCapacity && timeAtMaxPercent > 0 && (
             <motion.div 
               className="flex flex-col col-span-3 pt-2 border-t border-gray-700"
@@ -143,6 +220,7 @@ export default function ServerStatsCards({ playerData, capacityData, streamerDat
             </motion.div>
           )}
           
+          {/* Current Streams - LIVE DATA */}
           <motion.div 
             className="flex flex-col"
             variants={statItemVariants}
@@ -152,14 +230,27 @@ export default function ServerStatsCards({ playerData, capacityData, streamerDat
           >
             <span className="text-xs text-gray-400 flex items-center gap-1">
               <Twitch className="h-3 w-3 text-purple-400" /> Current Streams
+              {isShowingLiveData && (
+                <motion.span 
+                  className="text-green-400 text-[10px]"
+                  animate={{ opacity: [0.7, 1, 0.7] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  ●
+                </motion.span>
+              )}
             </span>
-            {loading ? (
+            {loading && !hasLiveData ? (
               <span className="text-xl font-bold text-white">-</span>
             ) : (
-              <AnimatedNumber value={streamCurrent} className="text-xl font-bold text-white" />
+              <AnimatedNumber 
+                value={currentStreams} 
+                className={`text-xl font-bold ${isShowingLiveData ? 'text-purple-400' : 'text-white'}`} 
+              />
             )}
           </motion.div>
 
+          {/* Peak Streams - HISTORICAL DATA */}
           <motion.div 
             className="flex flex-col"
             variants={statItemVariants}
@@ -175,6 +266,7 @@ export default function ServerStatsCards({ playerData, capacityData, streamerDat
             )}
           </motion.div>
 
+          {/* Average Streams - HISTORICAL DATA */}
           <motion.div 
             className="flex flex-col"
             variants={statItemVariants}
@@ -190,6 +282,7 @@ export default function ServerStatsCards({ playerData, capacityData, streamerDat
             )}
           </motion.div>
           
+          {/* Current Viewers - LIVE DATA */}
           <motion.div 
             className="flex flex-col"
             variants={statItemVariants}
@@ -199,14 +292,27 @@ export default function ServerStatsCards({ playerData, capacityData, streamerDat
           >
             <span className="text-xs text-gray-400 flex items-center gap-1">
               <Users className="h-3 w-3" /> Current Viewers
+              {isShowingLiveData && (
+                <motion.span 
+                  className="text-green-400 text-[10px]"
+                  animate={{ opacity: [0.7, 1, 0.7] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  ●
+                </motion.span>
+              )}
             </span>
-            {loading ? (
+            {loading && !hasLiveData ? (
               <span className="text-xl font-bold text-white">-</span>
             ) : (
-              <AnimatedNumber value={viewerCurrent} className="text-xl font-bold text-white" />
+              <AnimatedNumber 
+                value={currentViewers} 
+                className={`text-xl font-bold ${isShowingLiveData ? 'text-purple-400' : 'text-white'}`} 
+              />
             )}
           </motion.div>
 
+          {/* Peak Viewers - HISTORICAL DATA */}
           <motion.div 
             className="flex flex-col"
             variants={statItemVariants}
@@ -222,6 +328,7 @@ export default function ServerStatsCards({ playerData, capacityData, streamerDat
             )}
           </motion.div>
 
+          {/* Average Viewers - HISTORICAL DATA */}
           <motion.div 
             className="flex flex-col"
             variants={statItemVariants}
@@ -247,11 +354,11 @@ export default function ServerStatsCards({ playerData, capacityData, streamerDat
               <Button variant="outline" className="w-full flex items-center gap-2 bg-gray-700 border-gray-600 text-white hover:bg-gray-600">
                 <motion.span
                   animate={{ 
-                    opacity: streamCurrent > 0 ? [1, 0.5, 1] : 1
+                    opacity: currentStreams > 0 ? [1, 0.5, 1] : 1
                   }}
                   transition={{ 
                     duration: 2, 
-                    repeat: streamCurrent > 0 ? Infinity : 0,
+                    repeat: currentStreams > 0 ? Infinity : 0,
                     ease: "easeInOut"
                   }}
                 >
@@ -260,12 +367,12 @@ export default function ServerStatsCards({ playerData, capacityData, streamerDat
                 <span>View Live Streams</span>
                 <motion.span 
                   className="inline-flex items-center justify-center bg-gray-600 rounded-full h-5 w-5 text-xs ml-1"
-                  key={streamCurrent}
+                  key={currentStreams}
                   initial={{ scale: 1.3 }}
                   animate={{ scale: 1 }}
                   transition={springs.bouncy}
                 >
-                  {streamCurrent}
+                  {currentStreams}
                 </motion.span>
               </Button>
             </motion.div>
