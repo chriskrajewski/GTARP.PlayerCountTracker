@@ -28,9 +28,24 @@ export interface LiveTwitchData {
   error?: string
 }
 
+export interface LiveKickStream {
+  name: string
+  viewers: number
+  title: string
+}
+
+export interface LiveKickData {
+  streamCount: number
+  viewerCount: number
+  topStreams: LiveKickStream[]
+  lastUpdated: string
+  error?: string
+}
+
 export interface LiveServerData {
   fivem: LiveFiveMData | null
   twitch: LiveTwitchData | null
+  kick: LiveKickData | null
 }
 
 export interface LiveDataState {
@@ -57,6 +72,10 @@ interface UseLiveServerDataOptions {
    * Whether to fetch Twitch data (default: true)
    */
   fetchTwitch?: boolean
+  /**
+   * Whether to fetch Kick data (default: true)
+   */
+  fetchKick?: boolean
 }
 
 /**
@@ -77,7 +96,8 @@ export function useLiveServerData(
     pollingInterval = 30000, // 30 seconds default
     enabled = true,
     fetchFiveM = true,
-    fetchTwitch = true
+    fetchTwitch = true,
+    fetchKick = true
   } = options
 
   const [state, setState] = useState<LiveDataState>({
@@ -135,6 +155,27 @@ export function useLiveServerData(
   }, [fetchTwitch])
 
   /**
+   * Fetch live Kick data
+   */
+  const fetchKickData = useCallback(async (ids: string[]): Promise<Record<string, LiveKickData>> => {
+    if (ids.length === 0 || !fetchKick) return {}
+
+    try {
+      const response = await fetch(`/api/live/kick?serverIds=${ids.join(',')}`)
+      
+      if (!response.ok) {
+        throw new Error(`Kick API error: ${response.status}`)
+      }
+
+      const data = await response.json()
+      return data.servers || {}
+    } catch (error) {
+      console.error('Error fetching live Kick data:', error)
+      return {}
+    }
+  }, [fetchKick])
+
+  /**
    * Fetch all live data
    */
   const fetchLiveData = useCallback(async () => {
@@ -143,10 +184,11 @@ export function useLiveServerData(
     fetchInProgressRef.current = true
 
     try {
-      // Fetch FiveM and Twitch data in parallel
-      const [fivemData, twitchData] = await Promise.all([
+      // Fetch FiveM, Twitch, and Kick data in parallel
+      const [fivemData, twitchData, kickData] = await Promise.all([
         fetchFiveMData(serverIds),
-        fetchTwitchData(serverIds)
+        fetchTwitchData(serverIds),
+        fetchKickData(serverIds)
       ])
 
       if (!mountedRef.current) return
@@ -157,7 +199,8 @@ export function useLiveServerData(
       serverIds.forEach(serverId => {
         servers[serverId] = {
           fivem: fivemData[serverId] || null,
-          twitch: twitchData[serverId] || null
+          twitch: twitchData[serverId] || null,
+          kick: kickData[serverId] || null
         }
       })
 
@@ -182,7 +225,7 @@ export function useLiveServerData(
     } finally {
       fetchInProgressRef.current = false
     }
-  }, [serverIds, fetchFiveMData, fetchTwitchData])
+  }, [serverIds, fetchFiveMData, fetchTwitchData, fetchKickData])
 
   /**
    * Manual refresh function
@@ -272,12 +315,18 @@ export function getLiveServerStats(
     }
   }
 
+  // Aggregate streams and viewers from both Twitch and Kick
+  const twitchStreams = serverData.twitch?.streamCount ?? 0
+  const kickStreams = serverData.kick?.streamCount ?? 0
+  const twitchViewers = serverData.twitch?.viewerCount ?? 0
+  const kickViewers = serverData.kick?.viewerCount ?? 0
+
   return {
     currentPlayers: serverData.fivem?.currentPlayers ?? 0,
     maxCapacity: serverData.fivem?.maxCapacity ?? 0,
-    streamCount: serverData.twitch?.streamCount ?? 0,
-    viewerCount: serverData.twitch?.viewerCount ?? 0,
+    streamCount: twitchStreams + kickStreams,
+    viewerCount: twitchViewers + kickViewers,
     online: serverData.fivem?.online ?? false,
-    hasLiveData: !!(serverData.fivem || serverData.twitch)
+    hasLiveData: !!(serverData.fivem || serverData.twitch || serverData.kick)
   }
 }

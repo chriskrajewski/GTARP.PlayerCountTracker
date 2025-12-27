@@ -46,13 +46,19 @@ export default function ServerStatsCards({
   // Current values MUST come from live APIs to ensure accuracy
   const hasLiveFiveMData = !!liveData?.fivem
   const hasLiveTwitchData = !!liveData?.twitch
-  const hasLiveData = hasLiveFiveMData || hasLiveTwitchData
+  const hasLiveKickData = !!liveData?.kick
+  const hasLiveData = hasLiveFiveMData || hasLiveTwitchData || hasLiveKickData
   
   // Current values - ONLY from live API, no database fallback
   const currentPlayers = liveData?.fivem?.currentPlayers ?? 0
   const liveMaxCapacity = liveData?.fivem?.maxCapacity ?? 0
-  const currentStreams = liveData?.twitch?.streamCount ?? 0
-  const currentViewers = liveData?.twitch?.viewerCount ?? 0
+  // Aggregate streams and viewers from both Twitch and Kick platforms
+  const twitchStreams = liveData?.twitch?.streamCount ?? 0
+  const kickStreams = liveData?.kick?.streamCount ?? 0
+  const currentStreams = twitchStreams + kickStreams
+  const twitchViewers = liveData?.twitch?.viewerCount ?? 0
+  const kickViewers = liveData?.kick?.viewerCount ?? 0
+  const currentViewers = twitchViewers + kickViewers
   const isOnline = liveData?.fivem?.online ?? false
   
   // Get latest max capacity - prefer live data
