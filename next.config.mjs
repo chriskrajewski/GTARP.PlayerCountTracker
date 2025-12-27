@@ -65,7 +65,13 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'mixpanel.com',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'static-cdn.jtvnw.net/previews-ttv',
+        pathname: '/**',
       }
+      
     ],
   },
   poweredByHeader: false,

@@ -1239,7 +1239,7 @@ export default function MultiStreamPage() {
             </Link>
             <h1 className="font-bold flex items-center">
               <img 
-                src="https://cdn.7tv.app/emote/01FHJJSFZ00001HW666WR6HKPB/2x.avif" 
+                src="/pepeRP.webp" 
                 alt="Twitch Logo" 
                 className="h-9 w-9 mr-2" 
               />

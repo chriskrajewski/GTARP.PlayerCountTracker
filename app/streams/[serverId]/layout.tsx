@@ -26,8 +26,8 @@ export async function generateMetadata(
   }
   
   return {
-    title: `${serverName} Streams - GTA RP Player Count Tracker`,
-    description: `Watch active Twitch streams for ${serverName} GTA RP server`,
+    title: `${serverName} Streams - rpstats.com`,
+    description: `Watch active Twitch streams for ${serverName}`,
   };
 }
 

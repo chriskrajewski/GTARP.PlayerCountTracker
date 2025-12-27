@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Streams - GTA RP Player Count Tracker',
+  title: 'Streams - rpstats.com',
   description: 'View active Twitch streams for GTA RP servers',
 }
 
