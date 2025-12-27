@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase-server';
+import { getStreamSearchConfigMap, type StreamSearchConfig, type SearchType } from '@/lib/stream-config';
 
 /**
  * Live Twitch Stream Data API
@@ -24,32 +24,13 @@ import { createServerClient } from '@/lib/supabase-server';
  * }
  */
 
-// Server ID to search keyword mapping (same as edge function)
-const SEARCH_CONFIG: Record<string, string> = {
-  'o3re8y': 'unscripted',
-  '46pb7q': 'onx',
-  '3lamjz': 'nopixel',
-  '9mxzbe': 'prodigy',
-  'l7o9o4': 'district 10',
-  '7pkv5d': 'SmileRP',
-  'k8px4v': 'Time2RP',
-  'vqkmaq': 'unscripted public',
-  'wmev57': 'newdayrp',
-  '77qvev': 'rebirth',
-  'r8q73g': 'nopixel public',
-  '775kda': 'prodigy public',
-  '68oab8': 'echorp',
-  'ak44p9': 'free2rp',
-  'zx57jp': 'nopixel',  // Additional server mappings
-  'ypq96k': 'nopixel',
-  '6j7je6': 'nopixel'
-};
-
 interface TwitchStream {
   name: string;
   viewers: number;
   title: string;
   profileImage?: string;
+  gameName?: string;
+  tags?: string[];
 }
 
 interface TwitchServerData {
@@ -122,17 +103,13 @@ async function getGTAGameId(clientId: string, token: string): Promise<string | n
 }
 
 /**
- * Fetch streams matching a keyword from Twitch
+ * Fetch live GTA V streams from Twitch (limited pagination to reduce API load)
  */
-async function fetchStreamsForKeyword(
+async function fetchLiveGTAVStreams(
   clientId: string,
   token: string,
-  gameId: string,
-  keyword: string
+  gameId: string
 ): Promise<TwitchStream[]> {
-  const lowerKeyword = keyword.toLowerCase().trim();
-  if (!lowerKeyword) return [];
-
   const streams: TwitchStream[] = [];
   let cursor: string | null = null;
   const maxPages = 5; // Limit pagination to prevent excessive API calls
@@ -165,14 +142,14 @@ async function fetchStreamsForKeyword(
       const batch = Array.isArray(data.data) ? data.data : [];
 
       for (const stream of batch) {
-        const title = (stream.title || '').toLowerCase();
-        if (title.includes(lowerKeyword)) {
-          streams.push({
-            name: stream.user_name,
-            viewers: stream.viewer_count,
-            title: stream.title
-          });
-        }
+        const tags = Array.isArray(stream.tags) ? stream.tags : (Array.isArray(stream.tag_ids) ? [] : []);
+        streams.push({
+          name: stream.user_name,
+          viewers: stream.viewer_count,
+          title: stream.title,
+          gameName: stream.game_name,
+          tags
+        });
       }
 
       cursor = data.pagination?.cursor || null;
@@ -180,30 +157,34 @@ async function fetchStreamsForKeyword(
       pageCount++;
     }
   } catch (error) {
-    console.error(`Error fetching streams for keyword "${keyword}":`, error);
+    console.error('Error fetching live Twitch streams:', error);
   }
 
   return streams;
 }
 
 /**
- * Get server names from database
+ * Load per-server Twitch search configuration from Supabase.
+ * IMPORTANT: This must come from Supabase (no hardcoded server mappings).
  */
-async function getServerKeywords(serverIds: string[]): Promise<Map<string, string>> {
-  const keywordMap = new Map<string, string>();
+function normalizeConfigMap(map: Map<string, StreamSearchConfig[]>): Map<string, Array<Pick<StreamSearchConfig, 'search_keyword' | 'search_type'>>> {
+  const result = new Map<string, Array<Pick<StreamSearchConfig, 'search_keyword' | 'search_type'>>>();
 
-  // First use the static config
-  serverIds.forEach(serverId => {
-    if (SEARCH_CONFIG[serverId]) {
-      keywordMap.set(serverId, SEARCH_CONFIG[serverId]);
-    }
-  });
+  for (const [serverId, rows] of map.entries()) {
+    const rules = rows
+      .map(row => ({
+        search_keyword: (row.search_keyword || '').trim().toLowerCase(),
+        search_type: row.search_type as SearchType
+      }))
+      .filter(rule => rule.search_keyword.length > 0);
 
-  // Try to get any additional mappings from database if needed
-  // (This could be extended to use a database table for dynamic keyword mappings)
+    result.set(serverId, rules);
+  }
 
-  return keywordMap;
+  return result;
 }
+
+// (Intentionally no extra helpers here — matching is done in a tight loop below for efficiency.)
 
 export async function GET(request: NextRequest) {
   try {
@@ -217,10 +198,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const serverIds = serverIdsParam
-      .split(',')
-      .map(id => id.trim())
-      .filter(Boolean);
+    const serverIds = Array.from(new Set(
+      serverIdsParam
+        .split(',')
+        .map(id => id.trim())
+        .filter(Boolean)
+    ));
 
     if (serverIds.length === 0) {
       return NextResponse.json(
@@ -263,60 +246,78 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get keyword mappings for servers
-    const keywordMap = await getServerKeywords(serverIds);
+    // Load per-server search config from Supabase (no hardcoded mappings)
+    const rawConfig = await getStreamSearchConfigMap(serverIds, 'twitch');
+    const configByServer = normalizeConfigMap(rawConfig);
 
     // Build response object
     const servers: Record<string, TwitchServerData> = {};
     const timestamp = new Date().toISOString();
 
-    // Group servers by keyword to reduce API calls
-    const keywordToServers = new Map<string, string[]>();
-    serverIds.forEach(serverId => {
-      const keyword = keywordMap.get(serverId);
-      if (keyword) {
-        const existing = keywordToServers.get(keyword) || [];
-        existing.push(serverId);
-        keywordToServers.set(keyword, existing);
-      } else {
-        // No keyword mapping - return empty data
+    // Fetch live GTA V streams once, then apply per-server filtering.
+    const allStreams = await fetchLiveGTAVStreams(clientId, token, gameId);
+
+    // Normalize once for matching efficiency
+    const normalized = allStreams.map(s => ({
+      ...s,
+      _titleLower: (s.title || '').toLowerCase(),
+      _gameLower: (s.gameName || '').toLowerCase(),
+      _tagsLower: Array.isArray(s.tags) ? s.tags.map(t => (t || '').toLowerCase()) : []
+    }));
+
+    for (const serverId of serverIds) {
+      const cfg = configByServer.get(serverId) || [];
+      if (cfg.length === 0) {
         servers[serverId] = {
           streamCount: 0,
           viewerCount: 0,
           topStreams: [],
           lastUpdated: timestamp,
-          error: 'No keyword mapping for this server'
+          error: 'No Twitch search config found for this server (stream_search_config)'
         };
+        continue;
       }
-    });
 
-    // Fetch streams for each unique keyword
-    const keywordPromises = Array.from(keywordToServers.entries()).map(
-      async ([keyword, relatedServerIds]) => {
-        const streams = await fetchStreamsForKeyword(clientId, token, gameId, keyword);
-        
-        // Calculate totals
-        const streamCount = streams.length;
-        const viewerCount = streams.reduce((sum, s) => sum + s.viewers, 0);
-        
-        // Get top 5 streams by viewer count
-        const topStreams = streams
-          .sort((a, b) => b.viewers - a.viewers)
-          .slice(0, 5);
+      // De-dupe matched streams per server (a stream may match multiple keywords)
+      const seen = new Set<string>();
+      const matches: TwitchStream[] = [];
 
-        // Apply to all servers with this keyword
-        relatedServerIds.forEach(serverId => {
-          servers[serverId] = {
-            streamCount,
-            viewerCount,
-            topStreams,
-            lastUpdated: timestamp
-          };
-        });
+      for (const s of normalized) {
+        let isMatch = false;
+        for (const rule of cfg) {
+          const keyword = (rule.search_keyword || '').toLowerCase().trim();
+          if (!keyword) continue;
+          if (rule.search_type === 'title' && s._titleLower.includes(keyword)) { isMatch = true; break; }
+          // Category and tag should be exact matches to avoid "matches everything" config mistakes.
+          if (rule.search_type === 'category' && s._gameLower === keyword) { isMatch = true; break; }
+          if (rule.search_type === 'tag' && s._tagsLower.some(t => t === keyword)) { isMatch = true; break; }
+        }
+        if (!isMatch) continue;
+
+        // Use streamer name as stable identifier within the GTA V listing.
+        const key = (s.name || '').toLowerCase();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        matches.push({ name: s.name, viewers: s.viewers, title: s.title, gameName: s.gameName, tags: s.tags });
       }
-    );
 
-    await Promise.all(keywordPromises);
+      if (matches.length > 200) {
+        console.warn(`[LiveTwitch] High Twitch match count for ${serverId}: ${matches.length}. Keywords=${cfg.map(r => `${r.search_type}:${r.search_keyword}`).join(', ')}`);
+      }
+
+      const viewerCount = matches.reduce((sum, s) => sum + s.viewers, 0);
+      const topStreams = matches
+        .slice()
+        .sort((a, b) => b.viewers - a.viewers)
+        .slice(0, 5);
+
+      servers[serverId] = {
+        streamCount: matches.length,
+        viewerCount,
+        topStreams,
+        lastUpdated: timestamp
+      };
+    }
 
     return NextResponse.json({
       servers,

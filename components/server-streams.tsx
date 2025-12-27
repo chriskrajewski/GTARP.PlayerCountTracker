@@ -7,6 +7,19 @@ import { Loader2, ExternalLink, Twitch, X } from "lucide-react";
 import { useFeatureGate, FEATURE_GATES } from "@/lib/statsig";
 import { trackStreamClick } from "@/lib/gtag";
 
+// Kick icon component (they don't have an official icon in lucide)
+function KickIcon({ className }: { className?: string }) {
+  return (
+    <svg 
+      viewBox="0 0 24 24" 
+      fill="currentColor" 
+      className={className}
+    >
+      <path d="M1.333 0v24h21.334V0H1.333zm17.12 18.347h-4.32l-3.093-4.907-1.653 1.76v3.147H5.654V5.653h3.733v5.28l4.48-5.28h4.427l-4.907 5.44 4.986 7.254h.08z"/>
+    </svg>
+  );
+}
+
 // Define Twitch embed types
 declare global {
   interface Window {
@@ -44,6 +57,7 @@ interface StreamData {
   thumbnail_url: string;
   tags: string[];
   profile_image_url?: string;
+  platform: 'twitch' | 'kick';
 }
 
 interface ServerStreamsProps {
@@ -185,15 +199,22 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
     });
   };
 
-  // Function to launch multi-stream view
+  // Function to launch multi-stream view (Twitch only)
   const launchMultiStream = () => {
     if (!isMultiStreamEnabled || selectedStreams.length === 0) {
       alert("Please select at least one stream");
       return;
     }
     
-    // Encode the selected stream usernames as a URL parameter
-    const streamers = selectedStreams.map(stream => encodeURIComponent(stream.user_name.toLowerCase())).join(',');
+    // Multi-stream only works with Twitch - filter out Kick streams
+    const twitchStreams = selectedStreams.filter(s => s.platform === 'twitch');
+    if (twitchStreams.length === 0) {
+      alert("Multi-stream only works with Twitch streams. Please select at least one Twitch stream.");
+      return;
+    }
+    
+    // Encode the selected Twitch stream usernames as a URL parameter
+    const streamers = twitchStreams.map(stream => encodeURIComponent(stream.user_name.toLowerCase())).join(',');
     window.open(`/multi-stream?streamers=${streamers}`, "_blank");
   };
 
@@ -303,9 +324,21 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
           )}
         </div>
         
-        <p className="text-xs sm:text-sm text-gray-400">
-          {filteredStreams.length} of {streams.length} {streams.length === 1 ? "stream" : "streams"} live
-        </p>
+        <div className="text-xs sm:text-sm text-gray-400 flex items-center gap-2">
+          <span>{filteredStreams.length} of {streams.length} {streams.length === 1 ? "stream" : "streams"} live</span>
+          {streams.length > 0 && (
+            <span className="flex items-center gap-2">
+              <span className="flex items-center gap-1">
+                <Twitch className="h-3 w-3" style={{ color: '#9146FF' }} />
+                {streams.filter(s => s.platform === 'twitch').length}
+              </span>
+              <span className="flex items-center gap-1">
+                <KickIcon className="h-3 w-3" style={{ color: '#53FC18' }} />
+                {streams.filter(s => s.platform === 'kick').length}
+              </span>
+            </span>
+          )}
+        </div>
       </div>
       
       {/* Multi-stream controls */}
@@ -331,23 +364,34 @@ export default function ServerStreams({ serverId, serverName }: ServerStreamsPro
             </button>
             
             {isMultiSelectMode && (
-              <button
-                onClick={launchMultiStream}
-                disabled={selectedStreams.length === 0}
-                className="px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors"
-                style={{
-                  backgroundColor: selectedStreams.length === 0 ? '#26262c' : '#004D61',
-                  color: selectedStreams.length === 0 ? '#ADADB8' : '#FFFFFF',
-                  border: selectedStreams.length === 0 ? '1px solid #26262c' : '1px solid #004D61',
-                  borderRadius: '4px',
-                  fontWeight: 600,
-                  cursor: selectedStreams.length === 0 ? 'not-allowed' : 'pointer',
-                  opacity: selectedStreams.length === 0 ? 0.7 : 1,
-                  transition: 'background-color 0.2s ease'
-                }}
-              >
-                Launch Multi-Stream ({selectedStreams.length})
-              </button>
+              <>
+                <button
+                  onClick={launchMultiStream}
+                  disabled={selectedStreams.filter(s => s.platform === 'twitch').length === 0}
+                  className="px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors"
+                  style={{
+                    backgroundColor: selectedStreams.filter(s => s.platform === 'twitch').length === 0 ? '#26262c' : '#004D61',
+                    color: selectedStreams.filter(s => s.platform === 'twitch').length === 0 ? '#ADADB8' : '#FFFFFF',
+                    border: selectedStreams.filter(s => s.platform === 'twitch').length === 0 ? '1px solid #26262c' : '1px solid #004D61',
+                    borderRadius: '4px',
+                    fontWeight: 600,
+                    cursor: selectedStreams.filter(s => s.platform === 'twitch').length === 0 ? 'not-allowed' : 'pointer',
+                    opacity: selectedStreams.filter(s => s.platform === 'twitch').length === 0 ? 0.7 : 1,
+                    transition: 'background-color 0.2s ease'
+                  }}
+                >
+                  <span className="flex items-center gap-1">
+                    <Twitch className="h-4 w-4" />
+                    Launch Multi-Stream ({selectedStreams.filter(s => s.platform === 'twitch').length})
+                  </span>
+                </button>
+                {selectedStreams.filter(s => s.platform === 'kick').length > 0 && (
+                  <span className="text-xs text-gray-400 flex items-center gap-1">
+                    <KickIcon className="h-3 w-3" style={{ color: '#53FC18' }} />
+                    {selectedStreams.filter(s => s.platform === 'kick').length} Kick stream{selectedStreams.filter(s => s.platform === 'kick').length !== 1 ? 's' : ''} (opens separately)
+                  </span>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -405,11 +449,15 @@ function StreamCard({
   onSelect?: (stream: StreamData) => void;
 }) {
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const [imageError, setImageError] = useState(false);
 
   // Format the stream thumbnail URL
-  const thumbnailUrl = stream.thumbnail_url
-    .replace('{width}', '440')
-    .replace('{height}', '248');
+  // Twitch uses {width} and {height} placeholders, Kick provides complete URLs
+  const thumbnailUrl = stream.platform === 'kick' 
+    ? stream.thumbnail_url // Kick URLs are already complete
+    : stream.thumbnail_url
+        .replace('{width}', '440')
+        .replace('{height}', '248');
   
   // Format viewer count with commas for thousands
   const formatViewerCount = (count: number): string => {
@@ -431,16 +479,32 @@ function StreamCard({
     }
   };
   
-  // Open Twitch directly on mobile
+  // Get the correct URL based on platform
+  const getStreamUrl = () => {
+    if (stream.platform === 'kick') {
+      return `https://kick.com/${stream.user_name.toLowerCase()}`;
+    }
+    return `https://www.twitch.tv/${stream.user_name.toLowerCase()}`;
+  };
+
+  // Platform-specific colors
+  const platformColor = stream.platform === 'kick' ? '#53FC18' : '#9146FF';
+  const platformBgColor = stream.platform === 'kick' ? '#53FC18' : '#9146FF';
+  
+  // Open stream on mobile or handle click
   const handleCardClick = () => {
     if (isMultiSelectMode && onSelect) {
       onSelect(stream);
     } else if (isMobile) {
-      // On mobile, go directly to Twitch
-      window.open(`https://www.twitch.tv/${stream.user_name.toLowerCase()}`, '_blank');
+      // On mobile, go directly to the platform
+      window.open(getStreamUrl(), '_blank');
     } else {
-      // On desktop, show the modal
-      onClick();
+      // On desktop, show the modal (only for Twitch - Kick doesn't have embeddable player)
+      if (stream.platform === 'kick') {
+        window.open(getStreamUrl(), '_blank');
+      } else {
+        onClick();
+      }
     }
   };
   
@@ -459,11 +523,21 @@ function StreamCard({
       {/* Stream thumbnail with gradient overlay */}
       <div className="relative h-[180px] w-full overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/40 to-transparent opacity-60 group-hover:opacity-30 transition-opacity z-10" />
-        <img
-          src={thumbnailUrl}
-          alt={`${stream.user_name} streaming ${stream.game_name}`}
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-        />
+        {imageError ? (
+          <div className="w-full h-full bg-gray-800 flex items-center justify-center">
+            <div className="text-center text-gray-500">
+              <div className="text-2xl mb-2">{stream.platform === 'kick' ? '🎮' : '📺'}</div>
+              <div className="text-xs">{stream.user_name}</div>
+            </div>
+          </div>
+        ) : (
+          <img
+            src={thumbnailUrl}
+            alt={`${stream.user_name} streaming ${stream.game_name}`}
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            onError={() => setImageError(true)}
+          />
+        )}
         
         {/* Stream duration */}
         <div className="absolute top-2 right-2 z-20 px-2 py-1 text-xs font-medium text-white rounded" style={{ backgroundColor: 'rgba(20, 20, 20, 0.95)' }}>
@@ -476,10 +550,30 @@ function StreamCard({
           {formatViewerCount(stream.viewer_count)}
         </div>
 
+        {/* Platform badge */}
+        <div 
+          className="absolute top-2 left-2 z-20 px-2 py-1 text-xs font-medium rounded flex items-center gap-1"
+          style={{ 
+            backgroundColor: stream.platform === 'kick' ? 'rgba(83, 252, 24, 0.9)' : 'rgba(145, 70, 255, 0.9)',
+            color: stream.platform === 'kick' ? '#000000' : '#FFFFFF'
+          }}
+        >
+          {stream.platform === 'kick' ? (
+            <KickIcon className="h-3 w-3" />
+          ) : (
+            <Twitch className="h-3 w-3" />
+          )}
+          <span className="capitalize">{stream.platform}</span>
+        </div>
+
         {/* Mobile indicator */}
         {isMobile && (
           <div className="absolute bottom-2 left-2 z-20 px-2 py-1 text-xs font-medium text-white rounded flex items-center gap-1 bg-[#004D61]">
-            <Twitch className="h-3 w-3" />
+            {stream.platform === 'kick' ? (
+              <KickIcon className="h-3 w-3" />
+            ) : (
+              <Twitch className="h-3 w-3" />
+            )}
             <span>Open</span>
           </div>
         )}
@@ -494,7 +588,11 @@ function StreamCard({
         {/* Streamer info and game */}
         <div className="flex items-center justify-between text-sm">
           <div className="flex items-center gap-2 text-gray-300">
-            <Twitch className="h-4 w-4" style={{ color: '#9146FF' }} />
+            {stream.platform === 'kick' ? (
+              <KickIcon className="h-4 w-4" style={{ color: '#53FC18' }} />
+            ) : (
+              <Twitch className="h-4 w-4" style={{ color: '#9146FF' }} />
+            )}
             <span>{stream.user_name}</span>
           </div>
           
