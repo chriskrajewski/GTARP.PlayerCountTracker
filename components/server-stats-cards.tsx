@@ -10,6 +10,19 @@ import { AnimatedNumber, PulseIndicator } from "@/components/ui/motion"
 import { cardHover, springs } from "@/lib/motion"
 import { type LiveServerData } from "@/hooks/use-live-server-data"
 
+// Kick icon component (they don't have an official icon in lucide)
+function KickIcon({ className }: { className?: string }) {
+  return (
+    <svg 
+      viewBox="0 0 24 24" 
+      fill="currentColor" 
+      className={className}
+    >
+      <path d="M1.333 0v24h21.334V0H1.333zm17.12 18.347h-4.32l-3.093-4.907-1.653 1.76v3.147H5.654V5.653h3.733v5.28l4.48-5.28h4.427l-4.907 5.44 4.986 7.254h.08z"/>
+    </svg>
+  );
+}
+
 interface ServerStatsCardsProps {
   // Historical data (from Supabase) - used for peak/average calculations
   playerData: PlayerCountData[]
@@ -216,7 +229,16 @@ export default function ServerStatsCards({
             custom={3}
           >
             <span className="text-xs text-gray-400 flex items-center gap-1">
-              <Twitch className="h-3 w-3 text-purple-400" /> Current Streams
+              <div className="flex items-center gap-1">
+                <Twitch className="h-3 w-3 text-purple-400" />
+                {(hasLiveTwitchData && hasLiveKickData) && (
+                  <KickIcon className="h-3 w-3" style={{ color: '#53FC18' }} />
+                )}
+                {!hasLiveTwitchData && hasLiveKickData && (
+                  <KickIcon className="h-3 w-3" style={{ color: '#53FC18' }} />
+                )}
+              </div>
+              Current Streams
               {isShowingLiveData && (
                 <motion.span 
                   className="text-green-400 text-[10px]"
@@ -230,10 +252,19 @@ export default function ServerStatsCards({
             {loading && !hasLiveData ? (
               <span className="text-xl font-bold text-white">-</span>
             ) : (
-              <AnimatedNumber 
-                value={currentStreams} 
-                className={`text-xl font-bold ${isShowingLiveData ? 'text-purple-400' : 'text-white'}`} 
-              />
+              <div className="flex flex-col">
+                <AnimatedNumber 
+                  value={currentStreams} 
+                  className={`text-xl font-bold ${isShowingLiveData ? 'text-purple-400' : 'text-white'}`} 
+                />
+                {(hasLiveTwitchData && hasLiveKickData) && (twitchStreams > 0 || kickStreams > 0) && (
+                  <span className="text-[10px] text-gray-500 mt-0.5">
+                    {twitchStreams > 0 && `${twitchStreams} Twitch`}
+                    {twitchStreams > 0 && kickStreams > 0 && ' • '}
+                    {kickStreams > 0 && `${kickStreams} Kick`}
+                  </span>
+                )}
+              </div>
             )}
           </motion.div>
 
@@ -278,7 +309,16 @@ export default function ServerStatsCards({
             custom={6}
           >
             <span className="text-xs text-gray-400 flex items-center gap-1">
-              <Users className="h-3 w-3" /> Current Viewers
+              <div className="flex items-center gap-1">
+                <Users className="h-3 w-3" />
+                {(hasLiveTwitchData && hasLiveKickData) && (
+                  <div className="flex items-center gap-0.5">
+                    <Twitch className="h-2.5 w-2.5 text-purple-400" />
+                    <KickIcon className="h-2.5 w-2.5" style={{ color: '#53FC18' }} />
+                  </div>
+                )}
+              </div>
+              Current Viewers
               {isShowingLiveData && (
                 <motion.span 
                   className="text-green-400 text-[10px]"
@@ -292,10 +332,19 @@ export default function ServerStatsCards({
             {loading && !hasLiveData ? (
               <span className="text-xl font-bold text-white">-</span>
             ) : (
-              <AnimatedNumber 
-                value={currentViewers} 
-                className={`text-xl font-bold ${isShowingLiveData ? 'text-purple-400' : 'text-white'}`} 
-              />
+              <div className="flex flex-col">
+                <AnimatedNumber 
+                  value={currentViewers} 
+                  className={`text-xl font-bold ${isShowingLiveData ? 'text-purple-400' : 'text-white'}`} 
+                />
+                {(hasLiveTwitchData && hasLiveKickData) && (twitchViewers > 0 || kickViewers > 0) && (
+                  <span className="text-[10px] text-gray-500 mt-0.5">
+                    {twitchViewers > 0 && `${twitchViewers.toLocaleString()} Twitch`}
+                    {twitchViewers > 0 && kickViewers > 0 && ' • '}
+                    {kickViewers > 0 && `${kickViewers.toLocaleString()} Kick`}
+                  </span>
+                )}
+              </div>
             )}
           </motion.div>
 
@@ -339,7 +388,8 @@ export default function ServerStatsCards({
               transition={springs.stiff}
             >
               <Button variant="outline" className="w-full flex items-center gap-2 bg-gray-700 border-gray-600 text-white hover:bg-gray-600">
-                <motion.span
+                <motion.div
+                  className="flex items-center gap-1"
                   animate={{ 
                     opacity: currentStreams > 0 ? [1, 0.5, 1] : 1
                   }}
@@ -349,8 +399,16 @@ export default function ServerStatsCards({
                     ease: "easeInOut"
                   }}
                 >
-                  <Twitch className="h-4 w-4 text-purple-400" />
-                </motion.span>
+                  {hasLiveTwitchData && (
+                    <Twitch className="h-4 w-4 text-purple-400" />
+                  )}
+                  {hasLiveKickData && (
+                    <KickIcon className="h-4 w-4" style={{ color: '#53FC18' }} />
+                  )}
+                  {!hasLiveTwitchData && !hasLiveKickData && (
+                    <Twitch className="h-4 w-4 text-purple-400" />
+                  )}
+                </motion.div>
                 <span>View Live Streams</span>
                 <motion.span 
                   className="inline-flex items-center justify-center bg-gray-600 rounded-full h-5 w-5 text-xs ml-1"
