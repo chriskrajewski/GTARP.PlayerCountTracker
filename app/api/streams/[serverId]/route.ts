@@ -398,6 +398,10 @@ export async function GET(
             if (seenStreamers.has(key)) continue;
             seenStreamers.add(key);
 
+            const formattedThumbnail = stream.thumbnail_url
+              .replace('{width}', '440')
+              .replace('{height}', '248');
+
             allStreams.push({
               id: stream.id,
               user_id: stream.user_id,
@@ -406,7 +410,7 @@ export async function GET(
               title: stream.title,
               viewer_count: stream.viewer_count,
               started_at: stream.started_at,
-              thumbnail_url: stream.thumbnail_url,
+              thumbnail_url: formattedThumbnail,
               tags: stream.tags || [],
               profile_image_url: profileMap.get(stream.user_id),
               platform: 'twitch'
