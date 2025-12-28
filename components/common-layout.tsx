@@ -18,6 +18,8 @@ import { NotificationBannerList, useNotificationBanners } from '@/components/not
 import mixpanel from "mixpanel-browser";
 import { motion, AnimatePresence, MobileMenu, MobileMenuItem, MotionButton } from '@/components/ui/motion';
 import { fadeInUp, springs } from '@/lib/motion';
+import { SlideoutPanel } from '@/components/slideout-panel';
+import { ChangelogPanel } from '@/components/changelog-panel';
 
 // Create an instance of the Mixpanel object, your token is already added to this snippet
       mixpanel.init('13440c630224bb2155944bc8de971af7', {
@@ -56,6 +58,7 @@ export function CommonLayout({
 }: CommonLayoutProps) {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showResourceDialog, setShowResourceDialog] = useState(false);
+  const [showChangelogPanel, setShowChangelogPanel] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   // Feature gates - Temporarily force to true for debugging
@@ -190,10 +193,13 @@ export function CommonLayout({
               whileHover={{ scale: 1.02, y: -1 }}
               whileTap={{ scale: 0.98 }}
             >
-              <Link href="/changelog" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] hover:shadow-lg hover:shadow-[#00D9FF]/20 transition-all text-xs font-medium border border-[#26262c] hover:border-[#00D9FF]/50" style={{ color: '#EFEFF1' }}>
+              <button 
+                onClick={() => setShowChangelogPanel(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] hover:shadow-lg hover:shadow-[#00D9FF]/20 transition-all text-xs font-medium border border-[#26262c] hover:border-[#00D9FF]/50"
+              >
                 <ClipboardList className="h-3.5 w-3.5 text-[#EFEFF1]" />
                 <span className="text-[#EFEFF1]">Changelog</span>
-              </Link>
+              </button>
             </motion.div>
           )}
 
@@ -315,14 +321,16 @@ export function CommonLayout({
                 
                 {isChangelogEnabled && (
                   <MobileMenuItem>
-                    <Link 
-                      href="/changelog" 
+                    <button 
+                      onClick={() => {
+                        setShowChangelogPanel(true);
+                        setMobileMenuOpen(false);
+                      }}
                       className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] hover:shadow-lg hover:shadow-[#00D9FF]/20 transition-all text-xs font-medium border border-[#26262c] hover:border-[#00D9FF]/50"
-                      onClick={() => setMobileMenuOpen(false)}
                     >
                       <ClipboardList className="h-3.5 w-3.5 text-[#EFEFF1]" />
                       <span className="text-[#EFEFF1]">Changelog</span>
-                    </Link>
+                    </button>
                   </MobileMenuItem>
                 )}
 
@@ -469,6 +477,15 @@ export function CommonLayout({
           />
         </DialogContent>
       </Dialog>
+
+      <SlideoutPanel
+        isOpen={showChangelogPanel}
+        onClose={() => setShowChangelogPanel(false)}
+        title="Changelog"
+        description="Recent updates and improvements"
+      >
+        <ChangelogPanel isOpen={showChangelogPanel} />
+      </SlideoutPanel>
     </div>
   );
 } 
