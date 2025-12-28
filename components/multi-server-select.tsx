@@ -47,7 +47,7 @@ export function MultiServerSelect({ servers, selectedServers, onChange, disabled
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between sm:w-[320px]"
+          className="w-full justify-between sm:w-[320px] bg-gray-700 hover:bg-gray-600 border-gray-600 text-white transition-all"
           disabled={disabled}
         >
           {selectedServers.length > 0 ? (

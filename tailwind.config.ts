@@ -60,6 +60,33 @@ const config: Config = {
   				'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
   				border: 'hsl(var(--sidebar-border))',
   				ring: 'hsl(var(--sidebar-ring))'
+  			},
+  			// Custom colors for light blue theme from multi-stream
+  			'light-blue': {
+  				DEFAULT: '#00D9FF',
+  				50: '#e6fbff',
+  				100: '#b3f5ff',
+  				200: '#80efff',
+  				300: '#4de9ff',
+  				400: '#1ae3ff',
+  				500: '#00D9FF',
+  				600: '#00b3d9',
+  				700: '#008cb3',
+  				800: '#00668c',
+  				900: '#004066'
+  			},
+  			'teal-dark': {
+  				DEFAULT: '#004D61',
+  				50: '#e6f3f6',
+  				100: '#b3dce5',
+  				200: '#80c4d4',
+  				300: '#4dacc3',
+  				400: '#1a94b2',
+  				500: '#007c9a',
+  				600: '#006482',
+  				700: '#004D61',
+  				800: '#003a4d',
+  				900: '#002633'
   			}
   		},
   		borderRadius: {
