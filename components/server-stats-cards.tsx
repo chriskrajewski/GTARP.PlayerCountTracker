@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { type PlayerCountData, StreamCountData, ViewerCountData, ServerCapacityData, getServerStats, getStreamerStats, getViewerStats, calculateTimeAtMaxCapacity } from "@/lib/data"
-import { Users, Twitch, TrendingUp, Wifi, WifiOff, Radio } from 'lucide-react'
+import { Users, Twitch, TrendingUp, Wifi, WifiOff, Radio, Gauge, AlertCircle } from 'lucide-react'
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { motion } from "motion/react"
@@ -36,6 +36,8 @@ interface ServerStatsCardsProps {
   // Live data (from direct API calls) - used for current values
   liveData?: LiveServerData | null
   liveLoading?: boolean
+  // Callback for viewing server changes
+  onViewChanges?: () => void
 }
 
 
@@ -48,7 +50,8 @@ export default function ServerStatsCards({
   serverName, 
   loading,
   liveData,
-  liveLoading = false
+  liveLoading = false,
+  onViewChanges
 }: ServerStatsCardsProps) {
   // Historical stats (peak/average from Supabase data)
   const { peak: historicalPeak, average: historicalAverage } = getServerStats(playerData, serverId)
@@ -84,6 +87,19 @@ export default function ServerStatsCards({
   // Calculate % time at max capacity (historical data only)
   const timeAtMaxPercent = calculateTimeAtMaxCapacity(playerData, capacityData, serverId)
 
+  // Calculate current capacity percentage (bounded 0-100%)
+  const currentCapacityPercent = latestCapacity && latestCapacity > 0 
+    ? Math.min(Math.max(Math.round((currentPlayers / latestCapacity) * 100), 0), 100)
+    : 0
+
+  // Determine capacity color based on percentage
+  const getCapacityColor = (percent: number) => {
+    if (percent >= 100) return 'text-red-400'
+    if (percent >= 80) return 'text-orange-400'
+    if (percent >= 60) return 'text-yellow-400'
+    return 'text-green-400'
+  }
+
   // Animation variants for stat items
   const statItemVariants = {
     hidden: { opacity: 0, y: 10 },
@@ -115,6 +131,7 @@ export default function ServerStatsCards({
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.1, ...springs.snappy }}
+            className="flex items-center justify-between gap-3"
           >
             <CardTitle className="text-lg font-medium text-white flex items-center gap-2">
               {serverName}
@@ -129,6 +146,38 @@ export default function ServerStatsCards({
                 </motion.span>
               )}
             </CardTitle>
+            
+            {/* Current Capacity indicator - shows on every card */}
+            {latestCapacity && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.2, ...springs.snappy }}
+                className="flex items-center gap-1.5 px-2 py-1 bg-[#18181b] rounded-md border border-[#26262c]"
+              >
+                {/* Capacity indicator - shows if currently at max */}
+                {currentPlayers >= latestCapacity ? (
+                  <motion.span
+                    animate={{ 
+                      scale: [1, 1.2, 1],
+                      opacity: [0.8, 1, 0.8]
+                    }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                    className="text-red-400"
+                  >
+                    <AlertCircle className="h-3 w-3" />
+                  </motion.span>
+                ) : (
+                  <Gauge className={`h-3 w-3 ${getCapacityColor(currentCapacityPercent)}`} />
+                )}
+                <span className="text-[10px] text-gray-400 whitespace-nowrap">
+                  Capacity
+                </span>
+                <span className={`text-xs font-semibold ${getCapacityColor(currentCapacityPercent)}`}>
+                  {currentCapacityPercent}%
+                </span>
+              </motion.div>
+            )}
           </motion.div>
         </CardHeader>
         <CardContent className="grid grid-cols-3 gap-4 pt-4">
@@ -152,7 +201,7 @@ export default function ServerStatsCards({
                 </motion.span>
               )}
             </span>
-            <div className="flex items-baseline gap-1">
+            <div className="flex items-baseline gap-1 min-h-[28px]">
               {loading && !hasLiveData ? (
                 <span className="text-xl font-bold text-white">-</span>
               ) : (
@@ -176,11 +225,13 @@ export default function ServerStatsCards({
             custom={1}
           >
             <span className="text-xs text-gray-400">Peak Players</span>
-            {loading ? (
-              <span className="text-xl font-bold text-white">-</span>
-            ) : (
-              <AnimatedNumber value={historicalPeak} className="text-xl font-bold text-white" />
-            )}
+            <div className="min-h-[28px] flex items-center">
+              {loading ? (
+                <span className="text-xl font-bold text-white">-</span>
+              ) : (
+                <AnimatedNumber value={historicalPeak} className="text-xl font-bold text-white" />
+              )}
+            </div>
           </motion.div>
 
           {/* Average Players - HISTORICAL DATA */}
@@ -192,33 +243,14 @@ export default function ServerStatsCards({
             custom={2}
           >
             <span className="text-xs text-gray-400">Average Players</span>
-            {loading ? (
-              <span className="text-xl font-bold text-white">-</span>
-            ) : (
-              <AnimatedNumber value={historicalAverage} className="text-xl font-bold text-white" />
-            )}
+            <div className="min-h-[28px] flex items-center">
+              {loading ? (
+                <span className="text-xl font-bold text-white">-</span>
+              ) : (
+                <AnimatedNumber value={historicalAverage} className="text-xl font-bold text-white" />
+              )}
+            </div>
           </motion.div>
-          
-          {/* Time at Max Capacity - HISTORICAL DATA */}
-          {!loading && latestCapacity && timeAtMaxPercent > 0 && (
-            <motion.div 
-              className="flex flex-col col-span-3 pt-2 border-t border-gray-700"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              transition={{ delay: 0.3, ...springs.smooth }}
-            >
-              <span className="text-xs text-gray-400 flex items-center gap-1">
-                <motion.span
-                  animate={{ rotate: [0, 10, -10, 0] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                >
-                  <TrendingUp className="h-3 w-3" />
-                </motion.span>
-                Time at Max Capacity
-              </span>
-              <AnimatedNumber value={timeAtMaxPercent} className="text-xl font-bold text-white" formatFn={(v) => `${Math.round(v)}%`} />
-            </motion.div>
-          )}
           
           {/* Current Streams - LIVE DATA */}
           <motion.div 
@@ -252,7 +284,7 @@ export default function ServerStatsCards({
             {loading && !hasLiveData ? (
               <span className="text-xl font-bold text-white">-</span>
             ) : (
-              <div className="flex flex-col">
+              <div className="flex flex-col min-h-[28px] justify-center">
                 <AnimatedNumber 
                   value={currentStreams} 
                   className={`text-xl font-bold ${isShowingLiveData ? 'text-purple-400' : 'text-white'}`} 
@@ -277,11 +309,13 @@ export default function ServerStatsCards({
             custom={4}
           >
             <span className="text-xs text-gray-400">Peak Streams</span>
-            {loading ? (
-              <span className="text-xl font-bold text-white">-</span>
-            ) : (
-              <AnimatedNumber value={streamPeak} className="text-xl font-bold text-white" />
-            )}
+            <div className="min-h-[28px] flex items-center">
+              {loading ? (
+                <span className="text-xl font-bold text-white">-</span>
+              ) : (
+                <AnimatedNumber value={streamPeak} className="text-xl font-bold text-white" />
+              )}
+            </div>
           </motion.div>
 
           {/* Average Streams - HISTORICAL DATA */}
@@ -293,11 +327,13 @@ export default function ServerStatsCards({
             custom={5}
           >
             <span className="text-xs text-gray-400">Average Streams</span>
-            {loading ? (
-              <span className="text-xl font-bold text-white">-</span>
-            ) : (
-              <AnimatedNumber value={streamAverage} className="text-xl font-bold text-white" />
-            )}
+            <div className="min-h-[28px] flex items-center">
+              {loading ? (
+                <span className="text-xl font-bold text-white">-</span>
+              ) : (
+                <AnimatedNumber value={streamAverage} className="text-xl font-bold text-white" />
+              )}
+            </div>
           </motion.div>
           
           {/* Current Viewers - LIVE DATA */}
@@ -332,7 +368,7 @@ export default function ServerStatsCards({
             {loading && !hasLiveData ? (
               <span className="text-xl font-bold text-white">-</span>
             ) : (
-              <div className="flex flex-col">
+              <div className="flex flex-col min-h-[28px] justify-center">
                 <AnimatedNumber 
                   value={currentViewers} 
                   className={`text-xl font-bold ${isShowingLiveData ? 'text-purple-400' : 'text-white'}`} 
@@ -357,11 +393,13 @@ export default function ServerStatsCards({
             custom={7}
           >
             <span className="text-xs text-gray-400">Peak Viewers</span>
-            {loading ? (
-              <span className="text-xl font-bold text-white">-</span>
-            ) : (
-              <AnimatedNumber value={viewerPeak} className="text-xl font-bold text-white" />
-            )}
+            <div className="min-h-[28px] flex items-center">
+              {loading ? (
+                <span className="text-xl font-bold text-white">-</span>
+              ) : (
+                <AnimatedNumber value={viewerPeak} className="text-xl font-bold text-white" />
+              )}
+            </div>
           </motion.div>
 
           {/* Average Viewers - HISTORICAL DATA */}
@@ -373,21 +411,23 @@ export default function ServerStatsCards({
             custom={8}
           >
             <span className="text-xs text-gray-400">Average Viewers</span>
-            {loading ? (
-              <span className="text-xl font-bold text-white">-</span>
-            ) : (
-              <AnimatedNumber value={viewerAverage} className="text-xl font-bold text-white" />
-            )}
+            <div className="min-h-[28px] flex items-center">
+              {loading ? (
+                <span className="text-xl font-bold text-white">-</span>
+              ) : (
+                <AnimatedNumber value={viewerAverage} className="text-xl font-bold text-white" />
+              )}
+            </div>
           </motion.div>
         </CardContent>
-        <CardFooter className="pt-2 pb-4">
-          <Link href={`/streams/${serverId}`} className="w-full">
+        <CardFooter className="pt-2 pb-4 flex flex-wrap gap-2">
+          <Link href={`/streams/${serverId}`} className="flex-1 min-w-fit">
             <motion.div
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               transition={springs.stiff}
             >
-              <Button variant="outline" className="w-full flex items-center gap-2 bg-gray-700 border-gray-600 text-white hover:bg-gray-600">
+              <button className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-white rounded-md hover:bg-[#26262c] hover:shadow-lg hover:shadow-[#00D9FF]/20 transition-all text-xs font-medium border border-[#26262c] hover:border-[#00D9FF]/50">
                 <motion.div
                   className="flex items-center gap-1"
                   animate={{ 
@@ -400,18 +440,18 @@ export default function ServerStatsCards({
                   }}
                 >
                   {hasLiveTwitchData && (
-                    <Twitch className="h-4 w-4 text-purple-400" />
+                    <Twitch className="h-3.5 w-3.5 text-purple-400" />
                   )}
                   {hasLiveKickData && (
-                    <KickIcon className="h-4 w-4" style={{ color: '#53FC18' }} />
+                    <KickIcon className="h-3.5 w-3.5" style={{ color: '#53FC18' }} />
                   )}
                   {!hasLiveTwitchData && !hasLiveKickData && (
-                    <Twitch className="h-4 w-4 text-purple-400" />
+                    <Twitch className="h-3.5 w-3.5 text-purple-400" />
                   )}
                 </motion.div>
-                <span>View Live Streams</span>
+                <span>Live Streams</span>
                 <motion.span 
-                  className="inline-flex items-center justify-center bg-gray-600 rounded-full h-5 w-5 text-xs ml-1"
+                  className="inline-flex items-center justify-center bg-[#26262c] rounded-full h-4 w-4 text-[10px] font-semibold"
                   key={currentStreams}
                   initial={{ scale: 1.3 }}
                   animate={{ scale: 1 }}
@@ -419,9 +459,23 @@ export default function ServerStatsCards({
                 >
                   {currentStreams}
                 </motion.span>
-              </Button>
+              </button>
             </motion.div>
           </Link>
+          {onViewChanges && (
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              transition={springs.stiff}
+            >
+              <button 
+                onClick={onViewChanges}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-white rounded-md hover:bg-[#26262c] hover:shadow-lg hover:shadow-[#00D9FF]/20 transition-all text-xs font-medium border border-[#26262c] hover:border-[#00D9FF]/50"
+              >
+                <span>Server Changes</span>
+              </button>
+            </motion.div>
+          )}
         </CardFooter>
       </Card>
     </motion.div>

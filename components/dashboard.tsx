@@ -33,6 +33,9 @@ import ServerStatsCards from "./server-stats-cards"
 import { MultiServerSelect } from "./multi-server-select"
 import { trackServerSelect, trackTimeRangeSelect } from "@/lib/gtag"
 import { ServerLatestAssetsCard, ServerResourceChangesCard, ServerResourceListCard } from "./server-resource-panels"
+import { SlideoutPanel } from "./slideout-panel"
+import { ChangelogPanel } from "./changelog-panel"
+import { ServerChangesPanel } from "./server-changes-panel"
 import { useRouter, usePathname } from "next/navigation"
 import {
   buildServerSlugMaps,
@@ -174,6 +177,11 @@ export default function Dashboard() {
   const [resourceError, setResourceError] = useState<string | null>(null)
   const [shareStatus, setShareStatus] = useState<ShareStatus>(null)
   const shareResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  
+  // Panel state management
+  const [changelogPanelOpen, setChangelogPanelOpen] = useState(false)
+  const [serverChangesPanelOpen, setServerChangesPanelOpen] = useState(false)
+  const [selectedServerForChanges, setSelectedServerForChanges] = useState<string | null>(null)
 
   const router = useRouter()
   const pathname = usePathname()
@@ -772,6 +780,10 @@ export default function Dashboard() {
                   viewerData={currentViewData}
                   liveData={liveServers[serverId]}
                   liveLoading={liveLoading}
+                  onViewChanges={() => {
+                    setSelectedServerForChanges(serverId)
+                    setServerChangesPanelOpen(true)
+                  }}
                 />
               </motion.div>
             ))}
@@ -970,6 +982,31 @@ export default function Dashboard() {
         <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         </div>
       )}
+
+      {/* Changelog Panel */}
+      <SlideoutPanel
+        isOpen={changelogPanelOpen}
+        onClose={() => setChangelogPanelOpen(false)}
+        title="Changelog"
+        description="Recent updates and improvements to the application"
+      >
+        <ChangelogPanel isOpen={changelogPanelOpen} />
+      </SlideoutPanel>
+
+      {/* Server Changes Panel */}
+      <SlideoutPanel
+        isOpen={serverChangesPanelOpen}
+        onClose={() => setServerChangesPanelOpen(false)}
+        title="Server Resource Changes"
+        description={selectedServerForChanges ? `Changes for ${getServerNameById(selectedServerForChanges)}` : "Server resource changes"}
+      >
+        <ServerChangesPanel
+          isOpen={serverChangesPanelOpen}
+          serverId={selectedServerForChanges}
+          serverName={selectedServerForChanges ? getServerNameById(selectedServerForChanges) : null}
+          servers={servers}
+        />
+      </SlideoutPanel>
     </motion.div>
   )
 }
