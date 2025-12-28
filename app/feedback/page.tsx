@@ -129,7 +129,7 @@ export default function FeedbackPage() {
               )}
               
               <Link href="/">
-                <Button className="w-full bg-[#004D61] hover:bg-[#003a4d] text-white">
+                <Button className="w-full bg-gradient-to-r from-[#00D9FF] to-[#0099cc] hover:shadow-lg hover:shadow-[#00D9FF]/40 text-black">
                   Return to Home
                 </Button>
               </Link>
@@ -218,7 +218,7 @@ export default function FeedbackPage() {
             <Button 
               type="submit" 
               disabled={isSubmitting}
-              className="w-full bg-[#004D61] hover:bg-[#003a4d] text-white h-10 mt-4"
+              className="w-full bg-gradient-to-r from-[#00D9FF] to-[#0099cc] hover:shadow-lg hover:shadow-[#00D9FF]/40 text-black h-10 mt-4"
             >
               {isSubmitting ? (
                 <>

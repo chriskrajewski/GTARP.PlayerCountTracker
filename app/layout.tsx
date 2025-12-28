@@ -56,7 +56,9 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
         <style dangerouslySetInnerHTML={{ __html: `
           body {
-            background: radial-gradient(circle at 20% 20%, #141623 0%, #06070b 45%, #010103 100%) !important;
+            background: radial-gradient(circle at 10% 20%, rgba(0, 77, 97, 0.15) 0%, rgba(6, 7, 11, 0.98) 25%, #000000 50%),
+                        radial-gradient(circle at 90% 80%, rgba(0, 217, 255, 0.08) 0%, rgba(1, 1, 3, 0.95) 30%, #000000 60%),
+                        linear-gradient(135deg, #000000 0%, #06070b 50%, #010103 100%) !important;
             background-attachment: fixed;
             color: #FFFFFF !important;
           }

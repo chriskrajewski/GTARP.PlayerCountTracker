@@ -54,10 +54,14 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         case 'default':
           return { 
             ...baseStyles,
-            backgroundColor: '#004D61',
-            color: '#FFFFFF',
-            border: '1px solid #004D61',
-            ':hover': { backgroundColor: '#003a4d' }
+            background: 'linear-gradient(135deg, #00D9FF 0%, #00f0ff 50%, #0099cc 100%)',
+            color: '#000000',
+            border: '1px solid transparent',
+            boxShadow: '0 4px 15px rgba(0, 217, 255, 0.2)',
+            ':hover': { 
+              boxShadow: '0 6px 20px rgba(0, 217, 255, 0.4)',
+              transform: 'translateY(-1px)'
+            }
           };
         case 'destructive':
           return { 
@@ -89,7 +93,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           };
         case 'link':
           return { 
-            color: '#004D61',
+            color: '#00D9FF',
             textDecoration: 'underline',
             backgroundColor: 'transparent',
             border: 'none',
@@ -97,9 +101,9 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         default:
           return { 
             ...baseStyles,
-            backgroundColor: '#004D61',
-            color: '#FFFFFF',
-            border: '1px solid #004D61',
+            background: 'linear-gradient(135deg, #00D9FF 0%, #00f0ff 50%, #0099cc 100%)',
+            color: '#000000',
+            border: '1px solid transparent',
           };
       }
     };
@@ -112,21 +116,25 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         onMouseOver={(e) => {
           const target = e.currentTarget;
           if (variant === 'default') {
-            target.style.backgroundColor = '#003a4d';
+            target.style.boxShadow = '0 6px 20px rgba(0, 217, 255, 0.4)';
+            target.style.transform = 'translateY(-1px)';
           } else if (variant === 'secondary') {
             target.style.backgroundColor = '#26262c';
           } else if (variant === 'outline') {
-            target.style.borderColor = '#004D61';
-            target.style.color = '#004D61';
+            target.style.borderColor = '#00D9FF';
+            target.style.color = '#00D9FF';
           } else if (variant === 'ghost') {
-            target.style.backgroundColor = 'rgba(255,255,255,0.08)';
+            target.style.backgroundColor = 'rgba(0, 217, 255, 0.1)';
+          } else if (variant === 'link') {
+            target.style.color = '#00f0ff';
           }
         }}
         onMouseOut={(e) => {
           const target = e.currentTarget;
           const styles = getButtonStyles(variant as ButtonVariant);
           if (variant === 'default') {
-            target.style.backgroundColor = '#004D61';
+            target.style.boxShadow = '0 4px 15px rgba(0, 217, 255, 0.2)';
+            target.style.transform = 'translateY(0)';
           } else if (variant === 'secondary') {
             target.style.backgroundColor = '#18181b';
           } else if (variant === 'outline') {
@@ -134,6 +142,8 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
             target.style.color = '#FFFFFF';
           } else if (variant === 'ghost') {
             target.style.backgroundColor = 'transparent';
+          } else if (variant === 'link') {
+            target.style.color = '#00D9FF';
           }
         }}
         {...props}

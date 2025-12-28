@@ -175,7 +175,7 @@ export function CommonLayout({
             >
               <FeedbackForm 
                 trigger={
-                  <button className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-white rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium">
+                  <button className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-white rounded-md hover:bg-[#26262c] hover:shadow-lg hover:shadow-[#00D9FF]/20 transition-all text-xs font-medium border border-[#26262c] hover:border-[#00D9FF]/50">
                     <MessageSquare className="h-3.5 w-3.5 text-white" />
                     Feedback
                   </button>
@@ -190,7 +190,7 @@ export function CommonLayout({
               whileHover={{ scale: 1.02, y: -1 }}
               whileTap={{ scale: 0.98 }}
             >
-              <Link href="/changelog" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium" style={{ color: '#EFEFF1' }}>
+              <Link href="/changelog" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] hover:shadow-lg hover:shadow-[#00D9FF]/20 transition-all text-xs font-medium border border-[#26262c] hover:border-[#00D9FF]/50" style={{ color: '#EFEFF1' }}>
                 <ClipboardList className="h-3.5 w-3.5 text-[#EFEFF1]" />
                 <span className="text-[#EFEFF1]">Changelog</span>
               </Link>
@@ -204,7 +204,7 @@ export function CommonLayout({
           >
             <Link 
               href="/serverchangelog" 
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] hover:shadow-lg hover:shadow-[#00D9FF]/20 transition-all text-xs font-medium border border-[#26262c] hover:border-[#00D9FF]/50"
             >
               <History className="h-3.5 w-3.5 text-[#EFEFF1]" />
               <span className="text-[#EFEFF1]">Server Changes</span>
@@ -219,7 +219,7 @@ export function CommonLayout({
             >
               <button 
                 onClick={() => setShowExportDialog(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] hover:shadow-lg hover:shadow-[#00D9FF]/20 transition-all text-xs font-medium border border-[#26262c] hover:border-[#00D9FF]/50"
               >
                 <Download className="h-3.5 w-3.5" />
                 CSV Export
@@ -234,7 +234,7 @@ export function CommonLayout({
           >
             <Link 
               href="/multi-stream" 
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] hover:shadow-lg hover:shadow-[#00D9FF]/20 transition-all text-xs font-medium border border-[#26262c] hover:border-[#00D9FF]/50"
             >
               <Video className="h-3.5 w-3.5 text-white" /> 
               <span className="text-[#EFEFF1]">Multi Stream</span>
@@ -253,7 +253,7 @@ export function CommonLayout({
                     href="https://streamelements.com/alantiix/tip" 
                     target="_blank" 
                     rel="noopener noreferrer" 
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] hover:shadow-lg hover:shadow-[#ff4545]/20 transition-all text-xs font-medium border border-[#26262c] hover:border-[#ff4545]/50"
                   >
                     <motion.span
                       animate={{ 
@@ -304,7 +304,7 @@ export function CommonLayout({
                   <MobileMenuItem>
                     <Link 
                       href="/feedback" 
-                      className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-white rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+                      className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-white rounded-md hover:bg-[#26262c] hover:shadow-lg hover:shadow-[#00D9FF]/20 transition-all text-xs font-medium border border-[#26262c] hover:border-[#00D9FF]/50"
                       onClick={() => setMobileMenuOpen(false)}
                     >
                       <MessageSquare className="h-3.5 w-3.5 text-white" />
@@ -317,7 +317,7 @@ export function CommonLayout({
                   <MobileMenuItem>
                     <Link 
                       href="/changelog" 
-                      className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+                      className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] hover:shadow-lg hover:shadow-[#00D9FF]/20 transition-all text-xs font-medium border border-[#26262c] hover:border-[#00D9FF]/50"
                       onClick={() => setMobileMenuOpen(false)}
                     >
                       <ClipboardList className="h-3.5 w-3.5 text-[#EFEFF1]" />
@@ -329,7 +329,7 @@ export function CommonLayout({
                 <MobileMenuItem>
                   <Link 
                     href="/serverchangelog" 
-                    className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+                    className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] hover:shadow-lg hover:shadow-[#00D9FF]/20 transition-all text-xs font-medium border border-[#26262c] hover:border-[#00D9FF]/50"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     <History className="h-3.5 w-3.5 text-[#EFEFF1]" />
@@ -344,7 +344,7 @@ export function CommonLayout({
                         setShowExportDialog(true);
                         setMobileMenuOpen(false);
                       }}
-                      className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+                      className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] hover:shadow-lg hover:shadow-[#00D9FF]/20 transition-all text-xs font-medium border border-[#26262c] hover:border-[#00D9FF]/50"
                     >
                       <Download className="h-3.5 w-3.5" />
                       CSV Export
@@ -358,7 +358,7 @@ export function CommonLayout({
                       setShowResourceDialog(true);
                       setMobileMenuOpen(false);
                     }}
-                    className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+                    className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] hover:shadow-lg hover:shadow-[#00D9FF]/20 transition-all text-xs font-medium border border-[#26262c] hover:border-[#00D9FF]/50"
                   >
                     <History className="h-3.5 w-3.5 text-[#EFEFF1]" />
                     Server Changes
@@ -368,7 +368,7 @@ export function CommonLayout({
                 <MobileMenuItem>
                   <Link 
                     href="/multi-stream" 
-                    className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+                    className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-[#EFEFF1] rounded-md hover:bg-[#26262c] hover:shadow-lg hover:shadow-[#00D9FF]/20 transition-all text-xs font-medium border border-[#26262c] hover:border-[#00D9FF]/50"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     <Bot className="h-3.5 w-3.5" />
@@ -384,7 +384,7 @@ export function CommonLayout({
                           href="https://streamelements.com/alantiix/tip" 
                           target="_blank" 
                           rel="noopener noreferrer" 
-                          className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-white rounded-md hover:bg-[#26262c] transition-colors text-xs font-medium"
+                          className="flex w-full items-center gap-1.5 px-3 py-2 bg-[#18181b] text-white rounded-md hover:bg-[#26262c] hover:shadow-lg hover:shadow-[#ff4545]/20 transition-all text-xs font-medium border border-[#26262c] hover:border-[#ff4545]/50"
                         >
                           <Heart className="h-3.5 w-3.5 text-[#ff4545]" />
                           <span className="text-[#EFEFF1]">Donate</span>
