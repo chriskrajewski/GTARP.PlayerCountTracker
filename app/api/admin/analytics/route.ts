@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAdminRequest } from '@/lib/admin-auth-server';
-import { createServerClient } from '@/lib/supabase-server';
+import { createServiceRoleClient } from '@/lib/supabase-service-role';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     const timeRange = searchParams.get('time_range') || '7d';
     const serverId = searchParams.get('server_id');
 
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
 
     // Calculate date range based on time_range parameter
     const now = new Date();

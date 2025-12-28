@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAdminRequest } from '@/lib/admin-auth-server';
-import { createServerClient } from '@/lib/supabase-server';
+import { createServiceRoleClient } from '@/lib/supabase-service-role';
 import { z } from 'zod';
 
 const StatusUpdateSchema = z.object({
@@ -24,7 +24,7 @@ export async function PUT(
     const body = await request.json();
     const { is_active } = StatusUpdateSchema.parse(body);
 
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
 
     // Check if server exists
     const { data: existingServer, error: fetchError } = await supabase

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAdminRequest } from '@/lib/admin-auth-server';
-import { createServerClient } from '@/lib/supabase-server';
+import { createServiceRoleClient } from '@/lib/supabase-service-role';
 import { z } from 'zod';
 
 const ExportDataSchema = z.object({
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { server_ids, start_date, end_date, format, data_types } = ExportDataSchema.parse(body);
 
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
     const exportData: any = {};
 
     // Export player counts data

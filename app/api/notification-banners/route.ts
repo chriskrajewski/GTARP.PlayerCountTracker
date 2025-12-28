@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createBrowserClient } from '@/lib/supabase-browser';
+import { createServiceRoleClient } from '@/lib/supabase-service-role';
 import type { Database } from '@/lib/supabase.types';
 import { validateAdminRequest } from '@/lib/admin-auth-server';
 import { z } from 'zod';
@@ -73,6 +74,9 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       );
     }
+
+    // Use browser client for public reads (RLS will handle permissions)
+    const supabase = createBrowserClient();
 
     let query = supabase
       .from('notification_banners')
@@ -153,6 +157,9 @@ export async function POST(request: NextRequest) {
       created_by: validated.created_by || getUserId(request),
     };
 
+    // Use service role client for admin writes
+    const supabase = createServiceRoleClient();
+
     const { data, error } = await supabase
       .from('notification_banners')
       .insert(bannerData)
@@ -228,6 +235,9 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    // Use service role client for admin writes
+    const supabase = createServiceRoleClient();
+
     const { data, error } = await supabase
       .from('notification_banners')
       .update(validated)
@@ -291,6 +301,9 @@ export async function DELETE(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Use service role client for admin writes
+    const supabase = createServiceRoleClient();
 
     const { error } = await supabase
       .from('notification_banners')

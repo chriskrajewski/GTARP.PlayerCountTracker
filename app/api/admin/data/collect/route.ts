@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAdminRequest } from '@/lib/admin-auth-server';
-import { createServerClient } from '@/lib/supabase-server';
+import { createServiceRoleClient } from '@/lib/supabase-service-role';
 import { z } from 'zod';
 
 const CollectDataSchema = z.object({
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const { server_id } = CollectDataSchema.parse(body);
 
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
 
     // If server_id is specified, trigger collection for that server only
     // Otherwise trigger for all servers

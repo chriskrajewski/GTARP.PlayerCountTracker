@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAdminRequest } from '@/lib/admin-auth-server';
-import { createServerClient } from '@/lib/supabase-server';
+import { createServiceRoleClient } from '@/lib/supabase-service-role';
 import { ServerConfiguration, ServerFormData } from '@/lib/admin-types';
 import { z } from 'zod';
 
@@ -34,7 +34,7 @@ export async function GET(
     }
 
     const { serverId } = await params;
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
 
     // @ts-ignore - Supabase type inference issue with server_xref table
     const { data: server, error } = await supabase
@@ -119,7 +119,7 @@ export async function PUT(
     const body = await request.json();
     const validatedData = ServerUpdateSchema.parse(body);
 
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
 
     // Check if server exists
     const { data: existingServer, error: fetchError } = await supabase
@@ -275,7 +275,7 @@ export async function DELETE(
     }
 
     const { serverId } = await params;
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
 
     // Check if server exists
     const { data: existingServer, error: fetchError } = await supabase
