@@ -447,7 +447,8 @@ function StreamCard({
   // Format the stream thumbnail URL
   // Twitch URLs are already formatted on the server with {width} and {height} replaced
   // Kick URLs are already complete
-  const thumbnailUrl = stream.thumbnail_url;
+  // Use proxy endpoint to bypass any CORS/CSP issues
+  const proxiedThumbnailUrl = `/api/thumbnail?url=${encodeURIComponent(stream.thumbnail_url)}`;
   
   // Format viewer count with commas for thousands
   const formatViewerCount = (count: number): string => {
@@ -522,15 +523,15 @@ function StreamCard({
           </div>
         ) : (
           <img
-            src={thumbnailUrl}
+            src={proxiedThumbnailUrl}
             alt={`${stream.user_name} streaming ${stream.game_name}`}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             onError={() => {
-              console.error(`[StreamCard] Failed to load thumbnail for ${stream.user_name}:`, thumbnailUrl);
+              console.error(`[StreamCard] Failed to load thumbnail for ${stream.user_name}:`, proxiedThumbnailUrl);
               setImageError(true);
             }}
-            crossOrigin="anonymous"
             loading="lazy"
+            decoding="async"
           />
         )}
         
