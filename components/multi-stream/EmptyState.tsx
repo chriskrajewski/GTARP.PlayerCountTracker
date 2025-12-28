@@ -14,8 +14,8 @@ interface EmptyStateProps {
 
 // Example stream combinations for quick start
 const EXAMPLE_COMBOS = [
-  { label: 'Popular RP', streams: ['twitch:buddha', 'twitch:anthonyz', 'twitch:kyle'] },
-  { label: 'Multi-platform', streams: ['twitch:summit1g', 'kick:trainwreckstv'] },
+  { label: 'Popular RP', streams: ['twitch:whippy', 'twitch:penta', 'twitch:vader'] },
+  { label: 'Multi-platform', streams: ['twitch:summit1g', 'kick:xqc'] },
 ];
 
 /**
@@ -178,7 +178,7 @@ export function EmptyState({ onLaunch }: EmptyStateProps) {
                   setInputValue(e.target.value);
                   if (error) setError(null);
                 }}
-                placeholder="Enter stream names, URLs, or paste a list...&#10;&#10;Examples:&#10;shroud, summit1g&#10;twitch:xqc, kick:trainwreckstv&#10;https://twitch.tv/lirik"
+                placeholder="Enter stream names, URLs, or paste a list...&#10;&#10;Examples:&#10;penta, xqc&#10;twitch:vader, kick:kyle&#10;https://www.twitch.tv/traumz"
                 className={cn(
                   "w-full px-4 py-3 bg-[#18181b] border rounded-lg text-white placeholder-[#6B6B6B] focus:outline-none focus:ring-2 focus:ring-[#004D61] focus:border-transparent resize-none transition-all",
                   error ? "border-red-500" : "border-[#26262c]"
