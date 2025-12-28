@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
-import { RefreshCw, Loader2, Share2 } from "lucide-react"
+import { RefreshCw, Loader2, Share2, Clock } from "lucide-react"
 import { motion, AnimatePresence } from "motion/react"
 import { ChartAnimation, StaggeredList, MotionItem, AnimatedSkeleton } from "@/components/ui/motion"
 import { fadeInUp, springs, staggerContainer } from "@/lib/motion"
@@ -797,7 +797,10 @@ export default function Dashboard() {
       >
       <Tabs defaultValue={DEFAULT_TIME_RANGE} value={timeRange} onValueChange={handleTimeRangeChange} className="w-full">
         <div className="flex flex-col gap-2 mb-2">
-          <div className="text-sm text-gray-400">Time Range:</div>
+          <div className="text-sm text-gray-400 flex items-center gap-2">
+            <Clock className="h-4 w-4 text-cyan-400/60" />
+            Time Range:
+          </div>
           
           {/* Mobile touch-friendly time selector */}
           <div className="md:hidden flex overflow-x-auto pb-2 scrollbar-hide">
@@ -830,13 +833,25 @@ export default function Dashboard() {
                 <motion.button
                   key={item.value}
                   onClick={() => handleTimeRangeChange(item.value)}
-                  className={`px-4 py-3 rounded-md min-w-[60px] text-center ${timeRange === item.value ? "bg-[#004D61] text-white" : "bg-[#18181b] text-[#EFEFF1]"} border border-[#26262c]`}
+                  className={`px-4 py-2.5 rounded-lg min-w-[56px] text-center text-sm font-medium transition-all duration-200 ${
+                    timeRange === item.value 
+                      ? "text-cyan-400 border-cyan-500/40" 
+                      : "text-gray-400 border-[#26262c] hover:text-white hover:border-cyan-500/20"
+                  }`}
+                  style={{
+                    background: timeRange === item.value 
+                      ? 'linear-gradient(135deg, rgba(0, 217, 255, 0.15) 0%, rgba(20, 184, 166, 0.1) 100%)' 
+                      : 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+                    border: '1px solid',
+                    borderColor: timeRange === item.value ? 'rgba(0, 217, 255, 0.3)' : 'rgba(38, 38, 44, 1)',
+                    boxShadow: timeRange === item.value ? '0 0 15px rgba(0, 217, 255, 0.1)' : 'none',
+                  }}
                   variants={{
                     hidden: { opacity: 0, y: 10 },
                     visible: { opacity: 1, y: 0 }
                   }}
-                  whileHover={{ scale: 1.05, y: -2 }}
-                  whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: 1.02, y: -1 }}
+                  whileTap={{ scale: 0.98 }}
                   transition={springs.stiff}
                 >
                   {item.label}
@@ -846,18 +861,18 @@ export default function Dashboard() {
           </div>
           
           {/* Desktop - TabsList */}
-          <TabsList className="hidden md:grid grid-cols-11 bg-[#18181b] border border-[#26262c] p-0.5 rounded-md">
-            <TabsTrigger value="1h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">1h</TabsTrigger>
-            <TabsTrigger value="2h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">2h</TabsTrigger>
-            <TabsTrigger value="4h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">4h</TabsTrigger>
-            <TabsTrigger value="6h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">6h</TabsTrigger>
-            <TabsTrigger value="8h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">8h</TabsTrigger>
-            <TabsTrigger value="24h" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">24h</TabsTrigger>
-            <TabsTrigger value="7d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">7d</TabsTrigger>
-            <TabsTrigger value="30d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">30d</TabsTrigger>
-            <TabsTrigger value="90d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">3m</TabsTrigger>
-            <TabsTrigger value="180d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">6m</TabsTrigger>
-            <TabsTrigger value="365d" className="text-[#EFEFF1] data-[state=active]:bg-[#004D61] data-[state=active]:text-white transition-all duration-200">1y</TabsTrigger>
+          <TabsList className="hidden md:grid grid-cols-11 p-1 rounded-lg">
+            <TabsTrigger value="1h" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400 transition-all duration-200">1h</TabsTrigger>
+            <TabsTrigger value="2h" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400 transition-all duration-200">2h</TabsTrigger>
+            <TabsTrigger value="4h" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400 transition-all duration-200">4h</TabsTrigger>
+            <TabsTrigger value="6h" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400 transition-all duration-200">6h</TabsTrigger>
+            <TabsTrigger value="8h" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400 transition-all duration-200">8h</TabsTrigger>
+            <TabsTrigger value="24h" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400 transition-all duration-200">24h</TabsTrigger>
+            <TabsTrigger value="7d" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400 transition-all duration-200">7d</TabsTrigger>
+            <TabsTrigger value="30d" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400 transition-all duration-200">30d</TabsTrigger>
+            <TabsTrigger value="90d" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400 transition-all duration-200">3m</TabsTrigger>
+            <TabsTrigger value="180d" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400 transition-all duration-200">6m</TabsTrigger>
+            <TabsTrigger value="365d" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400 transition-all duration-200">1y</TabsTrigger>
           </TabsList>
         </div>
       </Tabs>

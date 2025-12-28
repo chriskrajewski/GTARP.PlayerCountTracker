@@ -6,11 +6,12 @@ import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
-import { CalendarIcon, Download } from "lucide-react"
+import { CalendarIcon, Download, FileSpreadsheet, Loader2 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { type ServerData } from "@/lib/data"
 import { playerCountsToCSV, streamerCountsToCSV, viewerCountsToCSV, downloadCSV } from "@/lib/csv-export"
 import { supabase } from "@/lib/supabase"
+import { motion } from "motion/react"
 
 type CSVExportProps = {
   servers: ServerData[]
@@ -108,38 +109,78 @@ export function CSVExport({ servers, selectedServers }: CSVExportProps) {
   }
 
   return (
-    <div className="flex flex-col gap-3 p-3 sm:p-4 border rounded-lg bg-card text-card-foreground shadow-sm">
-      <h3 className="text-base sm:text-lg font-semibold">Export Data as CSV</h3>
+    <motion.div 
+      className="flex flex-col gap-4 p-4 sm:p-5 rounded-xl relative overflow-hidden"
+      style={{
+        background: 'linear-gradient(135deg, rgba(14, 14, 16, 0.95) 0%, rgba(10, 10, 12, 0.95) 100%)',
+        border: '1px solid rgba(0, 217, 255, 0.15)',
+        boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3), 0 0 30px rgba(0, 217, 255, 0.03)',
+      }}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      {/* Background gradient orb */}
+      <div 
+        className="absolute -top-1/2 -right-1/2 w-full h-full rounded-full blur-3xl opacity-10 pointer-events-none"
+        style={{ 
+          background: 'radial-gradient(circle, rgba(0, 217, 255, 0.2) 0%, transparent 70%)' 
+        }}
+      />
       
-      <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2 relative z-10">
+        <FileSpreadsheet className="h-5 w-5 text-cyan-400" />
+        <h3 className="text-base sm:text-lg font-semibold text-white">Export Data as CSV</h3>
+      </div>
+      
+      <div className="flex flex-col gap-4 relative z-10">
         {/* Data Type Selector */}
-        <div className="space-y-1">
-          <label className="text-xs sm:text-sm font-medium">Data Type</label>
+        <div className="space-y-2">
+          <label className="text-xs sm:text-sm font-medium text-gray-400">Data Type</label>
           <Tabs value={dataType} onValueChange={setDataType} defaultValue="player" className="w-full">
-            <TabsList className="grid grid-cols-3 h-auto">
-              <TabsTrigger value="player" className="text-xs sm:text-sm py-1.5 px-1 sm:px-2">Player Counts</TabsTrigger>
-              <TabsTrigger value="streamer" className="text-xs sm:text-sm py-1.5 px-1 sm:px-2">Streamer Counts</TabsTrigger>
-              <TabsTrigger value="viewer" className="text-xs sm:text-sm py-1.5 px-1 sm:px-2">Viewer Counts</TabsTrigger>
+            <TabsList className="grid grid-cols-3 h-auto w-full">
+              <TabsTrigger 
+                value="player" 
+                className="text-xs sm:text-sm py-2 px-2 data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400"
+              >
+                Player Counts
+              </TabsTrigger>
+              <TabsTrigger 
+                value="streamer" 
+                className="text-xs sm:text-sm py-2 px-2 data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400"
+              >
+                Streamer Counts
+              </TabsTrigger>
+              <TabsTrigger 
+                value="viewer" 
+                className="text-xs sm:text-sm py-2 px-2 data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400"
+              >
+                Viewer Counts
+              </TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row gap-3 relative z-10">
         {/* Start Date Selector */}
-        <div className="space-y-1 w-full">
-          <label className="text-xs sm:text-sm font-medium">Start Date</label>
+        <div className="space-y-2 w-full">
+          <label className="text-xs sm:text-sm font-medium text-gray-400">Start Date</label>
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 className={cn(
-                  "w-full justify-start text-left font-normal text-xs sm:text-sm py-1.5",
-                  !startDate && "text-muted-foreground"
+                  "w-full justify-start text-left font-normal text-xs sm:text-sm py-2.5",
+                  !startDate && "text-gray-500"
                 )}
+                style={{
+                  background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+                  borderColor: 'rgba(0, 217, 255, 0.15)',
+                }}
               >
-                <CalendarIcon className="mr-1 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                {startDate ? format(startDate, "PP") : "Select date"}
+                <CalendarIcon className="mr-2 h-4 w-4 text-cyan-400/60" />
+                <span className="text-white">{startDate ? format(startDate, "PP") : "Select date"}</span>
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0">
@@ -154,19 +195,23 @@ export function CSVExport({ servers, selectedServers }: CSVExportProps) {
         </div>
 
         {/* End Date Selector */}
-        <div className="space-y-1 w-full">
-          <label className="text-xs sm:text-sm font-medium">End Date</label>
+        <div className="space-y-2 w-full">
+          <label className="text-xs sm:text-sm font-medium text-gray-400">End Date</label>
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 className={cn(
-                  "w-full justify-start text-left font-normal text-xs sm:text-sm py-1.5",
-                  !endDate && "text-muted-foreground"
+                  "w-full justify-start text-left font-normal text-xs sm:text-sm py-2.5",
+                  !endDate && "text-gray-500"
                 )}
+                style={{
+                  background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+                  borderColor: 'rgba(0, 217, 255, 0.15)',
+                }}
               >
-                <CalendarIcon className="mr-1 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                {endDate ? format(endDate, "PP") : "Select date"}
+                <CalendarIcon className="mr-2 h-4 w-4 text-cyan-400/60" />
+                <span className="text-white">{endDate ? format(endDate, "PP") : "Select date"}</span>
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0">
@@ -182,24 +227,36 @@ export function CSVExport({ servers, selectedServers }: CSVExportProps) {
       </div>
 
       {/* Export Button */}
-      <Button 
-        onClick={handleExport} 
-        disabled={isExporting || !startDate || !endDate || selectedServers.length === 0}
-        className="mt-2 text-xs sm:text-sm py-1.5 h-auto"
+      <motion.div
+        whileHover={{ scale: 1.01 }}
+        whileTap={{ scale: 0.99 }}
+        className="relative z-10"
       >
-        {isExporting ? (
-          <>Exporting...</>
-        ) : (
-          <>
-            <Download className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            Export CSV
-          </>
-        )}
-      </Button>
+        <Button 
+          onClick={handleExport} 
+          disabled={isExporting || !startDate || !endDate || selectedServers.length === 0}
+          className="w-full mt-1 text-sm py-2.5 h-auto font-medium"
+          variant="cyber"
+        >
+          {isExporting ? (
+            <span className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Exporting...
+            </span>
+          ) : (
+            <span className="flex items-center gap-2">
+              <Download className="h-4 w-4" />
+              Export CSV
+            </span>
+          )}
+        </Button>
+      </motion.div>
       
       {selectedServers.length === 0 && (
-        <p className="text-xs sm:text-sm text-muted-foreground">Please select at least one server to export data.</p>
+        <p className="text-xs sm:text-sm text-gray-500 relative z-10">
+          Please select at least one server to export data.
+        </p>
       )}
-    </div>
+    </motion.div>
   )
 } 

@@ -209,7 +209,18 @@ export function DataStatusIndicator({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <button className="inline-flex items-center gap-2 text-[#ADADB8] hover:text-white transition-colors group">
+        <motion.button 
+          className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-all duration-300 px-3 py-1.5 rounded-lg group"
+          style={{
+            background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.6) 0%, rgba(18, 18, 21, 0.6) 100%)',
+            border: '1px solid rgba(0, 217, 255, 0.1)',
+          }}
+          whileHover={{ 
+            scale: 1.02,
+            borderColor: 'rgba(0, 217, 255, 0.3)',
+          }}
+          whileTap={{ scale: 0.98 }}
+        >
           {/* Live Status Indicator */}
           <TooltipProvider>
             <Tooltip>
@@ -222,11 +233,11 @@ export function DataStatusIndicator({
                       animate={{ scale: 1 }}
                     >
                       <motion.span
-                        className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"
+                        className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
                         animate={{ scale: [1, 1.5, 1], opacity: [0.75, 0, 0.75] }}
                         transition={{ duration: 1.5, repeat: Infinity }}
                       />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-400" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
                     </motion.span>
                   )}
                   {liveStatus === "fetching" && (
@@ -248,7 +259,12 @@ export function DataStatusIndicator({
                   </span>
                 </span>
               </TooltipTrigger>
-              <TooltipContent className="bg-[#18181b] text-white border-[#26262c]">
+              <TooltipContent 
+                className="text-white border-cyan-500/20"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(14, 14, 16, 0.98) 0%, rgba(10, 10, 12, 0.98) 100%)',
+                }}
+              >
                 {liveStatus === "connected" && `Live data streaming • ${activeServerCount} server${activeServerCount !== 1 ? 's' : ''}`}
                 {liveStatus === "fetching" && "Fetching latest data..."}
                 {liveStatus === "stale" && "Connection may be slow"}
@@ -257,76 +273,84 @@ export function DataStatusIndicator({
             </Tooltip>
           </TooltipProvider>
 
-          <span className="text-[#3f3f46]">|</span>
+          <span className="text-cyan-500/30">|</span>
 
           {/* Historical Data Info */}
           <span className="inline-flex items-center gap-1 text-xs">
-            <Database className="h-3 w-3" />
+            <Database className="h-3 w-3 text-cyan-400/60" />
             <span>{getTimeRangeLabel(timeRange)}</span>
           </span>
 
-          <span className="text-[#3f3f46]">|</span>
+          <span className="text-cyan-500/30">|</span>
 
           {/* Last ETL Refresh */}
           <span className="inline-flex items-center gap-1 text-xs">
-            <Clock className="h-3 w-3" />
+            <Clock className="h-3 w-3 text-cyan-400/60" />
             <span>DB: {getRelativeTimeString(latestRefresh)}</span>
           </span>
 
-          <ChevronDown className="h-3 w-3 text-gray-500 group-hover:text-white transition-colors" />
-        </button>
+          <ChevronDown className="h-3 w-3 text-gray-500 group-hover:text-cyan-400 transition-colors" />
+        </motion.button>
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-lg bg-[#0e0e10] border-[#26262c] text-white">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Activity className="h-5 w-5 text-[#004D61]" />
-            Data Status Dashboard
+            <Activity className="h-5 w-5 text-cyan-400" />
+            <span className="bg-gradient-to-r from-white to-cyan-100 bg-clip-text text-transparent">
+              Data Status Dashboard
+            </span>
           </DialogTitle>
-          <DialogDescription className="text-[#ADADB8]">
+          <DialogDescription className="text-gray-400">
             View live data streaming status and historical data information
           </DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="live" className="mt-4">
-          <TabsList className="grid w-full grid-cols-3 bg-[#18181b] border border-[#26262c]">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger 
               value="live" 
-              className="data-[state=active]:bg-[#004D61] data-[state=active]:text-white text-[#ADADB8]"
+              className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400"
             >
-              <Radio className="h-3 w-3 mr-1" />
+              <Radio className="h-3 w-3 mr-1.5" />
               Live Status
             </TabsTrigger>
             <TabsTrigger 
               value="refresh" 
-              className="data-[state=active]:bg-[#004D61] data-[state=active]:text-white text-[#ADADB8]"
+              className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400"
             >
-              <HistoryIcon className="h-3 w-3 mr-1" />
-              Last History Load
+              <HistoryIcon className="h-3 w-3 mr-1.5" />
+              History Load
             </TabsTrigger>
             <TabsTrigger 
               value="start" 
-              className="data-[state=active]:bg-[#004D61] data-[state=active]:text-white text-[#ADADB8]"
+              className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400"
             >
-              <InfoIcon className="h-3 w-3 mr-1" />
+              <InfoIcon className="h-3 w-3 mr-1.5" />
               Data Start
             </TabsTrigger>
           </TabsList>
 
           {/* Live Status Tab */}
           <TabsContent value="live" className="mt-4 space-y-4">
-            <div className="rounded-lg bg-[#18181b] border border-[#26262c] p-4">
+            <div 
+              className="rounded-xl p-4"
+              style={{
+                background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.8) 0%, rgba(18, 18, 21, 0.8) 100%)',
+                border: '1px solid rgba(0, 217, 255, 0.1)',
+              }}
+            >
               <div className="flex items-center justify-between mb-4">
                 <span className="text-sm font-medium text-white">Data Streaming Status</span>
-                <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
-                  liveStatus === "connected" ? "bg-green-500/20 text-green-400" :
-                  liveStatus === "fetching" ? "bg-yellow-500/20 text-yellow-400" :
-                  liveStatus === "stale" ? "bg-orange-500/20 text-orange-400" :
-                  "bg-gray-500/20 text-gray-400"
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                  liveStatus === "connected" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" :
+                  liveStatus === "fetching" ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30" :
+                  liveStatus === "stale" ? "bg-orange-500/20 text-orange-400 border border-orange-500/30" :
+                  "bg-gray-500/20 text-gray-400 border border-gray-500/30"
                 }`}>
                   {liveStatus === "connected" && (
                     <motion.span
-                      className="w-1.5 h-1.5 rounded-full bg-green-400"
+                      className="w-1.5 h-1.5 rounded-full bg-emerald-400"
                       animate={{ scale: [1, 1.2, 1] }}
                       transition={{ duration: 1, repeat: Infinity }}
                     />
@@ -336,32 +360,38 @@ export function DataStatusIndicator({
               </div>
 
               <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-[#ADADB8]">Active Servers</span>
-                  <p className="text-white font-medium">{activeServerCount}</p>
+                <div className="space-y-1">
+                  <span className="text-gray-500 text-xs">Active Servers</span>
+                  <p className="text-white font-semibold">{activeServerCount}</p>
                 </div>
-                <div>
-                  <span className="text-[#ADADB8]">Polling Interval</span>
-                  <p className="text-white font-medium">{pollingInterval / 1000}s</p>
+                <div className="space-y-1">
+                  <span className="text-gray-500 text-xs">Polling Interval</span>
+                  <p className="text-white font-semibold">{pollingInterval / 1000}s</p>
                 </div>
-                <div>
-                  <span className="text-[#ADADB8]">Last Live Fetch</span>
-                  <p className="text-white font-medium">{getRelativeTimeString(lastLiveFetch)}</p>
+                <div className="space-y-1">
+                  <span className="text-gray-500 text-xs">Last Live Fetch</span>
+                  <p className="text-white font-semibold">{getRelativeTimeString(lastLiveFetch)}</p>
                 </div>
-                <div>
-                  <span className="text-[#ADADB8]">Viewing Range</span>
-                  <p className="text-white font-medium">{getTimeRangeLabel(timeRange)}</p>
+                <div className="space-y-1">
+                  <span className="text-gray-500 text-xs">Viewing Range</span>
+                  <p className="text-white font-semibold">{getTimeRangeLabel(timeRange)}</p>
                 </div>
               </div>
             </div>
 
-            <div className="text-xs text-[#ADADB8] bg-[#18181b] border border-[#26262c] rounded-lg p-3">
+            <div 
+              className="text-xs text-gray-400 rounded-xl p-3"
+              style={{
+                background: 'linear-gradient(135deg, rgba(0, 217, 255, 0.05) 0%, rgba(20, 184, 166, 0.05) 100%)',
+                border: '1px solid rgba(0, 217, 255, 0.1)',
+              }}
+            >
               <p className="flex items-start gap-2">
-                <InfoIcon className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <InfoIcon className="h-4 w-4 mt-0.5 flex-shrink-0 text-cyan-400/60" />
                 <span>
-                  <strong className="text-white">Live data</strong> shows real-time player counts and stream info, 
+                  <strong className="text-cyan-400">Live data</strong> shows real-time player counts and stream info, 
                   fetched directly from FiveM and Twitch APIs every {pollingInterval / 1000} seconds. 
-                  <strong className="text-white"> Historical data</strong> (charts, peaks, averages) comes from 
+                  <strong className="text-cyan-400"> Historical data</strong> (charts, peaks, averages) comes from 
                   our database, updated every ~10 minutes.
                 </span>
               </p>
@@ -370,7 +400,13 @@ export function DataStatusIndicator({
 
           {/* Last Refresh Tab */}
           <TabsContent value="refresh" className="mt-4">
-            <div className="rounded-lg bg-[#18181b] border border-[#26262c] p-4">
+            <div 
+              className="rounded-xl p-4"
+              style={{
+                background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.8) 0%, rgba(18, 18, 21, 0.8) 100%)',
+                border: '1px solid rgba(0, 217, 255, 0.1)',
+              }}
+            >
               {isLoading ? (
                 <div className="space-y-3">
                   <Skeleton className="h-5 w-full bg-[#26262c]" />
@@ -380,7 +416,7 @@ export function DataStatusIndicator({
               ) : error ? (
                 <div className="text-red-400 text-sm">{error}</div>
               ) : refreshTimes.length === 0 ? (
-                <div className="text-center text-[#ADADB8] text-sm py-4">
+                <div className="text-center text-gray-500 text-sm py-4">
                   No refresh information available
                 </div>
               ) : (
@@ -388,23 +424,33 @@ export function DataStatusIndicator({
                   {refreshTimes
                     .sort((a, b) => new Date(b.last_refresh).getTime() - new Date(a.last_refresh).getTime())
                     .map((item) => (
-                      <div key={item.server_id} className="flex justify-between items-center py-2 border-b border-[#26262c] last:border-0">
+                      <div 
+                        key={item.server_id} 
+                        className="flex justify-between items-center py-2 border-b last:border-0"
+                        style={{ borderColor: 'rgba(0, 217, 255, 0.1)' }}
+                      >
                         <span className="font-medium text-sm text-white">{getServerNameById(item.server_id)}</span>
-                        <span className="text-sm text-[#ADADB8]">{formatDateTime(item.last_refresh)}</span>
+                        <span className="text-sm text-gray-400">{formatDateTime(item.last_refresh)}</span>
                       </div>
                     ))
                   }
                 </div>
               )}
             </div>
-            <p className="text-xs text-[#ADADB8] mt-2">
+            <p className="text-xs text-gray-500 mt-2">
               Database records are updated approximately every 10 minutes via our ETL pipeline.
             </p>
           </TabsContent>
 
           {/* Data Start Tab */}
           <TabsContent value="start" className="mt-4">
-            <div className="rounded-lg bg-[#18181b] border border-[#26262c] p-4">
+            <div 
+              className="rounded-xl p-4"
+              style={{
+                background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.8) 0%, rgba(18, 18, 21, 0.8) 100%)',
+                border: '1px solid rgba(0, 217, 255, 0.1)',
+              }}
+            >
               {isLoading ? (
                 <div className="space-y-3">
                   <Skeleton className="h-5 w-full bg-[#26262c]" />
@@ -414,21 +460,25 @@ export function DataStatusIndicator({
               ) : error ? (
                 <div className="text-red-400 text-sm">{error}</div>
               ) : dataStartTimes.length === 0 ? (
-                <div className="text-center text-[#ADADB8] text-sm py-4">
+                <div className="text-center text-gray-500 text-sm py-4">
                   No data start information available
                 </div>
               ) : (
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {dataStartTimes.map((item) => (
-                    <div key={item.server_id} className="flex justify-between items-center py-2 border-b border-[#26262c] last:border-0">
+                    <div 
+                      key={item.server_id} 
+                      className="flex justify-between items-center py-2 border-b last:border-0"
+                      style={{ borderColor: 'rgba(0, 217, 255, 0.1)' }}
+                    >
                       <span className="font-medium text-sm text-white">{getServerNameById(item.server_id)}</span>
-                      <span className="text-sm text-[#ADADB8]">{formatDate(item.start_date)}</span>
+                      <span className="text-sm text-gray-400">{formatDate(item.start_date)}</span>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-            <p className="text-xs text-[#ADADB8] mt-2">
+            <p className="text-xs text-gray-500 mt-2">
               These are the dates when we started collecting data for each server.
             </p>
           </TabsContent>
