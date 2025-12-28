@@ -445,12 +445,9 @@ function StreamCard({
   const [imageError, setImageError] = useState(false);
 
   // Format the stream thumbnail URL
-  // Twitch uses {width} and {height} placeholders, Kick provides complete URLs
-  const thumbnailUrl = stream.platform === 'kick' 
-    ? stream.thumbnail_url // Kick URLs are already complete
-    : stream.thumbnail_url
-        .replace('{width}', '440')
-        .replace('{height}', '248');
+  // Twitch URLs are already formatted on the server with {width} and {height} replaced
+  // Kick URLs are already complete
+  const thumbnailUrl = stream.thumbnail_url;
   
   // Format viewer count with commas for thousands
   const formatViewerCount = (count: number): string => {
@@ -528,7 +525,12 @@ function StreamCard({
             src={thumbnailUrl}
             alt={`${stream.user_name} streaming ${stream.game_name}`}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-            onError={() => setImageError(true)}
+            onError={() => {
+              console.error(`[StreamCard] Failed to load thumbnail for ${stream.user_name}:`, thumbnailUrl);
+              setImageError(true);
+            }}
+            crossOrigin="anonymous"
+            loading="lazy"
           />
         )}
         
