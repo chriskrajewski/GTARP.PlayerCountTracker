@@ -12,6 +12,7 @@ Check it out at https://fivemstats.krtech.io
 - Dark mode support
 - Responsive design for all devices
 - Changelog displaying recent updates
+- **Multi-stream viewer** supporting Twitch and Kick streams simultaneously
 - **Customizable notification banner system** for site-wide announcements
 - Admin panel for banner management with real-time preview
 - User dismissal tracking and analytics
@@ -103,6 +104,49 @@ For production:
 ```bash
 vercel --prod
 ```
+
+## Multi-Stream Viewer
+
+The multi-stream viewer allows you to watch multiple Twitch and Kick streams simultaneously in a customizable grid layout.
+
+### URL Format
+
+The multi-stream viewer supports two URL parameter formats:
+
+**New format (recommended)** - `streams=` with platform prefixes:
+```
+/multi-stream?streams=twitch:shroud,kick:trainwreckstv,twitch:summit1g
+```
+
+**Legacy format** - `streamers=` (Twitch-only, backward compatible):
+```
+/multi-stream?streamers=shroud,summit1g,pokimane
+```
+
+### Features
+
+- **Mixed platform support**: Watch Twitch and Kick streams together
+- **Customizable layouts**: 11 preset layouts (Grid, Feature, Theater, Cascade, etc.)
+- **Drag & resize**: Freely position and resize stream panels
+- **Chat integration**: Twitch chat available for Twitch streams (Kick streams show "Open on Kick" links)
+- **Manual input**: Enter stream names directly with support for:
+  - Platform prefixes: `twitch:username`, `kick:slug`
+  - URLs: `https://www.twitch.tv/username`, `https://kick.com/slug`
+  - Bare usernames (defaults to Twitch for backward compatibility)
+- **Kick embedding**: Best-effort iframe embedding with automatic fallback to "Open on Kick" button if embedding is blocked
+
+### Usage Examples
+
+1. **From server stream list**: Select multiple streams (Twitch + Kick) and click "Launch Multi-Stream"
+2. **Manual entry**: Visit `/multi-stream` and use the manual input form
+3. **Direct link**: Share links using the `streams=` format
+
+### Kick Stream Behavior
+
+- Kick streams attempt to embed via iframe to `https://kick.com/<slug>`
+- If embedding fails or is blocked (X-Frame-Options/CSP), a fallback overlay appears after 5 seconds
+- Fallback overlay includes an "Open on Kick" button to view the stream in a new tab
+- Chat is only available for Twitch streams; Kick-only selections show a chat unavailable message with links to open Kick streams
 
 ## Notification Banner System
 
