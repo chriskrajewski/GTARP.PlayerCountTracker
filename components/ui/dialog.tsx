@@ -3,6 +3,7 @@
 import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
+import { motion, AnimatePresence } from "motion/react"
 
 import { cn } from "@/lib/utils"
 
@@ -21,9 +22,13 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 backdrop-blur-sm",
+      "fixed inset-0 z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
     )}
+    style={{
+      background: 'rgba(0, 0, 0, 0.75)',
+      backdropFilter: 'blur(4px)',
+    }}
     {...props}
   />
 ))
@@ -38,14 +43,42 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-[60] grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-3 sm:gap-4 border bg-background p-4 sm:p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
+        "fixed left-1/2 top-[80px] z-[60] grid w-full max-w-lg -translate-x-1/2 gap-3 sm:gap-4 border p-5 sm:p-6 shadow-2xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 rounded-xl overflow-hidden",
         className
       )}
+      style={{
+        background: 'linear-gradient(135deg, rgba(14, 14, 16, 0.98) 0%, rgba(10, 10, 12, 0.98) 100%)',
+        backdropFilter: 'blur(20px)',
+        borderColor: 'rgba(0, 217, 255, 0.15)',
+        boxShadow: '0 25px 80px rgba(0, 0, 0, 0.6), 0 0 60px rgba(0, 217, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+      }}
       {...props}
     >
+      {/* Top gradient line */}
+      <div 
+        className="absolute top-0 left-0 right-0 h-px"
+        style={{
+          background: 'linear-gradient(90deg, transparent, rgba(0, 217, 255, 0.4), transparent)'
+        }}
+      />
+      
+      {/* Background gradient orb */}
+      <div 
+        className="absolute -top-1/2 -right-1/2 w-full h-full rounded-full blur-3xl opacity-10 pointer-events-none"
+        style={{ 
+          background: 'radial-gradient(circle, rgba(0, 217, 255, 0.3) 0%, transparent 70%)' 
+        }}
+      />
+      
       {children}
-      <DialogPrimitive.Close className="absolute right-2 top-2 sm:right-4 sm:top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-        <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+      
+      <DialogPrimitive.Close 
+        className="absolute right-3 top-3 sm:right-4 sm:top-4 rounded-lg p-1.5 opacity-70 ring-offset-background transition-all hover:opacity-100 hover:bg-cyan-500/10 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 disabled:pointer-events-none group"
+        style={{
+          borderColor: 'rgba(0, 217, 255, 0.2)',
+        }}
+      >
+        <X className="h-4 w-4 text-gray-400 group-hover:text-cyan-400 transition-colors" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
@@ -73,7 +106,7 @@ const DialogFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
+      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 pt-2",
       className
     )}
     {...props}
@@ -88,9 +121,12 @@ const DialogTitle = React.forwardRef<
   <DialogPrimitive.Title
     ref={ref}
     className={cn(
-      "text-lg font-semibold leading-none tracking-tight",
+      "text-lg font-bold leading-none tracking-tight text-white",
       className
     )}
+    style={{
+      textShadow: '0 0 30px rgba(0, 217, 255, 0.2)'
+    }}
     {...props}
   />
 ))
@@ -102,7 +138,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
+    className={cn("text-sm text-gray-400", className)}
     {...props}
   />
 ))

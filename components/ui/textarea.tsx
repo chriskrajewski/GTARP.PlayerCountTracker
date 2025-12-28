@@ -1,5 +1,6 @@
-import * as React from "react"
+"use client"
 
+import * as React from "react"
 import { cn } from "@/lib/utils"
 
 const Textarea = React.forwardRef<
@@ -9,9 +10,24 @@ const Textarea = React.forwardRef<
   return (
     <textarea
       className={cn(
-        "flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+        "flex min-h-[100px] w-full rounded-lg border px-3.5 py-2.5 text-base placeholder:text-gray-500 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm transition-all duration-300 resize-none",
         className
       )}
+      style={{ 
+        backgroundColor: 'rgba(24, 24, 27, 0.8)', 
+        backdropFilter: 'blur(10px)',
+        borderColor: 'rgba(38, 38, 44, 0.8)',
+        color: '#FFFFFF',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.03)',
+      }}
+      onFocus={(e) => {
+        e.currentTarget.style.borderColor = 'rgba(0, 217, 255, 0.5)';
+        e.currentTarget.style.boxShadow = '0 0 0 2px rgba(0, 217, 255, 0.1), 0 0 20px rgba(0, 217, 255, 0.1), 0 2px 8px rgba(0, 0, 0, 0.2)';
+      }}
+      onBlur={(e) => {
+        e.currentTarget.style.borderColor = 'rgba(38, 38, 44, 0.8)';
+        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.03)';
+      }}
       ref={ref}
       {...props}
     />

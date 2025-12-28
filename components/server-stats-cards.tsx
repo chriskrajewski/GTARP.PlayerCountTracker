@@ -2,13 +2,14 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { type PlayerCountData, StreamCountData, ViewerCountData, ServerCapacityData, getServerStats, getStreamerStats, getViewerStats, calculateTimeAtMaxCapacity } from "@/lib/data"
-import { Users, Twitch, TrendingUp, Wifi, WifiOff, Radio, Gauge, AlertCircle } from 'lucide-react'
+import { Users, Twitch, TrendingUp, Wifi, WifiOff, Radio, Gauge, AlertCircle, Sparkles, Activity } from 'lucide-react'
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { motion } from "motion/react"
+import { motion, AnimatePresence } from "motion/react"
 import { AnimatedNumber, PulseIndicator } from "@/components/ui/motion"
 import { cardHover, springs } from "@/lib/motion"
 import { type LiveServerData } from "@/hooks/use-live-server-data"
+import { memo } from "react"
 
 // Kick icon component (they don't have an official icon in lucide)
 function KickIcon({ className }: { className?: string }) {
@@ -22,6 +23,114 @@ function KickIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+// Animated background gradient for cards
+const CardGradientBackground = memo(function CardGradientBackground() {
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
+      {/* Rotating gradient orb */}
+      <motion.div
+        className="absolute -top-1/2 -right-1/2 w-full h-full rounded-full blur-3xl opacity-30"
+        style={{ 
+          background: 'radial-gradient(circle, rgba(0, 217, 255, 0.15) 0%, transparent 70%)' 
+        }}
+        animate={{ rotate: 360 }}
+        transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+      />
+      {/* Grid pattern overlay */}
+      <div 
+        className="absolute inset-0 opacity-[0.02]"
+        style={{
+          backgroundImage: `
+            linear-gradient(rgba(0, 217, 255, 0.5) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0, 217, 255, 0.5) 1px, transparent 1px)
+          `,
+          backgroundSize: '30px 30px',
+        }}
+      />
+    </div>
+  )
+})
+
+// Stat item component with consistent styling
+const StatItem = memo(function StatItem({ 
+  label, 
+  value, 
+  icon: Icon, 
+  icons,
+  isLive = false, 
+  loading = false,
+  suffix,
+  subtext,
+  color = "white",
+  delay = 0
+}: { 
+  label: string
+  value: number
+  icon?: React.ComponentType<{ className?: string }>
+  icons?: React.ComponentType<{ className?: string }>[]
+  isLive?: boolean
+  loading?: boolean
+  suffix?: React.ReactNode
+  subtext?: string
+  color?: "white" | "green" | "purple" | "cyan"
+  delay?: number
+}) {
+  const colorClasses = {
+    white: "text-white",
+    green: "text-emerald-400",
+    purple: "text-purple-400",
+    cyan: "text-cyan-400",
+  }
+  
+  return (
+    <motion.div 
+      className="flex flex-col relative group"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: delay * 0.05, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+    >
+      {/* Hover glow effect */}
+      <div className="absolute -inset-2 bg-cyan-500/5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-sm" />
+      
+      <span className="text-xs text-gray-400 flex items-center gap-1.5 relative">
+        {icons ? (
+          <div className="flex items-center gap-1">
+            {icons.map((IconComponent, idx) => (
+              <IconComponent key={idx} className="h-3 w-3 text-cyan-400/70" />
+            ))}
+          </div>
+        ) : Icon ? (
+          <Icon className="h-3 w-3 text-cyan-400/70" />
+        ) : null}
+        {label}
+        {isLive && (
+          <motion.span 
+            className="text-emerald-400 text-[10px] flex items-center gap-0.5"
+            animate={{ opacity: [0.7, 1, 0.7] }}
+            transition={{ duration: 2, repeat: Infinity }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          </motion.span>
+        )}
+      </span>
+      <div className="flex items-baseline gap-1.5 min-h-[28px] relative">
+        {loading ? (
+          <span className="text-xl font-bold text-white">-</span>
+        ) : (
+          <AnimatedNumber 
+            value={value} 
+            className={`text-xl font-bold ${colorClasses[color]}`} 
+          />
+        )}
+        {suffix}
+      </div>
+      {subtext && (
+        <span className="text-[10px] text-gray-500 mt-0.5">{subtext}</span>
+      )}
+    </motion.div>
+  )
+})
 
 interface ServerStatsCardsProps {
   // Historical data (from Supabase) - used for peak/average calculations
@@ -97,21 +206,14 @@ export default function ServerStatsCards({
     if (percent >= 100) return 'text-red-400'
     if (percent >= 80) return 'text-orange-400'
     if (percent >= 60) return 'text-yellow-400'
-    return 'text-green-400'
+    return 'text-emerald-400'
   }
 
-  // Animation variants for stat items
-  const statItemVariants = {
-    hidden: { opacity: 0, y: 10 },
-    visible: (i: number) => ({
-      opacity: 1,
-      y: 0,
-      transition: {
-        delay: i * 0.05,
-        duration: 0.3,
-        ease: [0.22, 1, 0.36, 1]
-      }
-    })
+  const getCapacityGlow = (percent: number) => {
+    if (percent >= 100) return 'shadow-red-500/30'
+    if (percent >= 80) return 'shadow-orange-500/30'
+    if (percent >= 60) return 'shadow-yellow-500/30'
+    return 'shadow-emerald-500/30'
   }
 
   // Determine if we're showing live or historical current data
@@ -122,30 +224,50 @@ export default function ServerStatsCards({
       initial={{ opacity: 0, y: 20, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={springs.smooth}
-      whileHover={cardHover.whileHover}
-      style={{ willChange: "transform, box-shadow" }}
+      className="group"
     >
-      <Card className="col-span-1 bg-gray-800 border-gray-700 overflow-hidden">
-        <CardHeader className="pb-2 border-b border-gray-700">
+      <Card className="col-span-1 overflow-hidden relative" variant="elevated">
+        <CardGradientBackground />
+        
+        {/* Header */}
+        <CardHeader className="pb-3 relative z-10">
           <motion.div
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.1, ...springs.snappy }}
             className="flex items-center justify-between gap-3"
           >
-            <CardTitle className="text-lg font-medium text-white flex items-center gap-2">
-              {serverName}
-              {/* Loading indicator for live data */}
-              {liveLoading && (
-                <motion.span
-                  animate={{ opacity: [0.5, 1, 0.5] }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
-                  className="text-xs text-gray-400"
-                >
-                  updating...
-                </motion.span>
-              )}
-            </CardTitle>
+            <div className="flex items-center gap-3">
+              {/* Server status indicator */}
+              <motion.div
+                className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400' : 'bg-gray-500'}`}
+                animate={isOnline ? { 
+                  scale: [1, 1.2, 1],
+                  opacity: [1, 0.7, 1]
+                } : {}}
+                transition={{ duration: 2, repeat: Infinity }}
+                style={{
+                  boxShadow: isOnline ? '0 0 10px rgba(52, 211, 153, 0.5)' : 'none'
+                }}
+              />
+              
+              <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
+                <span className="bg-gradient-to-r from-white to-cyan-100 bg-clip-text text-transparent">
+                  {serverName}
+                </span>
+                {/* Loading indicator for live data */}
+                {liveLoading && (
+                  <motion.span
+                    animate={{ opacity: [0.5, 1, 0.5] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                    className="text-xs text-cyan-400/70 flex items-center gap-1"
+                  >
+                    <Activity className="h-3 w-3" />
+                    updating
+                  </motion.span>
+                )}
+              </CardTitle>
+            </div>
             
             {/* Current Capacity indicator - shows on every card */}
             {latestCapacity && (
@@ -153,7 +275,15 @@ export default function ServerStatsCards({
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.2, ...springs.snappy }}
-                className="flex items-center gap-1.5 px-2 py-1 bg-[#18181b] rounded-md border border-[#26262c]"
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border backdrop-blur-sm shadow-lg ${getCapacityGlow(currentCapacityPercent)}`}
+                style={{
+                  background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+                  borderColor: currentCapacityPercent >= 100 
+                    ? 'rgba(239, 68, 68, 0.3)' 
+                    : currentCapacityPercent >= 80 
+                      ? 'rgba(249, 115, 22, 0.3)'
+                      : 'rgba(0, 217, 255, 0.2)'
+                }}
               >
                 {/* Capacity indicator - shows if currently at max */}
                 {currentPlayers >= latestCapacity ? (
@@ -165,316 +295,161 @@ export default function ServerStatsCards({
                     transition={{ duration: 2, repeat: Infinity }}
                     className="text-red-400"
                   >
-                    <AlertCircle className="h-3 w-3" />
+                    <AlertCircle className="h-3.5 w-3.5" />
                   </motion.span>
                 ) : (
-                  <Gauge className={`h-3 w-3 ${getCapacityColor(currentCapacityPercent)}`} />
+                  <Gauge className={`h-3.5 w-3.5 ${getCapacityColor(currentCapacityPercent)}`} />
                 )}
-                <span className="text-[10px] text-gray-400 whitespace-nowrap">
-                  Capacity
-                </span>
-                <span className={`text-xs font-semibold ${getCapacityColor(currentCapacityPercent)}`}>
-                  {currentCapacityPercent}%
-                </span>
+                <div className="flex flex-col items-end">
+                  <span className={`text-sm font-bold ${getCapacityColor(currentCapacityPercent)}`}>
+                    {currentCapacityPercent}%
+                  </span>
+                  <span className="text-[9px] text-gray-500 -mt-0.5">capacity</span>
+                </div>
               </motion.div>
             )}
           </motion.div>
         </CardHeader>
-        <CardContent className="grid grid-cols-3 gap-4 pt-4">
-          {/* Current Players - LIVE DATA */}
-          <motion.div 
-            className="flex flex-col"
-            variants={statItemVariants}
-            initial="hidden"
-            animate="visible"
-            custom={0}
-          >
-            <span className="text-xs text-gray-400 flex items-center gap-1">
-              <Users className="h-3 w-3" /> Current Players
-              {isShowingLiveData && (
-                <motion.span 
-                  className="text-green-400 text-[10px]"
-                  animate={{ opacity: [0.7, 1, 0.7] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                >
-                  ●
-                </motion.span>
-              )}
-            </span>
-            <div className="flex items-baseline gap-1 min-h-[28px]">
-              {loading && !hasLiveData ? (
-                <span className="text-xl font-bold text-white">-</span>
-              ) : (
-                <AnimatedNumber 
-                  value={currentPlayers} 
-                  className={`text-xl font-bold ${isShowingLiveData ? 'text-green-400' : 'text-white'}`} 
-                />
-              )}
-              {latestCapacity && (
-                <span className="text-sm text-gray-400">/ {latestCapacity}</span>
-              )}
-            </div>
-          </motion.div>
-
-          {/* Peak Players - HISTORICAL DATA */}
-          <motion.div 
-            className="flex flex-col"
-            variants={statItemVariants}
-            initial="hidden"
-            animate="visible"
-            custom={1}
-          >
-            <span className="text-xs text-gray-400">Peak Players</span>
-            <div className="min-h-[28px] flex items-center">
-              {loading ? (
-                <span className="text-xl font-bold text-white">-</span>
-              ) : (
-                <AnimatedNumber value={historicalPeak} className="text-xl font-bold text-white" />
-              )}
-            </div>
-          </motion.div>
-
-          {/* Average Players - HISTORICAL DATA */}
-          <motion.div 
-            className="flex flex-col"
-            variants={statItemVariants}
-            initial="hidden"
-            animate="visible"
-            custom={2}
-          >
-            <span className="text-xs text-gray-400">Average Players</span>
-            <div className="min-h-[28px] flex items-center">
-              {loading ? (
-                <span className="text-xl font-bold text-white">-</span>
-              ) : (
-                <AnimatedNumber value={historicalAverage} className="text-xl font-bold text-white" />
-              )}
-            </div>
-          </motion.div>
+        
+        {/* Stats Grid */}
+        <CardContent className="grid grid-cols-3 gap-4 pt-2 relative z-10">
+          {/* Row 1: Player Stats */}
+          <StatItem 
+            label="Current" 
+            value={currentPlayers} 
+            icon={Users}
+            isLive={isShowingLiveData}
+            loading={loading && !hasLiveData}
+            color={isShowingLiveData ? "green" : "white"}
+            suffix={latestCapacity && <span className="text-sm text-gray-500">/ {latestCapacity}</span>}
+            delay={0}
+          />
+          <StatItem 
+            label="Peak" 
+            value={historicalPeak}
+            loading={loading}
+            delay={1}
+          />
+          <StatItem 
+            label="Average" 
+            value={historicalAverage}
+            loading={loading}
+            delay={2}
+          />
           
-          {/* Current Streams - LIVE DATA */}
-          <motion.div 
-            className="flex flex-col"
-            variants={statItemVariants}
-            initial="hidden"
-            animate="visible"
-            custom={3}
-          >
-            <span className="text-xs text-gray-400 flex items-center gap-1">
-              <div className="flex items-center gap-1">
-                <Twitch className="h-3 w-3 text-purple-400" />
-                {(hasLiveTwitchData && hasLiveKickData) && (
-                  <KickIcon className="h-3 w-3" style={{ color: '#53FC18' }} />
-                )}
-                {!hasLiveTwitchData && hasLiveKickData && (
-                  <KickIcon className="h-3 w-3" style={{ color: '#53FC18' }} />
-                )}
-              </div>
-              Current Streams
-              {isShowingLiveData && (
-                <motion.span 
-                  className="text-green-400 text-[10px]"
-                  animate={{ opacity: [0.7, 1, 0.7] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                >
-                  ●
-                </motion.span>
-              )}
-            </span>
-            {loading && !hasLiveData ? (
-              <span className="text-xl font-bold text-white">-</span>
-            ) : (
-              <div className="flex flex-col min-h-[28px] justify-center">
-                <AnimatedNumber 
-                  value={currentStreams} 
-                  className={`text-xl font-bold ${isShowingLiveData ? 'text-purple-400' : 'text-white'}`} 
-                />
-                {(hasLiveTwitchData && hasLiveKickData) && (twitchStreams > 0 || kickStreams > 0) && (
-                  <span className="text-[10px] text-gray-500 mt-0.5">
-                    {twitchStreams > 0 && `${twitchStreams} Twitch`}
-                    {twitchStreams > 0 && kickStreams > 0 && ' • '}
-                    {kickStreams > 0 && `${kickStreams} Kick`}
-                  </span>
-                )}
-              </div>
-            )}
-          </motion.div>
-
-          {/* Peak Streams - HISTORICAL DATA */}
-          <motion.div 
-            className="flex flex-col"
-            variants={statItemVariants}
-            initial="hidden"
-            animate="visible"
-            custom={4}
-          >
-            <span className="text-xs text-gray-400">Peak Streams</span>
-            <div className="min-h-[28px] flex items-center">
-              {loading ? (
-                <span className="text-xl font-bold text-white">-</span>
-              ) : (
-                <AnimatedNumber value={streamPeak} className="text-xl font-bold text-white" />
-              )}
-            </div>
-          </motion.div>
-
-          {/* Average Streams - HISTORICAL DATA */}
-          <motion.div 
-            className="flex flex-col"
-            variants={statItemVariants}
-            initial="hidden"
-            animate="visible"
-            custom={5}
-          >
-            <span className="text-xs text-gray-400">Average Streams</span>
-            <div className="min-h-[28px] flex items-center">
-              {loading ? (
-                <span className="text-xl font-bold text-white">-</span>
-              ) : (
-                <AnimatedNumber value={streamAverage} className="text-xl font-bold text-white" />
-              )}
-            </div>
-          </motion.div>
+          {/* Row 2: Stream Stats */}
+          <StatItem 
+            label="Streams" 
+            value={currentStreams}
+            icons={[Twitch, KickIcon]}
+            isLive={isShowingLiveData}
+            loading={loading && !hasLiveData}
+            color={isShowingLiveData ? "purple" : "white"}
+            delay={3}
+          />
+          <StatItem 
+            label="Peak Streams" 
+            value={streamPeak}
+            loading={loading}
+            delay={4}
+          />
+          <StatItem 
+            label="Avg Streams" 
+            value={streamAverage}
+            loading={loading}
+            delay={5}
+          />
           
-          {/* Current Viewers - LIVE DATA */}
-          <motion.div 
-            className="flex flex-col"
-            variants={statItemVariants}
-            initial="hidden"
-            animate="visible"
-            custom={6}
-          >
-            <span className="text-xs text-gray-400 flex items-center gap-1">
-              <div className="flex items-center gap-1">
-                <Users className="h-3 w-3" />
-                {(hasLiveTwitchData && hasLiveKickData) && (
-                  <div className="flex items-center gap-0.5">
-                    <Twitch className="h-2.5 w-2.5 text-purple-400" />
-                    <KickIcon className="h-2.5 w-2.5" style={{ color: '#53FC18' }} />
-                  </div>
-                )}
-              </div>
-              Current Viewers
-              {isShowingLiveData && (
-                <motion.span 
-                  className="text-green-400 text-[10px]"
-                  animate={{ opacity: [0.7, 1, 0.7] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                >
-                  ●
-                </motion.span>
-              )}
-            </span>
-            {loading && !hasLiveData ? (
-              <span className="text-xl font-bold text-white">-</span>
-            ) : (
-              <div className="flex flex-col min-h-[28px] justify-center">
-                <AnimatedNumber 
-                  value={currentViewers} 
-                  className={`text-xl font-bold ${isShowingLiveData ? 'text-purple-400' : 'text-white'}`} 
-                />
-                {(hasLiveTwitchData && hasLiveKickData) && (twitchViewers > 0 || kickViewers > 0) && (
-                  <span className="text-[10px] text-gray-500 mt-0.5">
-                    {twitchViewers > 0 && `${twitchViewers.toLocaleString()} Twitch`}
-                    {twitchViewers > 0 && kickViewers > 0 && ' • '}
-                    {kickViewers > 0 && `${kickViewers.toLocaleString()} Kick`}
-                  </span>
-                )}
-              </div>
-            )}
-          </motion.div>
-
-          {/* Peak Viewers - HISTORICAL DATA */}
-          <motion.div 
-            className="flex flex-col"
-            variants={statItemVariants}
-            initial="hidden"
-            animate="visible"
-            custom={7}
-          >
-            <span className="text-xs text-gray-400">Peak Viewers</span>
-            <div className="min-h-[28px] flex items-center">
-              {loading ? (
-                <span className="text-xl font-bold text-white">-</span>
-              ) : (
-                <AnimatedNumber value={viewerPeak} className="text-xl font-bold text-white" />
-              )}
-            </div>
-          </motion.div>
-
-          {/* Average Viewers - HISTORICAL DATA */}
-          <motion.div 
-            className="flex flex-col"
-            variants={statItemVariants}
-            initial="hidden"
-            animate="visible"
-            custom={8}
-          >
-            <span className="text-xs text-gray-400">Average Viewers</span>
-            <div className="min-h-[28px] flex items-center">
-              {loading ? (
-                <span className="text-xl font-bold text-white">-</span>
-              ) : (
-                <AnimatedNumber value={viewerAverage} className="text-xl font-bold text-white" />
-              )}
-            </div>
-          </motion.div>
+          {/* Row 3: Viewer Stats */}
+          <StatItem 
+            label="Viewers" 
+            value={currentViewers}
+            icons={[Twitch, KickIcon]}
+            isLive={isShowingLiveData}
+            loading={loading && !hasLiveData}
+            color={isShowingLiveData ? "purple" : "white"}
+            delay={6}
+          />
+          <StatItem 
+            label="Peak Viewers" 
+            value={viewerPeak}
+            loading={loading}
+            delay={7}
+          />
+          <StatItem 
+            label="Avg Viewers" 
+            value={viewerAverage}
+            loading={loading}
+            delay={8}
+          />
         </CardContent>
-        <CardFooter className="pt-2 pb-4 flex flex-wrap gap-2">
-          <Link href={`/streams/${serverId}`} className="flex-1 min-w-fit">
-            <motion.div
-              whileHover={{ scale: 1.02 }}
+        
+        {/* Footer */}
+        <CardFooter className="pt-3 pb-4 flex items-center gap-2 relative z-10">
+          <Link href={`/streams/${serverId}`} className="flex-1">
+            <motion.button
+              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-300 border backdrop-blur-sm"
+              style={{
+                background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+                borderColor: 'rgba(0, 217, 255, 0.15)',
+              }}
+              whileHover={{ 
+                borderColor: 'rgba(0, 217, 255, 0.4)',
+                boxShadow: '0 0 15px rgba(0, 217, 255, 0.1)'
+              }}
               whileTap={{ scale: 0.98 }}
-              transition={springs.stiff}
             >
-              <button className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-white rounded-md hover:bg-[#26262c] hover:shadow-lg hover:shadow-[#00D9FF]/20 transition-all text-xs font-medium border border-[#26262c] hover:border-[#00D9FF]/50">
-                <motion.div
-                  className="flex items-center gap-1"
-                  animate={{ 
-                    opacity: currentStreams > 0 ? [1, 0.5, 1] : 1
-                  }}
-                  transition={{ 
-                    duration: 2, 
-                    repeat: currentStreams > 0 ? Infinity : 0,
-                    ease: "easeInOut"
-                  }}
-                >
-                  {hasLiveTwitchData && (
-                    <Twitch className="h-3.5 w-3.5 text-purple-400" />
-                  )}
-                  {hasLiveKickData && (
-                    <KickIcon className="h-3.5 w-3.5" style={{ color: '#53FC18' }} />
-                  )}
-                  {!hasLiveTwitchData && !hasLiveKickData && (
-                    <Twitch className="h-3.5 w-3.5 text-purple-400" />
-                  )}
-                </motion.div>
-                <span>Live Streams</span>
-                <motion.span 
-                  className="inline-flex items-center justify-center bg-[#26262c] rounded-full h-4 w-4 text-[10px] font-semibold"
-                  key={currentStreams}
-                  initial={{ scale: 1.3 }}
-                  animate={{ scale: 1 }}
-                  transition={springs.bouncy}
-                >
-                  {currentStreams}
-                </motion.span>
-              </button>
-            </motion.div>
-          </Link>
-          {onViewChanges && (
-            <motion.div
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              transition={springs.stiff}
-            >
-              <button 
-                onClick={onViewChanges}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] text-white rounded-md hover:bg-[#26262c] hover:shadow-lg hover:shadow-[#00D9FF]/20 transition-all text-xs font-medium border border-[#26262c] hover:border-[#00D9FF]/50"
+              <motion.div
+                className="flex items-center gap-1"
+                animate={{ 
+                  opacity: currentStreams > 0 ? [1, 0.6, 1] : 1
+                }}
+                transition={{ 
+                  duration: 2, 
+                  repeat: currentStreams > 0 ? Infinity : 0,
+                  ease: "easeInOut"
+                }}
               >
-                <span>Server Changes</span>
-              </button>
-            </motion.div>
+                {hasLiveTwitchData && (
+                  <Twitch className="h-3.5 w-3.5 text-purple-400" />
+                )}
+                {hasLiveKickData && (
+                  <KickIcon className="h-3.5 w-3.5" style={{ color: '#53FC18' }} />
+                )}
+                {!hasLiveTwitchData && !hasLiveKickData && (
+                  <Twitch className="h-3.5 w-3.5 text-purple-400" />
+                )}
+              </motion.div>
+              <span className="text-white">Streams</span>
+              <motion.span 
+                className="inline-flex items-center justify-center bg-cyan-500/20 text-cyan-400 rounded-full h-4 min-w-4 px-1 text-[10px] font-bold border border-cyan-500/30"
+                key={currentStreams}
+                initial={{ scale: 1.2 }}
+                animate={{ scale: 1 }}
+                transition={springs.bouncy}
+              >
+                {currentStreams}
+              </motion.span>
+            </motion.button>
+          </Link>
+          
+          {onViewChanges && (
+            <motion.button 
+              onClick={onViewChanges}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-300 border backdrop-blur-sm text-white"
+              style={{
+                background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+                borderColor: 'rgba(0, 217, 255, 0.15)',
+              }}
+              whileHover={{ 
+                borderColor: 'rgba(0, 217, 255, 0.4)',
+                boxShadow: '0 0 15px rgba(0, 217, 255, 0.1)'
+              }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
+              Changes
+            </motion.button>
           )}
         </CardFooter>
       </Card>
