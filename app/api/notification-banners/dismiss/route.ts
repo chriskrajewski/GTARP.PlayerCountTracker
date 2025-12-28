@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createBrowserClient } from '@/lib/supabase-browser';
+import { createServiceRoleClient } from '@/lib/supabase-service-role';
 import { z } from 'zod';
 
 // Validation schema
@@ -23,6 +24,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { banner_id } = DismissBannerSchema.parse(body);
     const userId = getUserId(request);
+
+    // Use browser client for public reads
+    const supabase = createBrowserClient();
 
     // Check if banner exists and is dismissible
     const { data: banner, error: bannerError } = await supabase
@@ -63,8 +67,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Increment dismiss count (only if this was a new dismissal)
+    // Use service role for this update since it's an admin operation
     if (!dismissError) {
-      await supabase
+      const serviceRoleClient = createServiceRoleClient();
+      await serviceRoleClient
         .from('notification_banners')
         .update({ dismiss_count: (banner.dismiss_count || 0) + 1 })
         .eq('id', banner_id);
@@ -95,6 +101,9 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const userId = getUserId(request);
+
+    // Use browser client for public reads
+    const supabase = createBrowserClient();
 
     const { data: dismissals, error } = await supabase
       .from('notification_banner_dismissals')
@@ -130,6 +139,9 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const bannerId = searchParams.get('banner_id');
     const userId = getUserId(request);
+
+    // Use browser client for user-specific deletes
+    const supabase = createBrowserClient();
 
     let query = supabase
       .from('notification_banner_dismissals')

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAdminRequest } from '@/lib/admin-auth-server';
-import { createServerClient } from '@/lib/supabase-server';
+import { createServiceRoleClient } from '@/lib/supabase-service-role';
 import { ServerConfiguration, ServerFormData, PaginatedResponse } from '@/lib/admin-types';
 import { z } from 'zod';
 
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
     const status = searchParams.get('status');
 
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
     
     let query = supabase
       .from('server_xref')
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = ServerFormSchema.parse(body);
 
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
 
     // Check if server_id already exists
     const { data: existingServer } = await supabase

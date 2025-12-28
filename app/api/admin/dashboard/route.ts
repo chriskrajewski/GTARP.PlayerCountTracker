@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAdminRequest } from '@/lib/admin-auth-server';
-import { createServerClient } from '@/lib/supabase-server';
+import { createServiceRoleClient } from '@/lib/supabase-service-role';
 import { AdminDashboardData, SystemMetrics, AuditLog, SystemAlert } from '@/lib/admin-types';
 
 export async function GET(request: NextRequest) {
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
     
     // Fetch system metrics
     const metrics = await getSystemMetrics(supabase);
