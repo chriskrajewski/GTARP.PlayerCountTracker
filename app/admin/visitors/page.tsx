@@ -30,7 +30,9 @@ import {
   BarChart3,
   PieChart,
   Gauge,
-  ChevronRight
+  ChevronRight,
+  Menu,
+  X
 } from 'lucide-react';
 import { createBrowserClient } from '@/lib/supabase-browser';
 import { useToast } from '@/hooks/use-toast';
@@ -124,6 +126,8 @@ export default function EnhancedVisitorAnalyticsPage() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [selectedSession, setSelectedSession] = useState<VisitorSession | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const { toast } = useToast();
 
   const fetchVisitorData = async () => {
@@ -266,36 +270,70 @@ export default function EnhancedVisitorAnalyticsPage() {
 
   return (
     <AdminProtected>
-      <div className="flex h-screen bg-[#0e0e10]">
-        <AdminSidebar />
+      <div className="flex h-screen bg-[#0e0e10] flex-col md:flex-row">
+        {/* Mobile Sidebar Overlay */}
+        {sidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-black/50 z-40 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
         
-        <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Sidebar */}
+        <div className={`fixed md:relative w-64 h-screen z-50 md:z-auto transition-transform duration-300 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}>
+          <AdminSidebar />
+        </div>
+        
+        <div className="flex-1 flex flex-col overflow-hidden w-full">
           {/* Header */}
-          <div className="bg-[#1a1a1e] border-b border-[#26262c] px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                  <Users className="h-6 w-6" />
-                  Detailed Visitor Analytics
-                </h1>
-                <p className="text-[#ADADB8] text-sm">
-                  Comprehensive visitor tracking and behavior analysis
-                </p>
+          <div className="bg-[#1a1a1e] border-b border-[#26262c] px-4 md:px-6 py-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <Button
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  variant="ghost"
+                  size="icon"
+                  className="md:hidden text-white hover:bg-[#26262c]"
+                >
+                  {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                </Button>
+                <div className="min-w-0">
+                  <h1 className="text-lg md:text-2xl font-bold text-white flex items-center gap-2 truncate">
+                    <Users className="h-5 md:h-6 w-5 md:w-6 flex-shrink-0" />
+                    <span className="truncate">Visitor Analytics</span>
+                  </h1>
+                  <p className="text-[#ADADB8] text-xs md:text-sm hidden sm:block">
+                    Comprehensive visitor tracking
+                  </p>
+                </div>
               </div>
               
-              <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-2">
                 <Button
                   onClick={handleExport}
                   variant="outline"
-                  className="bg-[#26262c] border-[#40404a] text-white hover:bg-[#333339]"
+                  size="sm"
+                  className="bg-[#26262c] border-[#40404a] text-white hover:bg-[#333339] hidden sm:flex"
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Export
                 </Button>
                 <Button
+                  onClick={handleExport}
+                  variant="outline"
+                  size="icon"
+                  className="bg-[#26262c] border-[#40404a] text-white hover:bg-[#333339] sm:hidden"
+                  title="Export"
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+                <Button
                   onClick={handleRefresh}
                   disabled={refreshing}
                   variant="outline"
+                  size="icon"
                   className="bg-[#26262c] border-[#40404a] text-white hover:bg-[#333339]"
                 >
                   <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
@@ -305,11 +343,11 @@ export default function EnhancedVisitorAnalyticsPage() {
           </div>
 
           {/* Main Content */}
-          <div className="flex-1 overflow-auto p-6">
-            <div className="max-w-7xl mx-auto space-y-6">
+          <div className="flex-1 overflow-auto p-3 md:p-6">
+            <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
               
               {/* Key Metrics */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
                 <Card className="bg-[#1a1a1e] border-[#26262c]">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-xs font-medium text-[#ADADB8]">
@@ -317,7 +355,7 @@ export default function EnhancedVisitorAnalyticsPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-white">
+                    <div className="text-xl md:text-2xl font-bold text-white">
                       {metrics.totalVisitors.toLocaleString()}
                     </div>
                   </CardContent>
@@ -330,7 +368,7 @@ export default function EnhancedVisitorAnalyticsPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-emerald-400">
+                    <div className="text-xl md:text-2xl font-bold text-emerald-400">
                       {metrics.avgEngagementScore}/100
                     </div>
                   </CardContent>
@@ -339,12 +377,12 @@ export default function EnhancedVisitorAnalyticsPage() {
                 <Card className="bg-[#1a1a1e] border-[#26262c]">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-xs font-medium text-[#ADADB8]">
-                      Avg Session Duration
+                      Avg Duration
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-blue-400">
-                      {Math.floor(metrics.avgSessionDuration / 60)}m {metrics.avgSessionDuration % 60}s
+                    <div className="text-xl md:text-2xl font-bold text-blue-400">
+                      {Math.floor(metrics.avgSessionDuration / 60)}m
                     </div>
                   </CardContent>
                 </Card>
@@ -352,11 +390,11 @@ export default function EnhancedVisitorAnalyticsPage() {
                 <Card className="bg-[#1a1a1e] border-[#26262c]">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-xs font-medium text-[#ADADB8]">
-                      Avg Page Load
+                      Avg Load
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-purple-400">
+                    <div className="text-xl md:text-2xl font-bold text-purple-400">
                       {metrics.avgPageLoadTime}ms
                     </div>
                   </CardContent>
@@ -364,7 +402,7 @@ export default function EnhancedVisitorAnalyticsPage() {
               </div>
 
               {/* Additional Metrics */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4">
                 <Card className="bg-[#1a1a1e] border-[#26262c]">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-xs font-medium text-[#ADADB8]">
@@ -372,7 +410,7 @@ export default function EnhancedVisitorAnalyticsPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-emerald-400">
+                    <div className="text-xl md:text-2xl font-bold text-emerald-400">
                       {metrics.activeVisitors}
                     </div>
                     <p className="text-xs text-[#ADADB8] mt-1">
@@ -388,7 +426,7 @@ export default function EnhancedVisitorAnalyticsPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-blue-400">
+                    <div className="text-xl md:text-2xl font-bold text-blue-400">
                       {metrics.returningVisitors}
                     </div>
                     <p className="text-xs text-[#ADADB8] mt-1">
@@ -404,7 +442,7 @@ export default function EnhancedVisitorAnalyticsPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-red-400">
+                    <div className="text-xl md:text-2xl font-bold text-red-400">
                       {metrics.totalErrors}
                     </div>
                     <p className="text-xs text-[#ADADB8] mt-1">
@@ -415,15 +453,25 @@ export default function EnhancedVisitorAnalyticsPage() {
               </div>
 
               {/* Filters */}
-              <div className="bg-[#1a1a1e] border border-[#26262c] rounded-lg p-4">
-                <div className="flex items-center gap-4 flex-wrap">
-                  <div className="flex items-center space-x-2">
+              <div className="bg-[#1a1a1e] border border-[#26262c] rounded-lg p-3 md:p-4">
+                <div className="flex items-center justify-between mb-3 md:mb-0">
+                  <div className="flex items-center gap-2">
                     <Filter className="h-4 w-4 text-[#ADADB8]" />
-                    <Label className="text-white">Filters:</Label>
+                    <Label className="text-white text-sm md:text-base">Filters:</Label>
                   </div>
+                  <Button
+                    onClick={() => setShowFilters(!showFilters)}
+                    variant="ghost"
+                    size="sm"
+                    className="md:hidden text-[#ADADB8] hover:text-white"
+                  >
+                    {showFilters ? 'Hide' : 'Show'}
+                  </Button>
+                </div>
 
+                <div className={`grid grid-cols-1 md:grid-cols-5 gap-2 md:gap-3 ${showFilters ? 'block' : 'hidden md:grid'}`}>
                   <Select value={timeRange} onValueChange={setTimeRange}>
-                    <SelectTrigger className="w-40 bg-[#26262c] border-[#40404a] text-white">
+                    <SelectTrigger className="w-full bg-[#26262c] border-[#40404a] text-white text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-[#26262c] border-[#40404a]">
@@ -434,7 +482,7 @@ export default function EnhancedVisitorAnalyticsPage() {
                   </Select>
 
                   <Select value={filterDevice} onValueChange={setFilterDevice}>
-                    <SelectTrigger className="w-40 bg-[#26262c] border-[#40404a] text-white">
+                    <SelectTrigger className="w-full bg-[#26262c] border-[#40404a] text-white text-sm">
                       <SelectValue placeholder="Device" />
                     </SelectTrigger>
                     <SelectContent className="bg-[#26262c] border-[#40404a]">
@@ -448,7 +496,7 @@ export default function EnhancedVisitorAnalyticsPage() {
                   </Select>
 
                   <Select value={filterBrowser} onValueChange={setFilterBrowser}>
-                    <SelectTrigger className="w-40 bg-[#26262c] border-[#40404a] text-white">
+                    <SelectTrigger className="w-full bg-[#26262c] border-[#40404a] text-white text-sm">
                       <SelectValue placeholder="Browser" />
                     </SelectTrigger>
                     <SelectContent className="bg-[#26262c] border-[#40404a]">
@@ -462,7 +510,7 @@ export default function EnhancedVisitorAnalyticsPage() {
                   </Select>
 
                   <Select value={filterCountry} onValueChange={setFilterCountry}>
-                    <SelectTrigger className="w-40 bg-[#26262c] border-[#40404a] text-white">
+                    <SelectTrigger className="w-full bg-[#26262c] border-[#40404a] text-white text-sm">
                       <SelectValue placeholder="Country" />
                     </SelectTrigger>
                     <SelectContent className="bg-[#26262c] border-[#40404a]">
@@ -479,7 +527,7 @@ export default function EnhancedVisitorAnalyticsPage() {
                     placeholder="Search session ID..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="bg-[#26262c] border-[#40404a] text-white w-48"
+                    className="w-full bg-[#26262c] border-[#40404a] text-white text-sm"
                   />
                 </div>
               </div>
@@ -487,11 +535,11 @@ export default function EnhancedVisitorAnalyticsPage() {
               {/* Detailed Visitor List */}
               <Card className="bg-[#1a1a1e] border-[#26262c]">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-white">
+                  <CardTitle className="flex items-center gap-2 text-white text-base md:text-lg">
                     <Activity className="h-5 w-5" />
-                    Detailed Visitor Sessions ({filteredVisitors.length})
+                    Visitor Sessions ({filteredVisitors.length})
                   </CardTitle>
-                  <CardDescription className="text-[#ADADB8]">
+                  <CardDescription className="text-[#ADADB8] text-xs md:text-sm">
                     Complete visitor information with engagement metrics
                   </CardDescription>
                 </CardHeader>
@@ -499,26 +547,85 @@ export default function EnhancedVisitorAnalyticsPage() {
                   {loading ? (
                     <div className="flex items-center justify-center py-8">
                       <RefreshCw className="h-6 w-6 animate-spin text-[#9147ff] mr-2" />
-                      <span className="text-[#ADADB8]">Loading analytics...</span>
+                      <span className="text-[#ADADB8] text-sm">Loading analytics...</span>
                     </div>
                   ) : filteredVisitors.length === 0 ? (
                     <div className="text-center py-8">
                       <Users className="h-12 w-12 text-[#ADADB8] mx-auto mb-4" />
-                      <p className="text-[#ADADB8]">No visitor data available for this period</p>
+                      <p className="text-[#ADADB8] text-sm">No visitor data available for this period</p>
                     </div>
                   ) : (
                     <div className="space-y-3 max-h-96 overflow-y-auto">
                       {filteredVisitors.map((visitor) => (
                         <div 
                           key={visitor.session_id} 
-                          className="p-4 bg-[#26262c]/30 rounded-lg border border-[#40404a]/30 hover:bg-[#26262c]/50 cursor-pointer transition-colors"
+                          className="p-3 md:p-4 bg-[#26262c]/30 rounded-lg border border-[#40404a]/30 hover:bg-[#26262c]/50 cursor-pointer transition-colors"
                           onClick={() => {
                             setSelectedSessionId(visitor.session_id);
                             setSelectedSession(visitor);
                             setIsDetailModalOpen(true);
                           }}
                         >
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                          {/* Mobile Layout */}
+                          <div className="md:hidden space-y-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs text-[#ADADB8]">Session ID</p>
+                                <p className="text-sm font-mono text-white truncate">{visitor.session_id.substring(0, 12)}...</p>
+                              </div>
+                              <ChevronRight className="h-4 w-4 text-[#ADADB8] flex-shrink-0 mt-1" />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <p className="text-xs text-[#ADADB8]">Device / Browser</p>
+                                <p className="text-sm text-white truncate">
+                                  {visitor.device_type || 'N/A'} / {visitor.browser_name || 'N/A'}
+                                </p>
+                              </div>
+
+                              <div>
+                                <p className="text-xs text-[#ADADB8]">Location</p>
+                                <p className="text-sm text-white truncate">
+                                  {visitor.city || visitor.region || visitor.country || 'N/A'}
+                                </p>
+                              </div>
+
+                              <div>
+                                <p className="text-xs text-[#ADADB8]">Pages</p>
+                                <p className="text-sm text-white">{visitor.pages_visited || 0}</p>
+                              </div>
+
+                              <div>
+                                <p className="text-xs text-[#ADADB8]">Duration</p>
+                                <p className="text-sm text-white">
+                                  {Math.floor((visitor.session_duration_seconds || 0) / 60)}m
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2 flex-wrap items-center">
+                              {visitor.is_bot && (
+                                <Badge className="bg-amber-400/20 text-amber-400 border-amber-400/30 text-xs">
+                                  <Bot className="h-3 w-3 mr-1" />
+                                  Bot
+                                </Badge>
+                              )}
+                              {visitor.is_returning && (
+                                <Badge className="bg-blue-400/20 text-blue-400 border-blue-400/30 text-xs">
+                                  Returning
+                                </Badge>
+                              )}
+                              {visitor.error_count && visitor.error_count > 0 && (
+                                <Badge className="bg-red-400/20 text-red-400 border-red-400/30 text-xs">
+                                  {visitor.error_count} Errors
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Desktop Layout */}
+                          <div className="hidden md:grid grid-cols-1 lg:grid-cols-4 gap-4">
                             {/* Session Info */}
                             <div>
                               <p className="text-xs text-[#ADADB8]">Session ID</p>
@@ -609,9 +716,9 @@ export default function EnhancedVisitorAnalyticsPage() {
               </Card>
 
               {/* Information */}
-              <div className="bg-[#004D61]/20 border border-[#004D61]/30 rounded-lg p-4">
+              <div className="bg-[#004D61]/20 border border-[#004D61]/30 rounded-lg p-3 md:p-4">
                 <h3 className="text-sm font-semibold text-white mb-2">About Detailed Visitor Tracking</h3>
-                <p className="text-sm text-[#ADADB8]">
+                <p className="text-xs md:text-sm text-[#ADADB8]">
                   This enhanced analytics system tracks comprehensive visitor data including device type, browser, operating system, 
                   geographic location, engagement metrics, page load performance, and error tracking. Click on any visitor row to see detailed 
                   page views, performance metrics, errors, and events. All data is collected in real-time and stored securely.

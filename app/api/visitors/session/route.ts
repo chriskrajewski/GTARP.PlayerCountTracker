@@ -31,7 +31,11 @@ export async function POST(request: NextRequest) {
       isDevelopment: process.env.NODE_ENV === 'development'
     });
 
-    const isBot = botIdResult.isBot && !botIdResult.isVerifiedBot;
+    // Classification logic:
+    // - If isHuman is true, it's a legitimate human visitor (not a bot)
+    // - If isBot is true and isVerifiedBot is false, it's an unverified/suspicious bot
+    // - If isVerifiedBot is true, it's a known/verified bot (like Google crawler)
+    const isBot = !botIdResult.isHuman;
 
     // Create Supabase client
     // Source: Blueprint §6.1 (Database operations)
