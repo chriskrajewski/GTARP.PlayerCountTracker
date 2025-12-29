@@ -148,12 +148,45 @@ The multi-stream viewer supports two URL parameter formats:
 - Fallback overlay includes an "Open on Kick" button to view the stream in a new tab
 - Chat is only available for Twitch streams; Kick-only selections show a chat unavailable message with links to open Kick streams
 
+## Admin Panel
+
+The admin panel provides comprehensive management and monitoring capabilities for the application.
+
+### Quick Start
+- Visit `/admin/login` to access the admin panel
+- Sign in with your Supabase admin credentials
+- Access real-time visitor tracking, analytics, and management tools
+
+### Features
+- **Real-time Visitor Tracking**: Live monitoring of active site visitors with human/bot classification
+- **Visitor Analytics**: Detailed visitor statistics, hourly breakdowns, and export capabilities
+- **System Analytics**: API performance metrics, endpoint monitoring, and health tracking
+- **Notification Management**: Create and manage site-wide notification banners
+- **Data Management**: Export data, trigger collection, and manage data retention
+- **System Settings**: Configure tracking parameters and system behavior
+
+### Documentation
+- [🚀 Admin Setup Guide](./docs/ADMIN_SETUP.md) - Complete setup and configuration instructions
+- [📋 Admin Quick Reference](./docs/ADMIN_QUICK_REFERENCE.md) - Quick reference for common tasks
+- [📝 Admin Panel Rewrite](./docs/ADMIN_PANEL_REWRITE.md) - Technical details of the rewrite
+
+### Admin Routes
+| Route | Purpose |
+|-------|---------|
+| `/admin/login` | Authentication |
+| `/admin` | Main dashboard with live visitor tracking |
+| `/admin/visitors` | Detailed visitor analytics |
+| `/admin/notifications` | Notification banner management |
+| `/admin/data` | Data collection and export |
+| `/admin/analytics` | System and API performance metrics |
+| `/admin/settings` | System configuration |
+
 ## Notification Banner System
 
 This application includes a comprehensive notification banner system for displaying important updates and announcements to users. 
 
 ### Quick Start
-- Visit `/admin/banners` to access the admin panel
+- Visit `/admin/notifications` to access the notification management panel
 - Create, edit, and manage notification banners
 - Support for different banner types (info, warning, success, announcement, urgent)
 - Real-time preview and user dismissal tracking

@@ -63,6 +63,7 @@ export default function AdminNotificationsPage() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [bannerDialog, setBannerDialog] = useState(false);
   const [selectedBanner, setSelectedBanner] = useState<NotificationBanner | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [bannerForm, setBannerForm] = useState({
     title: '',
     message: '',
@@ -116,6 +117,7 @@ export default function AdminNotificationsPage() {
 
   const handleCreateBanner = async () => {
     try {
+      setIsSaving(true);
       const supabase = createBrowserClient();
       
       const insertData = {
@@ -157,6 +159,8 @@ export default function AdminNotificationsPage() {
         description: "Failed to create notification banner.",
         variant: "destructive"
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -164,6 +168,7 @@ export default function AdminNotificationsPage() {
     if (!selectedBanner) return;
 
     try {
+      setIsSaving(true);
       const supabase = createBrowserClient();
       
       const updateData = {
@@ -172,6 +177,7 @@ export default function AdminNotificationsPage() {
         end_date: bannerForm.end_date || null,
         action_text: bannerForm.action_text || null,
         action_url: bannerForm.action_url || null,
+        updated_at: new Date().toISOString(),
       };
       
       const { data: updatedBanner, error } = await supabase
@@ -206,6 +212,8 @@ export default function AdminNotificationsPage() {
         description: "Failed to update notification banner.",
         variant: "destructive"
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -795,6 +803,7 @@ export default function AdminNotificationsPage() {
                 setSelectedBanner(null);
                 resetBannerForm();
               }}
+              disabled={isSaving}
               className="bg-transparent border-[#40404a] text-[#ADADB8] hover:bg-[#26262c] hover:text-white"
             >
               Cancel
@@ -802,10 +811,17 @@ export default function AdminNotificationsPage() {
             
             <Button
               onClick={selectedBanner ? handleUpdateBanner : handleCreateBanner}
-              disabled={!bannerForm.title || !bannerForm.message}
+              disabled={!bannerForm.title || !bannerForm.message || isSaving}
               className="bg-[#9147ff] hover:bg-[#772ce8] text-white"
             >
-              {selectedBanner ? 'Update Banner' : 'Create Banner'}
+              {isSaving ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  {selectedBanner ? 'Updating...' : 'Creating...'}
+                </>
+              ) : (
+                selectedBanner ? 'Update Banner' : 'Create Banner'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
