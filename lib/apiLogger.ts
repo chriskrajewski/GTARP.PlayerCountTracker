@@ -2,12 +2,14 @@
 export type LogLevel = 'info' | 'warn' | 'error';
 export type ApiLogEntry = {
   timestamp: string;
-  ip: string;
   endpoint: string;
-  query?: string;
-  responseStatus: number;
+  method?: string;
+  statusCode?: number;
+  responseTime?: number;
+  requestId?: string;
   level: LogLevel;
   message: string;
+  metadata?: Record<string, any>;
 };
 
 // Logger function compatible with Edge runtime
@@ -20,31 +22,26 @@ export async function logApiRequest(entry: Omit<ApiLogEntry, 'timestamp'>) {
     };
     
     // Log to console
-    const prefix = `[GROK API] ${logEntry.level.toUpperCase()}:`;
-    switch (logEntry.level) {
+    const level = logEntry.level || 'info';
+    const prefix = `[GROK API] ${level.toUpperCase()}:`;
+    const logData = {
+      endpoint: logEntry.endpoint,
+      method: logEntry.method,
+      statusCode: logEntry.statusCode,
+      responseTime: logEntry.responseTime,
+      requestId: logEntry.requestId,
+      ...(logEntry.metadata && { metadata: logEntry.metadata })
+    };
+    
+    switch (level) {
       case 'error':
-        console.error(prefix, logEntry.message, {
-          ip: logEntry.ip,
-          endpoint: logEntry.endpoint,
-          query: logEntry.query,
-          status: logEntry.responseStatus
-        });
+        console.error(prefix, logEntry.message, logData);
         break;
       case 'warn':
-        console.warn(prefix, logEntry.message, {
-          ip: logEntry.ip,
-          endpoint: logEntry.endpoint,
-          query: logEntry.query,
-          status: logEntry.responseStatus
-        });
+        console.warn(prefix, logEntry.message, logData);
         break;
       default:
-        console.log(prefix, logEntry.message, {
-          ip: logEntry.ip,
-          endpoint: logEntry.endpoint,
-          query: logEntry.query,
-          status: logEntry.responseStatus
-        });
+        console.log(prefix, logEntry.message, logData);
     }
     
     // In a production environment, you could send logs to an external service
@@ -72,4 +69,22 @@ export function sanitizeQuery(query: string): string {
   }
   
   return query;
-} 
+}
+
+// Logger object for convenience
+export const apiLogger = {
+  info: (message: string, metadata?: Record<string, any>) => {
+    console.log(`[API] INFO: ${message}`, metadata || '');
+  },
+  error: (message: string, metadata?: Record<string, any>) => {
+    console.error(`[API] ERROR: ${message}`, metadata || '');
+  },
+  warn: (message: string, metadata?: Record<string, any>) => {
+    console.warn(`[API] WARN: ${message}`, metadata || '');
+  },
+  debug: (message: string, metadata?: Record<string, any>) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.debug(`[API] DEBUG: ${message}`, metadata || '');
+    }
+  }
+};

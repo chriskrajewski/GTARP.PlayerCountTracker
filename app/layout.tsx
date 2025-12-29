@@ -10,6 +10,7 @@ import Script from "next/script";
 import StatsigProvider from "@/components/statsig-provider";
 import GoogleAnalytics from "@/components/google-analytics";
 import { BotIDProvider } from "@/components/botid-provider"
+import { VisitorTrackingProvider } from "@/components/visitor-tracking-provider"
 import mixpanel from "mixpanel-browser";
 
 // Create an instance of the Mixpanel object, your token is already added to this snippet
@@ -113,6 +114,7 @@ export default function RootLayout({
             <Suspense>
               <BotIDProvider />
               <GoogleAnalytics />
+              <VisitorTrackingProvider />
               {children}
               <Analytics />
               <SpeedInsights />
