@@ -70,16 +70,36 @@ export function AdminLogin({ onAuthSuccess }: AdminLoginProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([]);
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
+  const [providerError, setProviderError] = useState<string | null>(null);
   const router = useRouter();
 
   // Load available OAuth providers on mount
   useEffect(() => {
+    let retryCount = 0;
+    const maxRetries = 3;
+
     const loadProviders = async () => {
       try {
+        console.log('[OAuth] Fetching providers... (attempt ' + (retryCount + 1) + ')');
         const providers = await getAvailableOAuthProviders();
+        console.log('[OAuth] Providers loaded successfully:', providers.length, providers);
         setOauthProviders(providers);
+        setProviderError(null);
       } catch (err) {
-        console.error('Failed to load OAuth providers:', err);
+        console.error('[OAuth] Failed to load providers:', err);
+        setProviderError(err instanceof Error ? err.message : 'Unknown error');
+        retryCount++;
+        
+        if (retryCount < maxRetries) {
+          console.log('[OAuth] Retrying in 2 seconds...');
+          // Retry after 2 seconds
+          const retryTimeout = setTimeout(() => {
+            loadProviders();
+          }, 2000);
+          return () => clearTimeout(retryTimeout);
+        } else {
+          console.warn('[OAuth] Max retries reached');
+        }
       }
     };
 
@@ -157,17 +177,27 @@ export function AdminLogin({ onAuthSuccess }: AdminLoginProps) {
         </CardHeader>
 
         <CardContent className="space-y-6">
+          {/* Provider Error Message */}
+          {providerError && (
+            <Alert className="bg-yellow-900/20 border-yellow-600/50">
+              <AlertCircle className="h-4 w-4 text-yellow-400" />
+              <AlertDescription className="text-yellow-400 ml-2 text-xs">
+                OAuth providers failed to load: {providerError}. You can still sign in with email/password.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* OAuth Providers */}
           {oauthProviders.length > 0 && (
             <div className="space-y-3">
               <p className="text-xs text-[#ADADB8] font-medium">Sign in with</p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {oauthProviders.map((provider) => (
                   <button
                     key={provider.id}
                     onClick={() => handleOAuthSignIn(provider)}
                     disabled={loadingProvider !== null}
-                    className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-[#40404a] bg-[#26262c] hover:bg-[#2a2a30] text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex flex-col sm:flex-row items-center justify-center gap-2 px-3 sm:px-4 py-3 sm:py-2 rounded-lg border border-[#40404a] bg-[#26262c] hover:bg-[#2a2a30] text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{
                       borderColor: loadingProvider === provider.id ? provider.color : '#40404a',
                     }}
@@ -180,7 +210,7 @@ export function AdminLogin({ onAuthSuccess }: AdminLoginProps) {
                         <ProviderIcon provider={provider} />
                       </div>
                     )}
-                    <span className="text-sm font-medium hidden sm:inline">{provider.displayName}</span>
+                    <span className="text-xs sm:text-sm font-medium">{provider.displayName}</span>
                   </button>
                 ))}
               </div>

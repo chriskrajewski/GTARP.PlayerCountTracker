@@ -136,31 +136,43 @@ const PROVIDER_METADATA: Record<string, Omit<OAuthProvider, 'id' | 'enabled'>> =
  * 
  * Set ENABLED_OAUTH_PROVIDERS in your environment:
  * ENABLED_OAUTH_PROVIDERS=discord,google,github
+ * 
+ * If not set, defaults to common providers: discord, google, github
  */
 async function getEnabledProviders(): Promise<string[]> {
+  const DEFAULT_PROVIDERS = ['discord', 'google', 'github'];
+  
   try {
+    console.log('[getEnabledProviders] Starting...');
+    
     // Get enabled providers from environment variable
     const enabledProvidersEnv = process.env.ENABLED_OAUTH_PROVIDERS;
+    console.log('[getEnabledProviders] ENABLED_OAUTH_PROVIDERS env:', enabledProvidersEnv);
     
-    if (enabledProvidersEnv) {
+    if (enabledProvidersEnv && enabledProvidersEnv.trim()) {
       const providers = enabledProvidersEnv
         .split(',')
         .map(p => p.trim().toLowerCase())
-        .filter(Boolean);
+        .filter(p => p.length > 0);
       
       if (providers.length > 0) {
-        console.log('Enabled OAuth providers from env:', providers);
+        console.log('[getEnabledProviders] Using env providers:', providers);
         return providers;
       }
     }
 
+    console.log('[getEnabledProviders] No env var set, trying Supabase...');
+    
     // Fallback: Try to detect from Supabase config
-    // This attempts to fetch from the Supabase metadata endpoint
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_ANON_KEY;
     
+    console.log('[getEnabledProviders] Supabase URL:', supabaseUrl ? 'set' : 'not set');
+    console.log('[getEnabledProviders] Supabase Key:', supabaseKey ? 'set' : 'not set');
+    
     if (supabaseUrl && supabaseKey) {
       try {
+        console.log('[getEnabledProviders] Fetching from Supabase...');
         const response = await fetch(`${supabaseUrl}/auth/v1/providers`, {
           method: 'GET',
           headers: {
@@ -169,27 +181,35 @@ async function getEnabledProviders(): Promise<string[]> {
           },
         });
 
+        console.log('[getEnabledProviders] Supabase response status:', response.status);
+
         if (response.ok) {
           const data = await response.json();
+          console.log('[getEnabledProviders] Supabase data:', data);
+          
           if (Array.isArray(data) && data.length > 0) {
             const providers = data
               .map((provider: any) => provider.id || provider.name)
-              .filter(Boolean);
-            console.log('Detected OAuth providers from Supabase:', providers);
-            return providers;
+              .filter((p: string) => p && p.length > 0);
+            
+            if (providers.length > 0) {
+              console.log('[getEnabledProviders] Using Supabase providers:', providers);
+              return providers;
+            }
           }
         }
       } catch (err) {
-        console.error('Error fetching from Supabase providers endpoint:', err);
+        console.error('[getEnabledProviders] Error fetching from Supabase:', err);
       }
     }
 
-    // Final fallback: return Discord as default
-    console.warn('No OAuth providers configured, defaulting to Discord');
-    return ['discord'];
+    // Final fallback: return common providers as default
+    console.warn('[getEnabledProviders] Using default providers:', DEFAULT_PROVIDERS);
+    return DEFAULT_PROVIDERS;
   } catch (error) {
-    console.error('Error getting enabled providers:', error);
-    return ['discord'];
+    console.error('[getEnabledProviders] Unexpected error:', error);
+    console.warn('[getEnabledProviders] Returning default providers:', DEFAULT_PROVIDERS);
+    return DEFAULT_PROVIDERS;
   }
 }
 
@@ -201,8 +221,11 @@ async function getEnabledProviders(): Promise<string[]> {
  */
 export async function GET(request: NextRequest) {
   try {
+    console.log('[API] /api/admin/auth-providers GET request');
+    
     // Get enabled providers from Supabase
     const enabledProviders = await getEnabledProviders();
+    console.log('[API] Enabled providers:', enabledProviders);
 
     // Build the response with provider metadata
     const providers: OAuthProvider[] = enabledProviders
@@ -229,13 +252,15 @@ export async function GET(request: NextRequest) {
       })
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
 
+    console.log('[API] Returning', providers.length, 'providers:', providers.map(p => p.id));
+
     return NextResponse.json({
       success: true,
       providers,
       count: providers.length,
     });
   } catch (error) {
-    console.error('Error in auth-providers endpoint:', error);
+    console.error('[API] Error in auth-providers endpoint:', error);
     return NextResponse.json(
       {
         success: false,

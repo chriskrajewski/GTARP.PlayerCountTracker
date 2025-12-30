@@ -24,15 +24,37 @@ import {
   MaintenanceTask,
 } from '@/lib/admin-types';
 import { getStoredAdminToken } from '@/lib/admin-auth';
+import { createBrowserClient } from '@/lib/supabase-browser';
 
 class AdminAPI {
   private baseURL: string = '/api/admin';
+
+  private async getAuthToken(): Promise<string | null> {
+    // First try to get stored admin token (for legacy auth)
+    const storedToken = getStoredAdminToken();
+    if (storedToken) {
+      return storedToken;
+    }
+
+    // Otherwise try to get Supabase session token
+    try {
+      const supabase = createBrowserClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        return session.access_token;
+      }
+    } catch (error) {
+      console.error('Error getting Supabase session:', error);
+    }
+
+    return null;
+  }
 
   private async request<T = any>(
     endpoint: string, 
     options: RequestInit = {}
   ): Promise<AdminAPIResponse<T>> {
-    const token = getStoredAdminToken();
+    const token = await this.getAuthToken();
     if (!token) {
       throw new Error('Admin authentication required');
     }
@@ -136,6 +158,25 @@ class AdminAPI {
     return this.put('/servers/reorder', { orders: serverOrders });
   }
 
+  async getServerManagementData(): Promise<AdminAPIResponse<any[]>> {
+    return this.get<any[]>('/servers/management');
+  }
+
+  async updateServerManagementData(data: {
+    server_id: string;
+    data_start_date?: string;
+    server_colors?: { color_hsl: string };
+    stream_search_config?: Array<{
+      platform: 'twitch' | 'kick';
+      search_keyword: string;
+      search_type: 'title' | 'category' | 'tag';
+      is_active: boolean;
+      priority: number;
+    }>;
+  }): Promise<AdminAPIResponse<void>> {
+    return this.put('/servers/management', data);
+  }
+
   // ==================== DATA MANAGEMENT ====================
   async getDataCollectionStatus(): Promise<AdminAPIResponse<DataCollectionStatus[]>> {
     return this.get<DataCollectionStatus[]>('/data/collection-status');
@@ -189,7 +230,7 @@ class AdminAPI {
 
   // ==================== ANALYTICS ====================
   async getAPIUsageMetrics(timeRange: string = '24h'): Promise<AdminAPIResponse<APIUsageMetrics[]>> {
-    return this.get<APIUsageMetrics[]>('/analytics/api-usage', { time_range: timeRange });
+    return this.get<APIUsageMetrics[]>('/analytics', { time_range: timeRange });
   }
 
   async getStreamAnalytics(serverId?: string, timeRange: string = '7d'): Promise<AdminAPIResponse<StreamAnalytics[]>> {

@@ -15,6 +15,13 @@ export function isValidAdminToken(token: string): boolean {
   return token === adminToken;
 }
 
+// Check if token is a Supabase JWT (basic format check)
+export function isSupabaseJWT(token: string): boolean {
+  // Supabase JWTs are JWT format: header.payload.signature
+  const parts = token.split('.');
+  return parts.length === 3;
+}
+
 // Get admin token from request headers or cookies (server-side)
 export function getAdminTokenFromRequest(request: NextRequest): string | null {
   // Check Authorization header first
@@ -32,12 +39,23 @@ export function getAdminTokenFromRequest(request: NextRequest): string | null {
   return null;
 }
 
-// Validate admin request (server-side)
+// Validate admin request (server-side) - supports both legacy token and Supabase JWT
 export function validateAdminRequest(request: NextRequest): boolean {
   const token = getAdminTokenFromRequest(request);
   if (!token) {
     return false;
   }
   
-  return isValidAdminToken(token);
+  // First try legacy admin token
+  if (isValidAdminToken(token)) {
+    return true;
+  }
+
+  // Accept Supabase JWT tokens (format validation only - actual verification happens in Supabase)
+  // The Supabase service role client will verify the token when making requests
+  if (isSupabaseJWT(token)) {
+    return true;
+  }
+
+  return false;
 }

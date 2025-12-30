@@ -6,11 +6,14 @@
  * 
  * Handles offline support, caching strategies, and background sync.
  * Implements cache-first strategy for static assets and network-first for API calls.
+ * Optimized for PWA and mobile app support.
  */
 
-const CACHE_NAME = 'gtarp-pct-cache-v1';
+const CACHE_NAME = 'gtarp-pct-cache-v2';
+const ADMIN_CACHE_NAME = 'gtarp-admin-cache-v1';
 const STATIC_ASSETS = [
   '/',
+  '/admin',
   '/placeholder-logo.png',
   '/placeholder-logo.svg',
   '/placeholder.jpg',
@@ -46,7 +49,7 @@ self.addEventListener('activate', (event) => {
       try {
         const cacheNames = await caches.keys();
         const cachesToDelete = cacheNames.filter(
-          (name) => name !== CACHE_NAME
+          (name) => name !== CACHE_NAME && name !== ADMIN_CACHE_NAME
         );
 
         await Promise.all(
@@ -80,6 +83,17 @@ self.addEventListener('fetch', (event) => {
 
   // Skip chrome extensions and other non-http(s) requests
   if (!url.protocol.startsWith('http')) {
+    return;
+  }
+
+  // Auth endpoints - skip service worker entirely, let browser handle it
+  if (url.pathname.includes('/api/admin/auth')) {
+    return;
+  }
+
+  // Admin routes - use admin cache
+  if (url.pathname.startsWith('/admin')) {
+    event.respondWith(adminCacheStrategy(request));
     return;
   }
 
@@ -120,10 +134,54 @@ self.addEventListener('message', (event) => {
         })()
       );
       break;
+    case 'CACHE_ADMIN_PAGE':
+      event.waitUntil(cacheAdminPage(event.data.url));
+      break;
     default:
       console.debug('Unknown message type:', type);
   }
 });
+
+/**
+ * Admin cache strategy - optimized for admin panel
+ */
+async function adminCacheStrategy(request) {
+  try {
+    const cache = await caches.open(ADMIN_CACHE_NAME);
+    
+    // Try network first for admin pages
+    try {
+      const response = await fetch(request);
+      if (response.ok) {
+        cache.put(request, response.clone());
+      }
+      return response;
+    } catch (networkError) {
+      // Fall back to cache
+      const cached = await cache.match(request);
+      if (cached) {
+        return cached;
+      }
+      
+      // Return offline page for admin
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Offline - Admin panel data unavailable',
+          offline: true
+        }),
+        {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+  } catch (error) {
+    console.error('Admin cache strategy failed:', error);
+    return new Response('Service Unavailable', { status: 503 });
+  }
+}
 
 /**
  * Cache-first strategy: try cache first, fallback to network
@@ -155,12 +213,14 @@ async function cacheFirstStrategy(request) {
 
 /**
  * Network-first strategy: try network first, fallback to cache
+ * @param {Request} request - The fetch request
+ * @param {boolean} alwaysFresh - If true, don't cache the response (for auth endpoints)
  */
-async function networkFirstStrategy(request) {
+async function networkFirstStrategy(request, alwaysFresh = false) {
   try {
     const response = await fetch(request);
 
-    if (response.ok) {
+    if (response.ok && !alwaysFresh) {
       const cache = await caches.open(CACHE_NAME);
       cache.put(request, response.clone());
     }
@@ -210,6 +270,21 @@ function isStaticAsset(pathname) {
   ];
 
   return staticExtensions.some((ext) => pathname.endsWith(ext));
+}
+
+/**
+ * Cache admin page for offline access
+ */
+async function cacheAdminPage(url) {
+  try {
+    const cache = await caches.open(ADMIN_CACHE_NAME);
+    const response = await fetch(url);
+    if (response.ok) {
+      await cache.put(url, response);
+    }
+  } catch (error) {
+    console.error('Failed to cache admin page:', error);
+  }
 }
 
 /**

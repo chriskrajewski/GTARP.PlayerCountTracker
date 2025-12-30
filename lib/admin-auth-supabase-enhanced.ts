@@ -291,23 +291,105 @@ export function onAuthStateChange(callback: (user: User | null) => void) {
  */
 export async function getAvailableOAuthProviders(): Promise<OAuthProvider[]> {
   try {
+    console.log('[getAvailableOAuthProviders] Fetching from /api/admin/auth-providers');
+    
+    // Use a simple fetch without any Supabase dependencies
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    
     const response = await fetch('/api/admin/auth-providers', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
       },
+      signal: controller.signal,
     });
 
+    clearTimeout(timeoutId);
+
+    console.log('[getAvailableOAuthProviders] Response status:', response.status);
+    console.log('[getAvailableOAuthProviders] Response ok:', response.ok);
+
     if (!response.ok) {
-      console.error('Failed to fetch OAuth providers:', response.status);
-      return [];
+      console.error('[getAvailableOAuthProviders] Failed to fetch OAuth providers:', response.status);
+      const errorText = await response.text();
+      console.error('[getAvailableOAuthProviders] Error response:', errorText);
+      // Return default providers on error
+      console.warn('[getAvailableOAuthProviders] Returning default providers due to error');
+      return [
+        {
+          id: 'discord',
+          name: 'discord',
+          displayName: 'Discord',
+          icon: 'discord',
+          color: '#5865F2',
+          enabled: true,
+          description: 'Sign in with your Discord account',
+        },
+        {
+          id: 'google',
+          name: 'google',
+          displayName: 'Google',
+          icon: 'google',
+          color: '#4285F4',
+          enabled: true,
+          description: 'Sign in with your Google account',
+        },
+        {
+          id: 'github',
+          name: 'github',
+          displayName: 'GitHub',
+          icon: 'github',
+          color: '#000000',
+          enabled: true,
+          description: 'Sign in with your GitHub account',
+        },
+      ];
     }
 
     const data = await response.json();
+    console.log('[getAvailableOAuthProviders] Response data:', data);
+    console.log('[getAvailableOAuthProviders] Providers:', data.providers);
+    
     return data.providers || [];
   } catch (error) {
-    console.error('Error fetching OAuth providers:', error);
-    return [];
+    console.error('[getAvailableOAuthProviders] Error fetching OAuth providers:', error);
+    console.error('[getAvailableOAuthProviders] Error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    
+    // Return default providers on any error
+    console.warn('[getAvailableOAuthProviders] Returning default providers due to error');
+    return [
+      {
+        id: 'discord',
+        name: 'discord',
+        displayName: 'Discord',
+        icon: 'discord',
+        color: '#5865F2',
+        enabled: true,
+        description: 'Sign in with your Discord account',
+      },
+      {
+        id: 'google',
+        name: 'google',
+        displayName: 'Google',
+        icon: 'google',
+        color: '#4285F4',
+        enabled: true,
+        description: 'Sign in with your Google account',
+      },
+      {
+        id: 'github',
+        name: 'github',
+        displayName: 'GitHub',
+        icon: 'github',
+        color: '#000000',
+        enabled: true,
+        description: 'Sign in with your GitHub account',
+      },
+    ];
   }
 }
 

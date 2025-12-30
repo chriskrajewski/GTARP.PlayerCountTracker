@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { AdminProtected } from '@/components/admin-login';
-import { AdminSidebar } from '@/components/admin/admin-sidebar';
+import { AdminSidebarMobile } from '@/components/admin/admin-sidebar-mobile';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,6 +41,7 @@ import { DataCollectionStatus, APIUsageMetrics } from '@/lib/admin-types';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { format, addDays } from 'date-fns';
+import { ServerManagementPanel } from '@/components/admin/server-management-panel';
 
 export default function AdminDataPage() {
   const [dataStatus, setDataStatus] = useState<DataCollectionStatus[]>([]);
@@ -96,7 +97,13 @@ export default function AdminDataPage() {
     try {
       const response = await adminAPI.getAPIUsageMetrics(selectedTimeRange);
       if (response.success && response.data) {
-        setApiMetrics(response.data);
+        // Handle both array and object responses
+        if (Array.isArray(response.data)) {
+          setApiMetrics(response.data);
+        } else {
+          // If it's an object (analytics response), convert to array format
+          setApiMetrics([response.data]);
+        }
       }
     } catch (error) {
       console.error('Error fetching API metrics:', error);
@@ -218,44 +225,55 @@ export default function AdminDataPage() {
   };
 
   const getAverageSuccessRate = () => {
-    if (apiMetrics.length === 0) return 0;
-    return Math.round(apiMetrics.reduce((sum, metric) => sum + metric.success_rate, 0) / apiMetrics.length);
+    if (!apiMetrics || apiMetrics.length === 0) return 0;
+    const metric = apiMetrics[0] as any;
+    
+    // Get total streams from stream analytics
+    if (metric.stream_analytics?.total_streams !== undefined) {
+      return metric.stream_analytics.total_streams;
+    }
+    
+    return 0;
   };
 
   const getTotalAPIRequests = () => {
-    return apiMetrics.reduce((sum, metric) => sum + metric.total_requests, 0);
+    if (!apiMetrics || apiMetrics.length === 0) return 0;
+    const metric = apiMetrics[0] as any;
+    
+    // If it's the analytics object with player_analytics
+    if (metric.player_analytics?.total_data_points !== undefined) {
+      return metric.player_analytics.total_data_points;
+    }
+    
+    // If it's an array of metrics with total_requests
+    if (metric.total_requests !== undefined) {
+      return apiMetrics.reduce((sum, m: any) => sum + (m.total_requests || 0), 0);
+    }
+    
+    return 0;
   };
 
   return (
     <AdminProtected>
-      <div className="flex h-screen bg-[#0e0e10]">
-        <AdminSidebar />
+      <div className="flex flex-col md:flex-row h-screen bg-[#0e0e10]">
+        <AdminSidebarMobile />
         
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden md:ml-64 mt-16 md:mt-0">
           {/* Header */}
-          <div className="bg-[#1a1a1e] border-b border-[#26262c] px-6 py-4">
-            <div className="flex items-center justify-between">
+          <div className="bg-[#1a1a1e] border-b border-[#26262c] px-4 md:px-6 py-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-bold text-white">Data Management</h1>
-                <p className="text-[#ADADB8] text-sm">
-                  Monitor data collection, analytics, and system performance
+                <h1 className="text-xl md:text-2xl font-bold text-white">Server Management</h1>
+                <p className="text-[#ADADB8] text-xs md:text-sm">
+                  Manage servers, data collection, and system performance
                 </p>
               </div>
               
-              <div className="flex items-center space-x-3">
-                <Button
-                  onClick={() => handleTriggerCollection()}
-                  disabled={collectionLoading}
-                  className="bg-[#9147ff] hover:bg-[#772ce8] text-white"
-                >
-                  <RefreshCw className={cn("h-4 w-4 mr-2", collectionLoading && "animate-spin")} />
-                  Trigger Collection
-                </Button>
-                
+              <div className="flex items-center space-x-2 md:space-x-3">
                 <Button
                   onClick={() => setExportDialog(true)}
                   variant="outline"
-                  className="bg-[#26262c] border-[#40404a] text-white hover:bg-[#333339]"
+                  className="bg-[#26262c] border-[#40404a] text-white hover:bg-[#333339] text-xs md:text-sm w-full md:w-auto"
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Export Data
@@ -265,21 +283,21 @@ export default function AdminDataPage() {
           </div>
 
           {/* Main Content */}
-          <div className="flex-1 overflow-auto p-6">
+          <div className="flex-1 overflow-auto p-4 md:p-6">
             <div className="max-w-7xl mx-auto space-y-6">
               
               {/* Data Overview Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
                 <Card className="bg-[#1a1a1e] border-[#26262c]">
-                  <CardContent className="p-6">
+                  <CardContent className="p-4 md:p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-[#ADADB8]">Total Records</p>
-                        <p className="text-2xl font-bold text-white">
+                        <p className="text-xs md:text-sm text-[#ADADB8]">Total Records</p>
+                        <p className="text-lg md:text-2xl font-bold text-white">
                           {calculateTotalRecords().toLocaleString()}
                         </p>
                       </div>
-                      <Database className="h-8 w-8 text-[#9147ff]" />
+                      <Database className="h-6 md:h-8 w-6 md:w-8 text-[#9147ff]" />
                     </div>
                   </CardContent>
                 </Card>
@@ -302,9 +320,9 @@ export default function AdminDataPage() {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-[#ADADB8]">API Success Rate</p>
+                        <p className="text-sm text-[#ADADB8]">Total Streams</p>
                         <p className="text-2xl font-bold text-blue-400">
-                          {getAverageSuccessRate()}%
+                          {getAverageSuccessRate().toLocaleString()}
                         </p>
                       </div>
                       <TrendingUp className="h-8 w-8 text-blue-400" />
@@ -316,7 +334,7 @@ export default function AdminDataPage() {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-[#ADADB8]">API Requests</p>
+                        <p className="text-sm text-[#ADADB8]">Total Data Points</p>
                         <p className="text-2xl font-bold text-amber-400">
                           {getTotalAPIRequests().toLocaleString()}
                         </p>
@@ -330,8 +348,8 @@ export default function AdminDataPage() {
               <Tabs defaultValue="collection" className="w-full">
                 <TabsList className="grid w-full grid-cols-3 bg-[#26262c]">
                   <TabsTrigger value="collection" className="text-white">Data Collection</TabsTrigger>
-                  <TabsTrigger value="analytics" className="text-white">API Analytics</TabsTrigger>
-                  <TabsTrigger value="management" className="text-white">Data Management</TabsTrigger>
+                  <TabsTrigger value="analytics" className="text-white">Analytics</TabsTrigger>
+                  <TabsTrigger value="servers" className="text-white">Server Management</TabsTrigger>
                 </TabsList>
 
                 {/* Data Collection Status */}
@@ -431,8 +449,8 @@ export default function AdminDataPage() {
                 <TabsContent value="analytics" className="space-y-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-lg font-semibold text-white">API Performance</h3>
-                      <p className="text-[#ADADB8] text-sm">Monitor API endpoint usage and performance metrics</p>
+                      <h3 className="text-lg font-semibold text-white">Analytics Dashboard</h3>
+                      <p className="text-[#ADADB8] text-sm">Player activity, stream data, and system performance</p>
                     </div>
                     
                     <Select value={selectedTimeRange} onValueChange={setSelectedTimeRange}>
@@ -440,136 +458,170 @@ export default function AdminDataPage() {
                         <SelectValue placeholder="Time range" />
                       </SelectTrigger>
                       <SelectContent className="bg-[#26262c] border-[#40404a]">
-                        <SelectItem value="1h">Last Hour</SelectItem>
                         <SelectItem value="24h">Last 24 Hours</SelectItem>
                         <SelectItem value="7d">Last 7 Days</SelectItem>
                         <SelectItem value="30d">Last 30 Days</SelectItem>
+                        <SelectItem value="90d">Last 90 Days</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {apiMetrics.map((metric) => (
-                      <Card key={`${metric.endpoint}-${metric.method}`} className="bg-[#1a1a1e] border-[#26262c]">
-                        <CardHeader className="pb-3">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <CardTitle className="text-sm text-white">
-                                {metric.method} {metric.endpoint}
-                              </CardTitle>
-                              <CardDescription className="text-[#ADADB8]">
-                                Last accessed: {new Date(metric.last_accessed).toLocaleString()}
-                              </CardDescription>
-                            </div>
+                  {apiMetrics.length === 0 ? (
+                    <Card className="bg-[#1a1a1e] border-[#26262c]">
+                      <CardContent className="p-12 text-center">
+                        <BarChart3 className="h-12 w-12 text-[#ADADB8] mx-auto mb-4" />
+                        <p className="text-[#ADADB8]">No analytics data available</p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <>
+                      {/* Player Analytics */}
+                      {(apiMetrics[0] as any).player_analytics && (
+                        <div className="space-y-4">
+                          <h4 className="text-white font-semibold">Player Analytics</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <Card className="bg-[#1a1a1e] border-[#26262c]">
+                              <CardContent className="p-4">
+                                <p className="text-[#ADADB8] text-sm mb-1">Total Data Points</p>
+                                <p className="text-2xl font-bold text-white">
+                                  {(apiMetrics[0] as any).player_analytics.total_data_points?.toLocaleString() || 0}
+                                </p>
+                              </CardContent>
+                            </Card>
                             
-                            <Badge variant="outline" className={cn(
-                              "border",
-                              metric.success_rate >= 95 ? "border-emerald-400/30 text-emerald-400" :
-                              metric.success_rate >= 90 ? "border-amber-400/30 text-amber-400" :
-                              "border-red-400/30 text-red-400"
-                            )}>
-                              {metric.success_rate}% Success
-                            </Badge>
+                            <Card className="bg-[#1a1a1e] border-[#26262c]">
+                              <CardContent className="p-4">
+                                <p className="text-[#ADADB8] text-sm mb-1">Avg Players</p>
+                                <p className="text-2xl font-bold text-emerald-400">
+                                  {(apiMetrics[0] as any).player_analytics.average_player_count?.toLocaleString() || 0}
+                                </p>
+                              </CardContent>
+                            </Card>
+                            
+                            <Card className="bg-[#1a1a1e] border-[#26262c]">
+                              <CardContent className="p-4">
+                                <p className="text-[#ADADB8] text-sm mb-1">Peak Players</p>
+                                <p className="text-2xl font-bold text-blue-400">
+                                  {(apiMetrics[0] as any).player_analytics.max_player_count?.toLocaleString() || 0}
+                                </p>
+                              </CardContent>
+                            </Card>
+                            
+                            <Card className="bg-[#1a1a1e] border-[#26262c]">
+                              <CardContent className="p-4">
+                                <p className="text-[#ADADB8] text-sm mb-1">Peak Hour</p>
+                                <p className="text-2xl font-bold text-amber-400">
+                                  {(apiMetrics[0] as any).player_analytics.peak_hour || 0}:00
+                                </p>
+                              </CardContent>
+                            </Card>
                           </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <p className="text-[#ADADB8]">Total Requests</p>
-                              <p className="text-white font-medium">{metric.total_requests.toLocaleString()}</p>
-                            </div>
+
+                          {/* Server Breakdown */}
+                          {(apiMetrics[0] as any).player_analytics.server_breakdown && (apiMetrics[0] as any).player_analytics.server_breakdown.length > 0 && (
+                            <Card className="bg-[#1a1a1e] border-[#26262c]">
+                              <CardHeader>
+                                <CardTitle className="text-white">Server Breakdown</CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <div className="space-y-3">
+                                  {(apiMetrics[0] as any).player_analytics.server_breakdown.map((server: any) => (
+                                    <div key={server.server_id} className="flex items-center justify-between p-3 bg-[#26262c]/30 rounded-lg">
+                                      <div>
+                                        <p className="text-white font-medium">{server.server_id}</p>
+                                        <p className="text-[#ADADB8] text-sm">{server.data_points} data points</p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-white font-medium">{server.average_players} avg</p>
+                                        <p className="text-[#ADADB8] text-sm">Peak: {server.max_players}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Stream Analytics */}
+                      {(apiMetrics[0] as any).stream_analytics && (
+                        <div className="space-y-4">
+                          <h4 className="text-white font-semibold">Stream Analytics</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <Card className="bg-[#1a1a1e] border-[#26262c]">
+                              <CardContent className="p-4">
+                                <p className="text-[#ADADB8] text-sm mb-1">Total Streams</p>
+                                <p className="text-2xl font-bold text-white">
+                                  {(apiMetrics[0] as any).stream_analytics.total_streams?.toLocaleString() || 0}
+                                </p>
+                              </CardContent>
+                            </Card>
                             
-                            <div>
-                              <p className="text-[#ADADB8]">Avg Response Time</p>
-                              <p className="text-white font-medium">{metric.average_response_time}ms</p>
-                            </div>
+                            <Card className="bg-[#1a1a1e] border-[#26262c]">
+                              <CardContent className="p-4">
+                                <p className="text-[#ADADB8] text-sm mb-1">Unique Streamers</p>
+                                <p className="text-2xl font-bold text-purple-400">
+                                  {(apiMetrics[0] as any).stream_analytics.unique_streamers?.toLocaleString() || 0}
+                                </p>
+                              </CardContent>
+                            </Card>
                             
-                            <div>
-                              <p className="text-[#ADADB8]">Errors (24h)</p>
-                              <p className="text-white font-medium">{metric.errors_24h}</p>
-                            </div>
+                            <Card className="bg-[#1a1a1e] border-[#26262c]">
+                              <CardContent className="p-4">
+                                <p className="text-[#ADADB8] text-sm mb-1">Avg Viewers</p>
+                                <p className="text-2xl font-bold text-pink-400">
+                                  {(apiMetrics[0] as any).stream_analytics.average_viewer_count?.toLocaleString() || 0}
+                                </p>
+                              </CardContent>
+                            </Card>
                             
-                            <div>
-                              <p className="text-[#ADADB8]">Success Rate</p>
-                              <Progress 
-                                value={metric.success_rate} 
-                                className="w-full h-2 bg-[#26262c]"
-                              />
-                            </div>
+                            <Card className="bg-[#1a1a1e] border-[#26262c]">
+                              <CardContent className="p-4">
+                                <p className="text-[#ADADB8] text-sm mb-1">Total Viewer Hours</p>
+                                <p className="text-2xl font-bold text-cyan-400">
+                                  {(apiMetrics[0] as any).stream_analytics.total_viewer_hours?.toLocaleString() || 0}
+                                </p>
+                              </CardContent>
+                            </Card>
                           </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+
+                          {/* Top Streamers */}
+                          {(apiMetrics[0] as any).stream_analytics.top_streamers && (apiMetrics[0] as any).stream_analytics.top_streamers.length > 0 && (
+                            <Card className="bg-[#1a1a1e] border-[#26262c]">
+                              <CardHeader>
+                                <CardTitle className="text-white">Top Streamers</CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <div className="space-y-3">
+                                  {(apiMetrics[0] as any).stream_analytics.top_streamers.slice(0, 5).map((streamer: any, idx: number) => (
+                                    <div key={streamer.streamer_name} className="flex items-center justify-between p-3 bg-[#26262c]/30 rounded-lg">
+                                      <div className="flex items-center space-x-3">
+                                        <Badge className="bg-[#9147ff] text-white">#{idx + 1}</Badge>
+                                        <div>
+                                          <p className="text-white font-medium">{streamer.streamer_name}</p>
+                                          <p className="text-[#ADADB8] text-sm">{streamer.stream_count} streams</p>
+                                        </div>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-white font-medium">{streamer.total_viewers?.toLocaleString()} viewers</p>
+                                        <p className="text-[#ADADB8] text-sm">{streamer.average_viewers} avg</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </TabsContent>
 
-                {/* Data Management */}
-                <TabsContent value="management" className="space-y-6">
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <Card className="bg-[#1a1a1e] border-[#26262c]">
-                      <CardHeader>
-                        <CardTitle className="flex items-center space-x-2 text-white">
-                          <Download className="h-5 w-5" />
-                          <span>Export Data</span>
-                        </CardTitle>
-                        <CardDescription className="text-[#ADADB8]">
-                          Export historical data in various formats
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <Button 
-                          onClick={() => setExportDialog(true)}
-                          className="w-full bg-[#9147ff] hover:bg-[#772ce8] text-white"
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Configure Export
-                        </Button>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="bg-[#1a1a1e] border-[#26262c]">
-                      <CardHeader>
-                        <CardTitle className="flex items-center space-x-2 text-white">
-                          <Upload className="h-5 w-5" />
-                          <span>Import Data</span>
-                        </CardTitle>
-                        <CardDescription className="text-[#ADADB8]">
-                          Import data from external sources
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <Button 
-                          variant="outline"
-                          className="w-full bg-[#26262c] border-[#40404a] text-white hover:bg-[#333339]"
-                        >
-                          <Upload className="h-4 w-4 mr-2" />
-                          Import File
-                        </Button>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="bg-[#1a1a1e] border-[#26262c]">
-                      <CardHeader>
-                        <CardTitle className="flex items-center space-x-2 text-white">
-                          <Trash2 className="h-5 w-5" />
-                          <span>Delete Data</span>
-                        </CardTitle>
-                        <CardDescription className="text-[#ADADB8]">
-                          Remove old or unwanted data
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <Button 
-                          variant="outline"
-                          onClick={() => setDeleteDialog(true)}
-                          className="w-full border-red-400/30 text-red-400 hover:bg-red-400/10"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete Range
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  </div>
+                {/* Server Management */}
+                <TabsContent value="servers" className="space-y-6">
+                  <ServerManagementPanel />
                 </TabsContent>
               </Tabs>
             </div>
