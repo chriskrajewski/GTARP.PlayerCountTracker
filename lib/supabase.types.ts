@@ -104,6 +104,7 @@ export type Database = {
           updated_at: string
           title: string
           message: string
+          message_markdown: string | null
           type: 'info' | 'warning' | 'success' | 'announcement' | 'urgent'
           priority: number
           is_active: boolean
@@ -123,6 +124,7 @@ export type Database = {
         Insert: {
           title: string
           message: string
+          message_markdown?: string | null
           type?: 'info' | 'warning' | 'success' | 'announcement' | 'urgent'
           priority?: number
           is_active?: boolean

@@ -10,14 +10,15 @@ type NotificationBanner = Database['public']['Tables']['notification_banners']['
 type NotificationBannerInsert = Database['public']['Tables']['notification_banners']['Insert'];
 type NotificationBannerUpdate = Partial<NotificationBannerInsert>;
 
-// Much simpler approach - preprocess data to clean empty strings
+// Preprocess data to clean empty strings and handle markdown
 function cleanBannerData(data: any) {
   const cleanData = { ...data };
   
   // Convert empty strings to undefined for optional fields
   const optionalFields = [
     'start_date', 'end_date', 'action_text', 'action_url', 
-    'background_color', 'text_color', 'border_color', 'created_by'
+    'background_color', 'text_color', 'border_color', 'created_by',
+    'message_markdown'
   ];
   
   optionalFields.forEach(field => {
@@ -33,6 +34,7 @@ function cleanBannerData(data: any) {
 const CreateBannerSchema = z.object({
   title: z.string().min(1).max(100),
   message: z.string().min(1).max(500),
+  message_markdown: z.string().max(2000).optional(),
   type: z.enum(['info', 'warning', 'success', 'announcement', 'urgent']).default('info'),
   priority: z.number().int().min(1).max(10).default(1),
   is_active: z.boolean().default(true),

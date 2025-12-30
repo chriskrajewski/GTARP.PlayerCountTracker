@@ -9,6 +9,7 @@ CREATE TABLE public.notification_banners (
   -- Banner Content
   title TEXT NOT NULL,
   message TEXT NOT NULL,
+  message_markdown TEXT NULL, -- Markdown-formatted version of message for rich formatting
   type TEXT NOT NULL DEFAULT 'info' CHECK (type IN ('info', 'warning', 'success', 'announcement', 'urgent')),
   
   -- Priority and Display Settings
@@ -77,7 +78,7 @@ CREATE INDEX notification_banner_dismissals_banner_idx ON public.notification_ba
 ALTER TABLE public.notification_banners ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notification_banner_dismissals ENABLE ROW LEVEL SECURITY;
 
--- Policies for public read access
+-- Policies for public read access (only active, scheduled banners)
 CREATE POLICY "Allow public read on active banners" ON public.notification_banners
   FOR SELECT USING (
     is_active = TRUE 
@@ -85,6 +86,24 @@ CREATE POLICY "Allow public read on active banners" ON public.notification_banne
     AND (end_date IS NULL OR end_date >= NOW())
   );
 
+-- Policy for admin read access (all banners, including inactive)
+-- Note: Service role client bypasses RLS, so this is for browser client admin reads
+CREATE POLICY "Allow admin read all banners" ON public.notification_banners
+  FOR SELECT USING (TRUE);
+
+-- Policy for admin insert
+CREATE POLICY "Allow admin insert banners" ON public.notification_banners
+  FOR INSERT WITH CHECK (TRUE);
+
+-- Policy for admin update
+CREATE POLICY "Allow admin update banners" ON public.notification_banners
+  FOR UPDATE USING (TRUE) WITH CHECK (TRUE);
+
+-- Policy for admin delete
+CREATE POLICY "Allow admin delete banners" ON public.notification_banners
+  FOR DELETE USING (TRUE);
+
+-- Policies for dismissal tracking
 CREATE POLICY "Allow dismissal tracking" ON public.notification_banner_dismissals
   FOR ALL USING (TRUE);
 

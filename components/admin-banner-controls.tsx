@@ -17,6 +17,7 @@ import type { Database } from '@/lib/supabase.types';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAdminAuth } from '@/lib/admin-auth';
+import MDEditor from '@uiw/react-md-editor';
 
 // Type definitions
 type NotificationBanner = Database['public']['Tables']['notification_banners']['Row'];
@@ -25,6 +26,7 @@ type NotificationBannerInsert = Database['public']['Tables']['notification_banne
 interface BannerFormData {
   title: string;
   message: string;
+  message_markdown: string;
   type: 'info' | 'warning' | 'success' | 'announcement' | 'urgent';
   priority: number;
   is_active: boolean;
@@ -42,6 +44,7 @@ interface BannerFormData {
 const DEFAULT_FORM_DATA: BannerFormData = {
   title: '',
   message: '',
+  message_markdown: '',
   type: 'info',
   priority: 1,
   is_active: true,
@@ -127,6 +130,7 @@ export function AdminBannerControls() {
       const submitData = {
         title: formData.title,
         message: formData.message,
+        message_markdown: formData.message_markdown,
         type: formData.type,
         priority: formData.priority,
         is_active: formData.is_active,
@@ -190,6 +194,7 @@ export function AdminBannerControls() {
     setFormData({
       title: banner.title,
       message: banner.message,
+      message_markdown: banner.message_markdown || '',
       type: banner.type,
       priority: banner.priority,
       is_active: banner.is_active,
@@ -280,6 +285,7 @@ export function AdminBannerControls() {
     updated_at: new Date().toISOString(),
     title: formData.title || 'Preview Title',
     message: formData.message || 'This is a preview of your notification banner.',
+    message_markdown: formData.message_markdown || null,
     type: formData.type,
     priority: formData.priority,
     is_active: formData.is_active,
@@ -365,6 +371,34 @@ export function AdminBannerControls() {
                         rows={3}
                         className="bg-[#18181b] border-[#26262c] text-white"
                       />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="message_markdown" className="text-white">
+                        Message (Markdown) - Optional
+                      </Label>
+                      <div data-color-mode="dark" className="rounded-md border border-[#26262c] overflow-hidden">
+                        <MDEditor
+                          value={formData.message_markdown}
+                          onChange={(val) => handleInputChange('message_markdown', val || '')}
+                          preview="live"
+                          hideToolbar={false}
+                          visibleDragbar={true}
+                          height={200}
+                          textareaProps={{
+                            placeholder: "Use markdown for rich formatting: **bold**, *italic*, [links](url), etc.",
+                          }}
+                          className="bg-[#18181b] text-white"
+                          style={{
+                            backgroundColor: '#18181b',
+                            color: '#ffffff',
+                            borderRadius: '0.375rem',
+                          }}
+                        />
+                      </div>
+                      <p className="text-xs text-[#ADADB8] mt-2">
+                        Supports: **bold**, *italic*, `code`, [links](url), - lists, # headings, tables, and more
+                      </p>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">

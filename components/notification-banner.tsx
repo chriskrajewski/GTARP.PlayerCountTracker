@@ -5,6 +5,8 @@ import { X, Info, AlertTriangle, CheckCircle, Megaphone, AlertCircle, ExternalLi
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/lib/supabase.types';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 // Type definitions
 type NotificationBanner = Database['public']['Tables']['notification_banners']['Row'];
@@ -132,12 +134,49 @@ export function NotificationBanner({ banner, onDismiss, className }: Notificatio
               >
                 {banner.title}
               </h3>
-              <p 
-                className="text-sm opacity-90 leading-relaxed"
-                style={{ color: textColor }}
-              >
-                {banner.message}
-              </p>
+              
+              {/* Render markdown if available, otherwise plain text */}
+              {banner.message_markdown ? (
+                <div 
+                  className="text-sm opacity-90 leading-relaxed prose prose-sm dark:prose-invert max-w-none"
+                  style={{ color: textColor }}
+                >
+                  <ReactMarkdown 
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      p: ({ node, ...props }) => <p className="mb-1" {...props} />,
+                      ul: ({ node, ...props }) => <ul className="list-disc list-inside mb-1" {...props} />,
+                      ol: ({ node, ...props }) => <ol className="list-decimal list-inside mb-1" {...props} />,
+                      li: ({ node, ...props }) => <li className="mb-0" {...props} />,
+                      strong: ({ node, ...props }) => <strong className="font-bold" {...props} />,
+                      em: ({ node, ...props }) => <em className="italic" {...props} />,
+                      code: ({ node, ...props }) => (
+                        <code 
+                          className="bg-black/20 px-1 py-0.5 rounded text-xs font-mono" 
+                          {...props} 
+                        />
+                      ),
+                      a: ({ node, ...props }) => (
+                        <a 
+                          className="underline hover:opacity-80 transition-opacity" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          {...props} 
+                        />
+                      ),
+                    }}
+                  >
+                    {banner.message_markdown}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                <p 
+                  className="text-sm opacity-90 leading-relaxed"
+                  style={{ color: textColor }}
+                >
+                  {banner.message}
+                </p>
+              )}
 
               {/* Action Button */}
               {banner.action_text && banner.action_url && (

@@ -36,11 +36,13 @@ import {
 import { createBrowserClient } from '@/lib/supabase-browser';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import MDEditor from '@uiw/react-md-editor';
 
 interface NotificationBanner {
   id: number;
   title: string;
   message: string;
+  message_markdown?: string | null;
   type: string;
   is_active: boolean;
   priority: number;
@@ -51,6 +53,10 @@ interface NotificationBanner {
   updated_at: string;
   action_text?: string;
   action_url?: string;
+  action_target?: '_self' | '_blank' | null;
+  background_color?: string | null;
+  text_color?: string | null;
+  border_color?: string | null;
   dismiss_count: number;
   view_count: number;
 }
@@ -67,6 +73,7 @@ export default function AdminNotificationsPage() {
   const [bannerForm, setBannerForm] = useState({
     title: '',
     message: '',
+    message_markdown: '',
     type: 'info',
     is_active: true,
     priority: 1,
@@ -75,6 +82,10 @@ export default function AdminNotificationsPage() {
     end_date: '',
     action_text: '',
     action_url: '',
+    action_target: '_self' as '_self' | '_blank',
+    background_color: '',
+    text_color: '',
+    border_color: '',
   });
   const { toast } = useToast();
 
@@ -121,11 +132,21 @@ export default function AdminNotificationsPage() {
       const supabase = createBrowserClient();
       
       const insertData = {
-        ...bannerForm,
+        title: bannerForm.title,
+        message: bannerForm.message,
+        message_markdown: bannerForm.message_markdown || null,
+        type: bannerForm.type,
+        is_active: bannerForm.is_active,
+        priority: bannerForm.priority,
+        is_dismissible: bannerForm.is_dismissible,
         start_date: bannerForm.start_date || null,
         end_date: bannerForm.end_date || null,
         action_text: bannerForm.action_text || null,
         action_url: bannerForm.action_url || null,
+        action_target: bannerForm.action_target || '_self',
+        background_color: bannerForm.background_color || null,
+        text_color: bannerForm.text_color || null,
+        border_color: bannerForm.border_color || null,
       };
       
       const { data: newBanner, error } = await supabase
@@ -172,11 +193,21 @@ export default function AdminNotificationsPage() {
       const supabase = createBrowserClient();
       
       const updateData = {
-        ...bannerForm,
+        title: bannerForm.title,
+        message: bannerForm.message,
+        message_markdown: bannerForm.message_markdown || null,
+        type: bannerForm.type,
+        is_active: bannerForm.is_active,
+        priority: bannerForm.priority,
+        is_dismissible: bannerForm.is_dismissible,
         start_date: bannerForm.start_date || null,
         end_date: bannerForm.end_date || null,
         action_text: bannerForm.action_text || null,
         action_url: bannerForm.action_url || null,
+        action_target: bannerForm.action_target || '_self',
+        background_color: bannerForm.background_color || null,
+        text_color: bannerForm.text_color || null,
+        border_color: bannerForm.border_color || null,
         updated_at: new Date().toISOString(),
       };
       
@@ -291,6 +322,7 @@ export default function AdminNotificationsPage() {
     setBannerForm({
       title: '',
       message: '',
+      message_markdown: '',
       type: 'info',
       is_active: true,
       priority: 1,
@@ -299,6 +331,10 @@ export default function AdminNotificationsPage() {
       end_date: '',
       action_text: '',
       action_url: '',
+      action_target: '_self',
+      background_color: '',
+      text_color: '',
+      border_color: '',
     });
   };
 
@@ -307,6 +343,7 @@ export default function AdminNotificationsPage() {
     setBannerForm({
       title: banner.title,
       message: banner.message,
+      message_markdown: banner.message_markdown || '',
       type: banner.type,
       is_active: banner.is_active,
       priority: banner.priority,
@@ -315,6 +352,10 @@ export default function AdminNotificationsPage() {
       end_date: banner.end_date || '',
       action_text: banner.action_text || '',
       action_url: banner.action_url || '',
+      action_target: banner.action_target || '_self',
+      background_color: banner.background_color || '',
+      text_color: banner.text_color || '',
+      border_color: banner.border_color || '',
     });
     setBannerDialog(true);
   };
@@ -711,6 +752,35 @@ export default function AdminNotificationsPage() {
               />
             </div>
 
+            <div>
+              <Label htmlFor="message_markdown" className="text-white">
+                Message (Markdown) - Optional
+              </Label>
+              <p className="text-xs text-[#ADADB8] mb-2">
+                Rich text formatting. If provided, this will be displayed instead of the plain message.
+              </p>
+              <div data-color-mode="dark" className="rounded-md border border-[#40404a] overflow-hidden">
+                <MDEditor
+                  value={bannerForm.message_markdown}
+                  onChange={(val) => setBannerForm(prev => ({ ...prev, message_markdown: val || '' }))}
+                  preview="live"
+                  hideToolbar={false}
+                  visibleDragbar={true}
+                  height={200}
+                  textareaProps={{
+                    placeholder: "Use markdown for rich formatting: **bold**, *italic*, [links](url), etc.",
+                  }}
+                  style={{
+                    backgroundColor: '#26262c',
+                    color: '#ffffff',
+                  }}
+                />
+              </div>
+              <p className="text-xs text-[#ADADB8] mt-1">
+                Supports: **bold**, *italic*, `code`, [links](url), - lists, # headings
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="priority" className="text-white">Priority</Label>
@@ -791,6 +861,89 @@ export default function AdminNotificationsPage() {
                   className="bg-[#26262c] border-[#40404a] text-white"
                   placeholder="https://example.com"
                 />
+              </div>
+            </div>
+
+            {bannerForm.action_url && (
+              <div>
+                <Label htmlFor="action_target" className="text-white">Link Target</Label>
+                <Select 
+                  value={bannerForm.action_target} 
+                  onValueChange={(value: '_self' | '_blank') => setBannerForm(prev => ({ ...prev, action_target: value }))}
+                >
+                  <SelectTrigger className="bg-[#26262c] border-[#40404a] text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#26262c] border-[#40404a]">
+                    <SelectItem value="_self">Same Tab</SelectItem>
+                    <SelectItem value="_blank">New Tab</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div>
+              <Label className="text-white mb-2 block">Custom Colors (Optional)</Label>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="background_color" className="text-xs text-[#ADADB8]">Background</Label>
+                  <div className="flex gap-2 items-center">
+                    <Input
+                      id="background_color"
+                      type="color"
+                      value={bannerForm.background_color || '#1e40af'}
+                      onChange={(e) => setBannerForm(prev => ({ ...prev, background_color: e.target.value }))}
+                      className="bg-[#26262c] border-[#40404a] h-10 w-14 p-1 cursor-pointer"
+                    />
+                    <Input
+                      type="text"
+                      value={bannerForm.background_color}
+                      onChange={(e) => setBannerForm(prev => ({ ...prev, background_color: e.target.value }))}
+                      className="bg-[#26262c] border-[#40404a] text-white flex-1"
+                      placeholder="#1e40af"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <Label htmlFor="text_color" className="text-xs text-[#ADADB8]">Text</Label>
+                  <div className="flex gap-2 items-center">
+                    <Input
+                      id="text_color"
+                      type="color"
+                      value={bannerForm.text_color || '#ffffff'}
+                      onChange={(e) => setBannerForm(prev => ({ ...prev, text_color: e.target.value }))}
+                      className="bg-[#26262c] border-[#40404a] h-10 w-14 p-1 cursor-pointer"
+                    />
+                    <Input
+                      type="text"
+                      value={bannerForm.text_color}
+                      onChange={(e) => setBannerForm(prev => ({ ...prev, text_color: e.target.value }))}
+                      className="bg-[#26262c] border-[#40404a] text-white flex-1"
+                      placeholder="#ffffff"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <Label htmlFor="border_color" className="text-xs text-[#ADADB8]">Border</Label>
+                  <div className="flex gap-2 items-center">
+                    <Input
+                      id="border_color"
+                      type="color"
+                      value={bannerForm.border_color || '#3b82f6'}
+                      onChange={(e) => setBannerForm(prev => ({ ...prev, border_color: e.target.value }))}
+                      className="bg-[#26262c] border-[#40404a] h-10 w-14 p-1 cursor-pointer"
+                    />
+                    <Input
+                      type="text"
+                      value={bannerForm.border_color}
+                      onChange={(e) => setBannerForm(prev => ({ ...prev, border_color: e.target.value }))}
+                      className="bg-[#26262c] border-[#40404a] text-white flex-1"
+                      placeholder="#3b82f6"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
