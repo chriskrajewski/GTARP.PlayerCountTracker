@@ -154,8 +154,17 @@ The admin panel provides comprehensive management and monitoring capabilities fo
 
 ### Quick Start
 - Visit `/admin/login` to access the admin panel
-- Sign in with your Supabase admin credentials
+- Sign in with your Supabase admin credentials (email/password or OAuth)
 - Access real-time visitor tracking, analytics, and management tools
+
+### Authentication
+The admin panel supports **dynamic OAuth authentication** with automatic provider detection:
+- **Email/Password**: Traditional authentication method
+- **OAuth Providers**: Automatically detects all enabled providers in Supabase (Discord, Google, GitHub, etc.)
+- **Zero Code Changes**: Add new providers in Supabase, they appear instantly on the login page
+- **Secure**: Admin-only access with database verification
+
+See [Dynamic OAuth Authentication](./docs/DYNAMIC_OAUTH_AUTH.md) for complete details.
 
 ### Features
 - **Real-time Visitor Tracking**: Live monitoring of active site visitors with human/bot classification
@@ -169,6 +178,10 @@ The admin panel provides comprehensive management and monitoring capabilities fo
 - [🚀 Admin Setup Guide](./docs/ADMIN_SETUP.md) - Complete setup and configuration instructions
 - [📋 Admin Quick Reference](./docs/ADMIN_QUICK_REFERENCE.md) - Quick reference for common tasks
 - [📝 Admin Panel Rewrite](./docs/ADMIN_PANEL_REWRITE.md) - Technical details of the rewrite
+- [🔐 Dynamic OAuth Authentication](./docs/DYNAMIC_OAUTH_AUTH.md) - OAuth provider system and configuration
+- [⚙️ OAuth Configuration Guide](./docs/OAUTH_CONFIGURATION.md) - How to configure OAuth providers
+- [🏗️ OAuth Architecture](./docs/OAUTH_ARCHITECTURE.md) - Technical architecture and data flows
+- [🧪 OAuth Setup & Testing](./docs/OAUTH_SETUP_TESTING.md) - Setup guide and comprehensive testing procedures
 
 ### Admin Routes
 | Route | Purpose |

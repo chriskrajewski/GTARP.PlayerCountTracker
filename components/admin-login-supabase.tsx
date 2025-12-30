@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Eye, EyeOff, Shield, Mail, Lock, AlertCircle } from 'lucide-react';
-import { signInAdmin, signOutAdmin, getCurrentAdminUser, onAuthStateChange } from '@/lib/admin-auth-supabase';
+import { signOutAdmin, getCurrentAdminUser, onAuthStateChange } from '@/lib/admin-auth-supabase-enhanced';
 import { waitForSessionRestoration } from '@/lib/supabase-browser';
 import type { User } from '@supabase/supabase-js';
 
