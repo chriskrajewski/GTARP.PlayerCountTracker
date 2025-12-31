@@ -9,6 +9,8 @@ import { motion, AnimatePresence } from "motion/react"
 import { AnimatedNumber, PulseIndicator } from "@/components/ui/motion"
 import { cardHover, springs } from "@/lib/motion"
 import { type LiveServerData } from "@/hooks/use-live-server-data"
+import { type RestartPrediction } from "@/lib/restart-prediction"
+import { RestartCountdown } from "@/components/restart-countdown"
 import { memo } from "react"
 
 // Kick icon component (they don't have an official icon in lucide)
@@ -145,6 +147,8 @@ interface ServerStatsCardsProps {
   // Live data (from direct API calls) - used for current values
   liveData?: LiveServerData | null
   liveLoading?: boolean
+  // Restart prediction data
+  restartPrediction?: RestartPrediction | null
   // Callback for viewing server changes
   onViewChanges?: () => void
 }
@@ -160,6 +164,7 @@ export default function ServerStatsCards({
   loading,
   liveData,
   liveLoading = false,
+  restartPrediction,
   onViewChanges
 }: ServerStatsCardsProps) {
   // Historical stats (peak/average from Supabase data)
@@ -235,12 +240,12 @@ export default function ServerStatsCards({
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.1, ...springs.snappy }}
-            className="flex items-center justify-between gap-3"
+            className="flex items-center justify-between gap-2 flex-nowrap"
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0">
               {/* Server status indicator */}
               <motion.div
-                className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400' : 'bg-gray-500'}`}
+                className={`w-2 h-2 rounded-full flex-shrink-0 ${isOnline ? 'bg-emerald-400' : 'bg-gray-500'}`}
                 animate={isOnline ? { 
                   scale: [1, 1.2, 1],
                   opacity: [1, 0.7, 1]
@@ -251,8 +256,8 @@ export default function ServerStatsCards({
                 }}
               />
               
-              <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
-                <span className="bg-gradient-to-r from-white to-cyan-100 bg-clip-text text-transparent">
+              <CardTitle className="text-base font-bold text-white flex items-center gap-2 min-w-0">
+                <span className="bg-gradient-to-r from-white to-cyan-100 bg-clip-text text-transparent truncate">
                   {serverName}
                 </span>
                 {/* Loading indicator for live data */}
@@ -260,7 +265,7 @@ export default function ServerStatsCards({
                   <motion.span
                     animate={{ opacity: [0.5, 1, 0.5] }}
                     transition={{ duration: 1.5, repeat: Infinity }}
-                    className="text-xs text-cyan-400/70 flex items-center gap-1"
+                    className="text-xs text-cyan-400/70 flex items-center gap-1 flex-shrink-0"
                   >
                     <Activity className="h-3 w-3" />
                     updating
@@ -269,13 +274,18 @@ export default function ServerStatsCards({
               </CardTitle>
             </div>
             
+            {/* Restart Countdown - positioned between server name and capacity */}
+            <div className="flex-shrink-0">
+              <RestartCountdown prediction={restartPrediction || null} />
+            </div>
+            
             {/* Current Capacity indicator - shows on every card */}
             {latestCapacity && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.2, ...springs.snappy }}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border backdrop-blur-sm shadow-lg ${getCapacityGlow(currentCapacityPercent)}`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border backdrop-blur-sm shadow-lg flex-shrink-0 ${getCapacityGlow(currentCapacityPercent)}`}
                 style={{
                   background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
                   borderColor: currentCapacityPercent >= 100 
