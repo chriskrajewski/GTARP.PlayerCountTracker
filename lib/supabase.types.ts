@@ -155,6 +155,78 @@ export type Database = {
           dismissed_at?: string
         }
       }
+      server_restart_predictions: {
+        Row: {
+          id: number
+          server_id: string
+          next_restart_time: string | null
+          confidence: number
+          detected_pattern: string | null
+          last_restart_time: string | null
+          average_downtime: number
+          pattern_type: string | null
+          pattern_interval: number | null
+          pattern_time_of_day: string | null
+          pattern_variance: number
+          pattern_occurrences: number
+          detected_events_count: number
+          ml_reasoning: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          server_id: string
+          next_restart_time?: string | null
+          confidence?: number
+          detected_pattern?: string | null
+          last_restart_time?: string | null
+          average_downtime?: number
+          pattern_type?: string | null
+          pattern_interval?: number | null
+          pattern_time_of_day?: string | null
+          pattern_variance?: number
+          pattern_occurrences?: number
+          detected_events_count?: number
+          ml_reasoning?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          server_id?: string
+          next_restart_time?: string | null
+          confidence?: number
+          detected_pattern?: string | null
+          last_restart_time?: string | null
+          average_downtime?: number
+          pattern_type?: string | null
+          pattern_interval?: number | null
+          pattern_time_of_day?: string | null
+          pattern_variance?: number
+          pattern_occurrences?: number
+          detected_events_count?: number
+          ml_reasoning?: string | null
+          updated_at?: string
+        }
+      }
+      server_restart_events: {
+        Row: {
+          id: number
+          server_id: string
+          event_timestamp: string
+          player_count_before: number | null
+          player_count_after: number | null
+          downtime_minutes: number | null
+          created_at: string
+        }
+        Insert: {
+          server_id: string
+          event_timestamp: string
+          player_count_before?: number | null
+          player_count_after?: number | null
+          downtime_minutes?: number | null
+          created_at?: string
+        }
+      }
     }
   }
 }

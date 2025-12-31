@@ -22,7 +22,12 @@ export interface RestartPattern {
 }
 
 /**
- * Represents the final restart prediction
+ * Pattern types for ML predictions
+ */
+export type PatternType = 'fixed-interval' | 'fixed-time' | 'irregular' | 'insufficient-data'
+
+/**
+ * Represents the final restart prediction (ML-enhanced)
  */
 export interface RestartPrediction {
   serverId: string
@@ -32,6 +37,21 @@ export interface RestartPrediction {
   lastRestartTime: string | null
   averageDowntime: number // minutes
   detectedEvents: RestartEvent[]
+  // ML-enhanced fields
+  patternType?: PatternType
+  mlReasoning?: string
+  isStale?: boolean
+  cachedAt?: string
+  detectedEventsCount?: number
+}
+
+/**
+ * API response format
+ */
+export interface RestartPredictionResponse {
+  predictions: RestartPrediction[]
+  source: 'ml' | 'cache' | 'fallback'
+  timestamp: string
 }
 
 /**
@@ -266,6 +286,7 @@ export function formatPatternDescription(pattern: RestartPattern | null): string
 
 /**
  * Main function to predict server restarts from player count data
+ * @deprecated Use the API endpoint /api/restart-prediction for ML-enhanced predictions
  */
 export function predictServerRestarts(
   data: PlayerCountData[],
@@ -303,7 +324,48 @@ export function predictServerRestarts(
     detectedPattern,
     lastRestartTime,
     averageDowntime,
-    detectedEvents: events
+    detectedEvents: events,
+    patternType: pattern?.type || 'insufficient-data',
+    detectedEventsCount: events.length
   }
 }
 
+/**
+ * Gets a human-readable description of the ML reasoning
+ */
+export function formatMLReasoning(prediction: RestartPrediction): string {
+  if (prediction.mlReasoning) {
+    return prediction.mlReasoning
+  }
+  
+  if (!prediction.detectedPattern) {
+    return 'Insufficient data to establish a restart pattern.'
+  }
+  
+  const eventCount = prediction.detectedEventsCount || prediction.detectedEvents?.length || 0
+  return `Based on ${eventCount} detected restart events, pattern: ${prediction.detectedPattern}`
+}
+
+/**
+ * Gets a confidence level description
+ */
+export function getConfidenceLevel(confidence: number): 'high' | 'medium' | 'low' | 'none' {
+  if (confidence >= 75) return 'high'
+  if (confidence >= 50) return 'medium'
+  if (confidence >= 25) return 'low'
+  return 'none'
+}
+
+/**
+ * Formats confidence as a percentage string with level indicator
+ */
+export function formatConfidence(confidence: number): string {
+  const level = getConfidenceLevel(confidence)
+  const levelEmoji = {
+    high: '🟢',
+    medium: '🟡',
+    low: '🟠',
+    none: '🔴'
+  }
+  return `${levelEmoji[level]} ${confidence}%`
+}

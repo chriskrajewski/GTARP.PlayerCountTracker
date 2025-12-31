@@ -203,7 +203,7 @@ export default function Dashboard() {
     predictions: restartPredictions,
     loading: restartPredictionsLoading
   } = useRestartPrediction(selectedServers, {
-    pollingInterval: 5 * 60 * 1000, // Poll every 5 minutes
+    pollingInterval: 2 * 60 * 1000, // Poll every 2 minutes for more responsive updates
     enabled: selectedServers.length > 0,
     daysBack: 14
   })

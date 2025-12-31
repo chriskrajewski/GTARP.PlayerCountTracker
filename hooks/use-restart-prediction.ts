@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { RestartPrediction } from '@/lib/restart-prediction'
+import { RestartPrediction, RestartPredictionResponse, getConfidenceLevel, formatMLReasoning } from '@/lib/restart-prediction'
 
 export interface UseRestartPredictionOptions {
   /**
@@ -16,6 +16,10 @@ export interface UseRestartPredictionOptions {
    * Number of days to analyze (default: 14, max: 30)
    */
   daysBack?: number
+  /**
+   * Force refresh from ML model (bypasses cache)
+   */
+  forceRefresh?: boolean
 }
 
 export interface UseRestartPredictionState {
@@ -23,10 +27,18 @@ export interface UseRestartPredictionState {
   loading: boolean
   error: string | null
   lastFetch: Date | null
+  /**
+   * Source of the predictions: 'ml' (fresh ML), 'cache' (stale cache), 'fallback' (database only)
+   */
+  source: 'ml' | 'cache' | 'fallback' | null
+  /**
+   * Whether any predictions are stale (older than 15 minutes)
+   */
+  hasStaleData: boolean
 }
 
 /**
- * Custom hook for fetching and polling server restart predictions
+ * Custom hook for fetching and polling ML-enhanced server restart predictions
  * 
  * @param serverIds - Array of server IDs to fetch predictions for
  * @param options - Configuration options
@@ -39,14 +51,17 @@ export function useRestartPrediction(
   const {
     pollingInterval = 5 * 60 * 1000, // 5 minutes default
     enabled = true,
-    daysBack = 14
+    daysBack = 14,
+    forceRefresh = false
   } = options
 
   const [state, setState] = useState<UseRestartPredictionState>({
     predictions: {},
     loading: true,
     error: null,
-    lastFetch: null
+    lastFetch: null,
+    source: null,
+    hasStaleData: false
   })
 
   // Track if component is mounted to prevent state updates after unmount
@@ -57,7 +72,7 @@ export function useRestartPrediction(
   /**
    * Fetch restart predictions from the API
    */
-  const fetchPredictions = useCallback(async () => {
+  const fetchPredictions = useCallback(async (force: boolean = false) => {
     // Prevent concurrent fetches
     if (fetchInProgressRef.current) return
     fetchInProgressRef.current = true
@@ -67,28 +82,47 @@ export function useRestartPrediction(
         setState(prev => ({
           ...prev,
           predictions: {},
-          loading: false
+          loading: false,
+          source: null,
+          hasStaleData: false
         }))
         return
       }
 
-      const response = await fetch(
-        `/api/restart-prediction?serverIds=${serverIds.join(',')}&daysBack=${daysBack}`
-      )
+      const params = new URLSearchParams({
+        serverIds: serverIds.join(','),
+        daysBack: daysBack.toString()
+      })
+      
+      if (force || forceRefresh) {
+        params.set('forceRefresh', 'true')
+      }
+
+      // Add cache-busting parameter to bypass CDN cache when forcing refresh
+      if (force || forceRefresh) {
+        params.set('_t', Date.now().toString())
+      }
+
+      const response = await fetch(`/api/restart-prediction?${params}`)
 
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`)
       }
 
-      const data = await response.json()
+      const data: RestartPredictionResponse = await response.json()
 
       if (!mountedRef.current) return
 
       // Convert array to record keyed by serverId
       const predictionsRecord: Record<string, RestartPrediction> = {}
+      let hasStale = false
+      
       if (Array.isArray(data.predictions)) {
         data.predictions.forEach((pred: RestartPrediction) => {
           predictionsRecord[pred.serverId] = pred
+          if (pred.isStale) {
+            hasStale = true
+          }
         })
       }
 
@@ -97,7 +131,9 @@ export function useRestartPrediction(
         predictions: predictionsRecord,
         loading: false,
         error: null,
-        lastFetch: new Date()
+        lastFetch: new Date(),
+        source: data.source || 'fallback',
+        hasStaleData: hasStale
       }))
     } catch (error) {
       if (!mountedRef.current) return
@@ -113,15 +149,22 @@ export function useRestartPrediction(
     } finally {
       fetchInProgressRef.current = false
     }
-  }, [serverIds, daysBack])
+  }, [serverIds, daysBack, forceRefresh])
 
   /**
    * Manual refresh function
    */
-  const refresh = useCallback(() => {
+  const refresh = useCallback((force: boolean = false) => {
     setState(prev => ({ ...prev, loading: true }))
-    fetchPredictions()
+    fetchPredictions(force)
   }, [fetchPredictions])
+
+  /**
+   * Force refresh from ML model (bypasses cache)
+   */
+  const forceMLRefresh = useCallback(() => {
+    refresh(true)
+  }, [refresh])
 
   /**
    * Calculate time remaining until restart
@@ -154,6 +197,42 @@ export function useRestartPrediction(
     }
   }, [])
 
+  /**
+   * Get prediction for a specific server
+   */
+  const getPrediction = useCallback((serverId: string): RestartPrediction | null => {
+    return state.predictions[serverId] || null
+  }, [state.predictions])
+
+  /**
+   * Get ML reasoning for a prediction
+   */
+  const getReasoning = useCallback((serverId: string): string => {
+    const prediction = state.predictions[serverId]
+    if (!prediction) return 'No prediction data available.'
+    return formatMLReasoning(prediction)
+  }, [state.predictions])
+
+  /**
+   * Get confidence level for a prediction
+   */
+  const getConfidence = useCallback((serverId: string): { level: 'high' | 'medium' | 'low' | 'none', value: number } => {
+    const prediction = state.predictions[serverId]
+    if (!prediction) return { level: 'none', value: 0 }
+    return {
+      level: getConfidenceLevel(prediction.confidence),
+      value: prediction.confidence
+    }
+  }, [state.predictions])
+
+  /**
+   * Check if a prediction is stale
+   */
+  const isStale = useCallback((serverId: string): boolean => {
+    const prediction = state.predictions[serverId]
+    return prediction?.isStale ?? true
+  }, [state.predictions])
+
   // Initial fetch and polling setup
   useEffect(() => {
     mountedRef.current = true
@@ -162,7 +241,9 @@ export function useRestartPrediction(
       setState(prev => ({
         ...prev,
         loading: false,
-        predictions: {}
+        predictions: {},
+        source: null,
+        hasStaleData: false
       }))
       return
     }
@@ -195,8 +276,13 @@ export function useRestartPrediction(
   return {
     ...state,
     refresh,
+    forceMLRefresh,
     getTimeRemaining,
     formatTimeRemaining,
+    getPrediction,
+    getReasoning,
+    getConfidence,
+    isStale,
     isPolling: enabled && serverIds.length > 0
   }
 }
@@ -211,3 +297,66 @@ export function getRestartPrediction(
   return predictions[serverId] || null
 }
 
+/**
+ * Hook to get countdown timer for a specific server's restart
+ */
+export function useRestartCountdown(
+  prediction: RestartPrediction | null,
+  updateInterval: number = 1000
+) {
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null)
+  const [isExpired, setIsExpired] = useState(false)
+
+  useEffect(() => {
+    if (!prediction?.nextRestartTime) {
+      setTimeRemaining(null)
+      setIsExpired(false)
+      return
+    }
+
+    const updateCountdown = () => {
+      const now = Date.now()
+      const restartTime = new Date(prediction.nextRestartTime!).getTime()
+      const remaining = restartTime - now
+
+      if (remaining <= 0) {
+        setTimeRemaining(0)
+        setIsExpired(true)
+      } else {
+        setTimeRemaining(remaining)
+        setIsExpired(false)
+      }
+    }
+
+    // Initial update
+    updateCountdown()
+
+    // Set up interval
+    const interval = setInterval(updateCountdown, updateInterval)
+
+    return () => clearInterval(interval)
+  }, [prediction?.nextRestartTime, updateInterval])
+
+  return {
+    timeRemaining,
+    isExpired,
+    formatted: timeRemaining !== null ? formatCountdown(timeRemaining) : null
+  }
+}
+
+/**
+ * Format milliseconds as countdown string (HH:MM:SS or MM:SS)
+ */
+function formatCountdown(milliseconds: number): string {
+  if (milliseconds <= 0) return '00:00'
+  
+  const totalSeconds = Math.floor(milliseconds / 1000)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+
+  if (hours > 0) {
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+  }
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+}
