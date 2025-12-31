@@ -154,8 +154,17 @@ The admin panel provides comprehensive management and monitoring capabilities fo
 
 ### Quick Start
 - Visit `/admin/login` to access the admin panel
-- Sign in with your Supabase admin credentials
+- Sign in with your Supabase admin credentials (email/password or OAuth)
 - Access real-time visitor tracking, analytics, and management tools
+
+### Authentication
+The admin panel supports **dynamic OAuth authentication** with automatic provider detection:
+- **Email/Password**: Traditional authentication method
+- **OAuth Providers**: Automatically detects all enabled providers in Supabase (Discord, Google, GitHub, etc.)
+- **Zero Code Changes**: Add new providers in Supabase, they appear instantly on the login page
+- **Secure**: Admin-only access with database verification
+
+See [Dynamic OAuth Authentication](./docs/DYNAMIC_OAUTH_AUTH.md) for complete details.
 
 ### Features
 - **Real-time Visitor Tracking**: Live monitoring of active site visitors with human/bot classification
@@ -169,6 +178,14 @@ The admin panel provides comprehensive management and monitoring capabilities fo
 - [🚀 Admin Setup Guide](./docs/ADMIN_SETUP.md) - Complete setup and configuration instructions
 - [📋 Admin Quick Reference](./docs/ADMIN_QUICK_REFERENCE.md) - Quick reference for common tasks
 - [📝 Admin Panel Rewrite](./docs/ADMIN_PANEL_REWRITE.md) - Technical details of the rewrite
+- [🔐 Dynamic OAuth Authentication](./docs/DYNAMIC_OAUTH_AUTH.md) - OAuth provider system and configuration
+- [⚙️ OAuth Configuration Guide](./docs/OAUTH_CONFIGURATION.md) - How to configure OAuth providers
+- [🏗️ OAuth Architecture](./docs/OAUTH_ARCHITECTURE.md) - Technical architecture and data flows
+- [🧪 OAuth Setup & Testing](./docs/OAUTH_SETUP_TESTING.md) - Setup guide and comprehensive testing procedures
+- [📱 Mobile & PWA Guide](./docs/MOBILE_PWA_GUIDE.md) - Mobile and PWA setup and usage
+- [🏛️ Mobile & PWA Architecture](./docs/MOBILE_PWA_ARCHITECTURE.md) - Technical architecture and diagrams
+- [✅ Mobile & PWA Testing](./docs/MOBILE_PWA_TESTING.md) - Comprehensive testing checklist
+- [📊 Implementation Summary](./docs/MOBILE_PWA_IMPLEMENTATION_SUMMARY.md) - Complete implementation summary
 
 ### Admin Routes
 | Route | Purpose |
@@ -194,6 +211,29 @@ This application includes a comprehensive notification banner system for display
 ### Documentation
 - [📚 Complete Documentation](./docs/NOTIFICATION_BANNERS.md) - Comprehensive guide with API reference, component details, and deployment instructions
 - [🚀 Quick Start Guide](./docs/NOTIFICATION_BANNERS_QUICKSTART.md) - Get started in 5 minutes with common examples
+
+## Mobile & PWA Support
+
+The admin panel is fully optimized for mobile devices and PWA (Progressive Web App) functionality:
+
+### Features
+- ✅ **Responsive Design** - Optimized for all screen sizes (mobile, tablet, desktop)
+- ✅ **Mobile Navigation** - Hamburger menu drawer on mobile devices
+- ✅ **PWA Installation** - Install as standalone app on iOS, Android, and Desktop
+- ✅ **Offline Support** - Service Worker caching for offline access
+- ✅ **Fast Performance** - Intelligent caching strategies for optimal load times
+- ✅ **Touch Optimized** - 44x44px minimum touch targets
+- ✅ **Safe Area Support** - Proper handling of notched devices
+
+### Installation
+- **iOS**: Open in Safari → Share → Add to Home Screen
+- **Android**: Open in Chrome → Menu → Install app
+- **Desktop**: Click install icon in address bar
+
+### Documentation
+- [📱 Mobile & PWA Guide](./docs/MOBILE_PWA_GUIDE.md) - Setup and usage instructions
+- [🏛️ Architecture](./docs/MOBILE_PWA_ARCHITECTURE.md) - Technical architecture and diagrams
+- [✅ Testing Guide](./docs/MOBILE_PWA_TESTING.md) - Comprehensive testing checklist
 
 ### Features
 - Multiple banner types with customizable styling

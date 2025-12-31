@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { AdminProtected } from '@/components/admin-login-supabase';
-import { AdminSidebar } from '@/components/admin/admin-sidebar-new';
+import { AdminSidebarMobile } from '@/components/admin/admin-sidebar-mobile';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -283,7 +283,7 @@ export default function EnhancedVisitorAnalyticsPage() {
         <div className={`fixed md:relative w-64 h-screen z-50 md:z-auto transition-transform duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}>
-          <AdminSidebar />
+          <AdminSidebarMobile />
         </div>
         
         <div className="flex-1 flex flex-col overflow-hidden w-full">

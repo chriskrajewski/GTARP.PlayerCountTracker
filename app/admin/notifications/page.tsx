@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { AdminProtected } from '@/components/admin-login';
-import { AdminSidebar } from '@/components/admin/admin-sidebar';
+import { AdminSidebarMobile } from '@/components/admin/admin-sidebar-mobile';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -408,9 +408,9 @@ export default function AdminNotificationsPage() {
   if (loading) {
     return (
       <AdminProtected>
-        <div className="flex h-screen bg-[#0e0e10]">
-          <AdminSidebar />
-          <div className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col md:flex-row h-screen bg-[#0e0e10]">
+          <AdminSidebarMobile />
+          <div className="flex-1 flex items-center justify-center md:ml-64 mt-16 md:mt-0">
             <div className="flex items-center space-x-2 text-white">
               <RefreshCw className="h-6 w-6 animate-spin" />
               <span>Loading notifications...</span>
@@ -423,26 +423,26 @@ export default function AdminNotificationsPage() {
 
   return (
     <AdminProtected>
-      <div className="flex h-screen bg-[#0e0e10]">
-        <AdminSidebar />
+      <div className="flex flex-col md:flex-row h-screen bg-[#0e0e10]">
+        <AdminSidebarMobile />
         
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden md:ml-64 mt-16 md:mt-0">
           {/* Header */}
-          <div className="bg-[#1a1a1e] border-b border-[#26262c] px-6 py-4">
-            <div className="flex items-center justify-between">
+          <div className="bg-[#1a1a1e] border-b border-[#26262c] px-4 md:px-6 py-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-bold text-white flex items-center">
-                  <Bell className="mr-3 h-6 w-6" />
+                <h1 className="text-xl md:text-2xl font-bold text-white flex items-center">
+                  <Bell className="mr-2 md:mr-3 h-5 md:h-6 w-5 md:w-6" />
                   Notification Management
                 </h1>
-                <p className="text-[#ADADB8] text-sm">
+                <p className="text-[#ADADB8] text-xs md:text-sm">
                   Manage system notifications and announcement banners
                 </p>
               </div>
               
               <Button 
                 onClick={openCreateDialog}
-                className="bg-[#9147ff] hover:bg-[#772ce8] text-white"
+                className="bg-[#9147ff] hover:bg-[#772ce8] text-white text-xs md:text-sm w-full md:w-auto"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Create Banner

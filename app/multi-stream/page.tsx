@@ -3,11 +3,14 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Responsive, WidthProvider } from 'react-grid-layout';
+import { AnimatePresence } from 'motion/react';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
 import { useFeatureGate, FEATURE_GATES } from '@/lib/statsig';
 import { cn } from '@/lib/utils';
+import { PWABottomDock } from '@/components/pwa-bottom-dock';
+import { usePWAStandalone } from '@/hooks/use-pwa-standalone';
 
 import {
   StreamInfo,
@@ -78,6 +81,9 @@ export default function MultiStreamPage() {
   
   // Feature flag check
   const isMultiStreamEnabled = useFeatureGate(FEATURE_GATES.MULTI_STREAM);
+  
+  // PWA standalone mode detection
+  const { isPWA, isLoading: isPWALoading } = usePWAStandalone();
 
   // Parse streams from URL
   const streams = useMemo(() => parseStreamsParam(searchParams), [searchParams]);
@@ -376,6 +382,13 @@ export default function MultiStreamPage() {
                     </div>
                   )}
                 </div>
+      
+      {/* PWA Bottom Dock - only show in PWA mode and when not fullscreen */}
+      <AnimatePresence>
+        {isPWA && !isPWALoading && !isFullscreen && (
+          <PWABottomDock />
+        )}
+      </AnimatePresence>
     </div>
   );
 } 

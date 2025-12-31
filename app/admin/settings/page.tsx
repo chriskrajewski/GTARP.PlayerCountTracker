@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { AdminProtected } from '@/components/admin-login-supabase';
-import { AdminSidebar } from '@/components/admin/admin-sidebar-new';
+import { AdminSidebarMobile } from '@/components/admin/admin-sidebar-mobile';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -80,19 +80,19 @@ export default function SettingsPage() {
 
   return (
     <AdminProtected>
-      <div className="flex h-screen bg-[#0e0e10]">
-        <AdminSidebar />
+      <div className="flex flex-col md:flex-row h-screen bg-[#0e0e10]">
+        <AdminSidebarMobile />
         
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden md:ml-64 mt-16 md:mt-0">
           {/* Header */}
-          <div className="bg-[#1a1a1e] border-b border-[#26262c] px-6 py-4">
+          <div className="bg-[#1a1a1e] border-b border-[#26262c] px-4 md:px-6 py-4">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                  <Settings className="h-6 w-6" />
+                <h1 className="text-xl md:text-2xl font-bold text-white flex items-center gap-2">
+                  <Settings className="h-5 md:h-6 w-5 md:w-6" />
                   Settings
                 </h1>
-                <p className="text-[#ADADB8] text-sm">
+                <p className="text-[#ADADB8] text-xs md:text-sm">
                   System configuration and preferences
                 </p>
               </div>
@@ -100,14 +100,14 @@ export default function SettingsPage() {
           </div>
 
           {/* Main Content */}
-          <div className="flex-1 overflow-auto p-6">
+          <div className="flex-1 overflow-auto p-4 md:p-6">
             <div className="max-w-4xl mx-auto space-y-6">
               
               <Tabs defaultValue="visitor-tracking" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 bg-[#26262c]">
-                  <TabsTrigger value="visitor-tracking" className="text-white">Visitor Tracking</TabsTrigger>
-                  <TabsTrigger value="data-management" className="text-white">Data Management</TabsTrigger>
-                  <TabsTrigger value="system" className="text-white">System</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 bg-[#26262c]">
+                  <TabsTrigger value="visitor-tracking" className="text-white text-xs md:text-sm">Visitor Tracking</TabsTrigger>
+                  <TabsTrigger value="data-management" className="text-white text-xs md:text-sm">Data Management</TabsTrigger>
+                  <TabsTrigger value="system" className="hidden md:block text-white text-xs md:text-sm">System</TabsTrigger>
                 </TabsList>
 
                 {/* Visitor Tracking Settings */}

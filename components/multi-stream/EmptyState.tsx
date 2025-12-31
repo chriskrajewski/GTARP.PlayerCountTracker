@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Twitch, Zap, Play, ExternalLink } from 'lucide-react';
 import { KickIcon } from './icons';
 import { MAX_STREAMS } from './types';
 import { cn } from '@/lib/utils';
+import { PWABottomDock } from '@/components/pwa-bottom-dock';
+import { usePWAStandalone } from '@/hooks/use-pwa-standalone';
 
 interface EmptyStateProps {
   onLaunch: (streamsParam: string) => void;
@@ -29,6 +31,12 @@ const EXAMPLE_COMBOS = [
 export function EmptyState({ onLaunch }: EmptyStateProps) {
   const [inputValue, setInputValue] = useState('');
   const [error, setError] = useState<string | null>(null);
+  
+  // PWA standalone mode detection
+  const { isPWA, isLoading: isPWALoading } = usePWAStandalone();
+  
+  // Show dock in PWA mode
+  const showPWADock = isPWA && !isPWALoading;
 
   // Validate and parse input
   const parseInput = (input: string): { valid: string[]; error: string | null } => {
@@ -129,9 +137,18 @@ export function EmptyState({ onLaunch }: EmptyStateProps) {
   };
 
   return (
-    <div className="min-h-screen bg-black flex flex-col">
-      {/* Minimal header */}
-      <div className="px-4 py-3 border-b border-[#26262c]">
+    <div className={cn(
+      "min-h-screen bg-black flex flex-col",
+      showPWADock && "pb-20" // Add padding for dock
+    )}>
+      {/* Minimal header with iOS safe area support */}
+      <div 
+        className="px-4 py-3 border-b border-[#26262c] bg-black"
+        style={{
+          // Add safe area padding for iOS status bar
+          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)',
+        }}
+      >
         <div className="flex items-center gap-3 max-w-2xl mx-auto">
           <Link 
             href="/" 
@@ -257,6 +274,11 @@ export function EmptyState({ onLaunch }: EmptyStateProps) {
           </div>
         </div>
       </div>
+      
+      {/* PWA Bottom Dock */}
+      <AnimatePresence>
+        {showPWADock && <PWABottomDock />}
+      </AnimatePresence>
     </div>
   );
 }

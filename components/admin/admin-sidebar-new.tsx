@@ -9,7 +9,6 @@ import {
   Users,
   Bell,
   Database,
-  BarChart3,
   Settings,
   LogOut,
   ChevronRight
@@ -43,16 +42,10 @@ const ADMIN_MENU_ITEMS = [
     description: 'Manage notification banners'
   },
   {
-    label: 'Data Management',
+    label: 'Server Management',
     href: '/admin/data',
     icon: Database,
-    description: 'Data collection and export'
-  },
-  {
-    label: 'System Analytics',
-    href: '/admin/analytics',
-    icon: BarChart3,
-    description: 'API and system performance metrics'
+    description: 'Manage servers and data collection'
   },
   {
     label: 'Settings',

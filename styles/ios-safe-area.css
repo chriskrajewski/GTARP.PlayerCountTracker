@@ -1,0 +1,259 @@
+/* iOS Safe Area Support for PWA */
+/* This file provides safe area insets for notched devices (iPhone X+, etc.) */
+/* The header handles top safe area, body handles sides and bottom */
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* ROOT STYLING                                                                */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Ensure html has the dark background for status bar area */
+html {
+  background-color: #000000;
+}
+
+/* Body safe area padding - sides and bottom only */
+/* Top is handled by the header's paddingTop */
+body {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  min-height: 100vh;
+  min-height: 100dvh; /* Dynamic viewport height */
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* HEADER STYLING - Handles top safe area                                      */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Header padding includes safe area inset for status bar */
+/* This is also set inline in common-layout.tsx for reliability */
+header[role="banner"],
+.mobile-header,
+.ios-safe-header {
+  padding-top: max(0.75rem, env(safe-area-inset-top, 0px)) !important;
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+}
+
+/* Mobile drawer with safe area support */
+.mobile-drawer {
+  padding-left: max(0px, env(safe-area-inset-left, 0px));
+  padding-right: max(0px, env(safe-area-inset-right, 0px));
+  padding-bottom: max(0px, env(safe-area-inset-bottom, 0px));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* PWA STANDALONE MODE                                                         */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+@media all and (display-mode: standalone) {
+  /* In standalone mode, ensure header has extra padding for status bar */
+  header[role="banner"],
+  .mobile-header,
+  .ios-safe-header {
+    padding-top: max(1rem, calc(env(safe-area-inset-top, 0px) + 0.5rem)) !important;
+  }
+  
+  /* Prevent text selection in standalone mode for app-like feel */
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  
+  /* Allow text selection in inputs */
+  input, textarea, [contenteditable] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* iOS SPECIFIC - Using feature detection                                      */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+@supports (-webkit-touch-callout: none) {
+  /* iOS Safari and PWA */
+  body {
+    -webkit-tap-highlight-color: transparent;
+    /* Prevent rubber band scroll effect */
+    overscroll-behavior: none;
+  }
+
+  input,
+  textarea,
+  select {
+    -webkit-user-select: text;
+    font-size: 16px; /* Prevent zoom on focus */
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* TOUCH TARGET ACCESSIBILITY                                                  */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Ensure touch targets are accessible - but exclude specific UI components */
+/* Note: Tabs, small icon buttons, and inline links have their own sizing */
+/* Radix UI components use data-radix-collection-item attribute */
+button:not([data-radix-collection-item]):not([data-cyber]):not(.icon-btn):not(.tab-trigger),
+input[type="button"],
+input[type="submit"] {
+  min-height: 44px;
+}
+
+/* Standalone buttons and primary CTAs need minimum tap target */
+.btn-primary,
+.btn-secondary,
+.custom-btn,
+button[type="submit"],
+button.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* PREVENT HORIZONTAL OVERFLOW                                                 */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* Z-INDEX STACKING                                                            */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+.fixed-header,
+.mobile-header {
+  z-index: 40;
+}
+
+.drawer-overlay {
+  z-index: 30;
+}
+
+.mobile-drawer {
+  z-index: 40;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* ANDROID SPECIFIC FIXES                                                      */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+@supports (-webkit-appearance: none) and (not (-webkit-touch-callout: none)) {
+  /* Android specific styles (not iOS) */
+  input,
+  textarea,
+  select {
+    font-size: 16px; /* Prevent zoom on focus */
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* PWA BOTTOM DOCK STYLING                                                     */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Base dock styling - MUST be above everything including modals/slideouts */
+.pwa-bottom-dock {
+  /* z-index set inline for reliability, but CSS fallback */
+  z-index: 9999 !important;
+  /* Ensure it's always on top */
+  isolation: isolate;
+  /* Force position at bottom - no transform needed */
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  position: fixed !important;
+  /* Ensure no transform is applied initially */
+  transform: none !important;
+}
+
+/* Safe area support for dock */
+@media all and (display-mode: standalone) {
+  /* When dock is present, remove body bottom padding to avoid double spacing */
+  body:has(.pwa-bottom-dock) {
+    padding-bottom: 0 !important;
+  }
+  
+  /* Main content needs extra bottom padding when dock is visible */
+  .pwa-dock-content-padding {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Dock touch interactions */
+.pwa-bottom-dock button,
+.pwa-bottom-dock a {
+  /* Ensure minimum touch target */
+  min-height: 44px;
+  min-width: 44px;
+  /* Remove tap highlight */
+  -webkit-tap-highlight-color: transparent;
+  /* Smooth active state */
+  transition: transform 0.1s ease, opacity 0.1s ease;
+}
+
+.pwa-bottom-dock button:active,
+.pwa-bottom-dock a:active {
+  transform: scale(0.95);
+  opacity: 0.8;
+}
+
+/* Dock glassmorphism backdrop for iOS */
+@supports (-webkit-backdrop-filter: blur(20px)) {
+  .pwa-bottom-dock > div > div:first-child {
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+  }
+}
+
+/* Hide dock when keyboard is open (viewport height changes significantly) */
+@media (max-height: 400px) {
+  .pwa-bottom-dock {
+    display: none;
+  }
+}
+
+/* Dock animation states */
+.pwa-bottom-dock[data-state="hidden"] {
+  transform: translateY(100%);
+  pointer-events: none;
+}
+
+.pwa-bottom-dock[data-state="visible"] {
+  transform: translateY(0);
+}
+
+/* Active dock item indicator animation */
+@keyframes dock-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(0, 217, 255, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(0, 217, 255, 0);
+  }
+}
+
+.pwa-bottom-dock .dock-item-active {
+  animation: dock-pulse 2s ease-in-out infinite;
+}
+
+/* Dock glow effect on scroll */
+.pwa-bottom-dock::before {
+  content: '';
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  height: 20px;
+  background: linear-gradient(to top, rgba(0, 217, 255, 0.08), transparent);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.pwa-bottom-dock[data-scrolled="true"]::before {
+  opacity: 1;
+}

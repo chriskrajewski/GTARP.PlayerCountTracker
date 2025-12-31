@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,9 +8,14 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Eye, EyeOff, Shield, Mail, Lock, AlertCircle } from 'lucide-react';
-import { signInAdmin, signOutAdmin, getCurrentAdminUser, onAuthStateChange } from '@/lib/admin-auth-supabase';
+import { signOutAdmin, getCurrentAdminUser, onAuthStateChange } from '@/lib/admin-auth-supabase-enhanced';
 import { waitForSessionRestoration } from '@/lib/supabase-browser';
 import type { User } from '@supabase/supabase-js';
+
+// Lazy load the enhanced login component to avoid circular dependencies
+const EnhancedAdminLogin = lazy(() => 
+  import('@/components/admin-login-enhanced').then(mod => ({ default: mod.AdminLogin }))
+);
 
 /**
  * Admin Login Component
@@ -265,7 +270,18 @@ export function AdminProtected({ children, fallback }: AdminProtectedProps) {
   }
 
   if (!user) {
-    return fallback || <AdminLogin />;
+    return (
+      <Suspense fallback={
+        <div className="min-h-screen bg-[#0e0e10] flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-8 h-8 border-2 border-[#9147ff]/20 border-t-[#9147ff] rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-white">Loading login...</p>
+          </div>
+        </div>
+      }>
+        {fallback || <EnhancedAdminLogin />}
+      </Suspense>
+    );
   }
 
   return <>{children}</>;

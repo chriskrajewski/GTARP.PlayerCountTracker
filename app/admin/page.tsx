@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { AdminProtected } from '@/components/admin-login-supabase';
-import { AdminSidebar } from '@/components/admin/admin-sidebar-new';
+import { AdminSidebarMobile } from '@/components/admin/admin-sidebar-mobile';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,8 @@ import {
   CheckCircle2,
   Clock,
   Eye,
-  Zap
+  Zap,
+  Bell
 } from 'lucide-react';
 import { LiveVisitorCount } from '@/components/LiveVisitorCount';
 import { createBrowserClient } from '@/lib/supabase-browser';
@@ -102,16 +103,21 @@ export default function AdminDashboard() {
 
   return (
     <AdminProtected>
-      <div className="flex h-screen bg-[#0e0e10]">
-        <AdminSidebar />
+      <div className="flex flex-col md:flex-row h-screen bg-[#0e0e10]">
+        <AdminSidebarMobile />
         
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden md:ml-64 mt-16 md:mt-0" style={{
+          marginTop: 'max(4rem, calc(3.5rem + env(safe-area-inset-top)))',
+        }}>
           {/* Header */}
-          <div className="bg-[#1a1a1e] border-b border-[#26262c] px-6 py-4">
-            <div className="flex items-center justify-between">
+          <div className="bg-[#1a1a1e] border-b border-[#26262c] px-4 md:px-6 py-4" style={{
+            paddingLeft: 'max(1rem, calc(1rem + env(safe-area-inset-left)))',
+            paddingRight: 'max(1rem, calc(1rem + env(safe-area-inset-right)))',
+          }}>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-                <p className="text-[#ADADB8] text-sm">
+                <h1 className="text-xl md:text-2xl font-bold text-white">Dashboard</h1>
+                <p className="text-[#ADADB8] text-xs md:text-sm">
                   Real-time system overview and visitor tracking
                 </p>
               </div>
@@ -121,7 +127,7 @@ export default function AdminDashboard() {
                 size="sm"
                 onClick={handleRefresh}
                 disabled={refreshing}
-                className="bg-[#26262c] border-[#40404a] hover:bg-[#333339] text-white"
+                className="bg-[#26262c] border-[#40404a] hover:bg-[#333339] text-white w-full md:w-auto"
               >
                 <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
               </Button>
@@ -129,20 +135,24 @@ export default function AdminDashboard() {
           </div>
 
           {/* Main Content */}
-          <div className="flex-1 overflow-auto p-6">
+          <div className="flex-1 overflow-auto p-4 md:p-6" style={{
+            paddingLeft: 'max(1rem, calc(1rem + env(safe-area-inset-left)))',
+            paddingRight: 'max(1rem, calc(1rem + env(safe-area-inset-right)))',
+            paddingBottom: 'max(1.5rem, calc(1.5rem + env(safe-area-inset-bottom)))',
+          }}>
             <div className="max-w-7xl mx-auto space-y-6">
               
               {/* Key Metrics */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 md:gap-6">
                 <Card className="bg-[#1a1a1e] border-[#26262c]">
                   <CardHeader className="flex flex-row items-center justify-between pb-3">
-                    <CardTitle className="text-sm font-medium text-[#ADADB8]">
+                    <CardTitle className="text-xs md:text-sm font-medium text-[#ADADB8]">
                       Active Servers
                     </CardTitle>
                     <Database className="h-4 w-4 text-[#ADADB8]" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-white">
+                    <div className="text-xl md:text-2xl font-bold text-white">
                       {metrics.activeServers}
                     </div>
                     <p className="text-xs text-[#ADADB8] mt-1">
@@ -153,13 +163,13 @@ export default function AdminDashboard() {
 
                 <Card className="bg-[#1a1a1e] border-[#26262c]">
                   <CardHeader className="flex flex-row items-center justify-between pb-3">
-                    <CardTitle className="text-sm font-medium text-[#ADADB8]">
+                    <CardTitle className="text-xs md:text-sm font-medium text-[#ADADB8]">
                       API Requests (24h)
                     </CardTitle>
                     <Zap className="h-4 w-4 text-[#ADADB8]" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-white">
+                    <div className="text-xl md:text-2xl font-bold text-white">
                       {metrics.apiRequests.toLocaleString()}
                     </div>
                     <p className="text-xs text-emerald-400 mt-1">
@@ -168,50 +178,16 @@ export default function AdminDashboard() {
                     </p>
                   </CardContent>
                 </Card>
-
-                <Card className="bg-[#1a1a1e] border-[#26262c]">
-                  <CardHeader className="flex flex-row items-center justify-between pb-3">
-                    <CardTitle className="text-sm font-medium text-[#ADADB8]">
-                      System Uptime
-                    </CardTitle>
-                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-white">
-                      {metrics.systemUptime}
-                    </div>
-                    <p className="text-xs text-emerald-400 mt-1">
-                      All systems operational
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-[#1a1a1e] border-[#26262c]">
-                  <CardHeader className="flex flex-row items-center justify-between pb-3">
-                    <CardTitle className="text-sm font-medium text-[#ADADB8]">
-                      Status
-                    </CardTitle>
-                    <Activity className="h-4 w-4 text-[#ADADB8]" />
-                  </CardHeader>
-                  <CardContent>
-                    <Badge className="bg-emerald-400/20 text-emerald-400 border-emerald-400/30">
-                      Healthy
-                    </Badge>
-                    <p className="text-xs text-[#ADADB8] mt-2">
-                      Last updated: {new Date().toLocaleTimeString()}
-                    </p>
-                  </CardContent>
-                </Card>
               </div>
 
               {/* Live Visitor Tracking */}
-              <div className="bg-gradient-to-r from-[#9147ff]/10 to-[#004D61]/10 border border-[#9147ff]/20 rounded-lg p-6">
+              <div className="bg-gradient-to-r from-[#9147ff]/10 to-[#004D61]/10 border border-[#9147ff]/20 rounded-lg p-4 md:p-6">
                 <div className="mb-4">
-                  <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                    <Eye className="h-5 w-5 text-[#9147ff]" />
+                  <h2 className="text-base md:text-lg font-semibold text-white flex items-center gap-2">
+                    <Eye className="h-4 md:h-5 w-4 md:w-5 text-[#9147ff]" />
                     Live Visitor Tracking
                   </h2>
-                  <p className="text-sm text-[#ADADB8] mt-1">
+                  <p className="text-xs md:text-sm text-[#ADADB8] mt-1">
                     Real-time monitoring of active site visitors with human/bot classification
                   </p>
                 </div>
@@ -219,16 +195,16 @@ export default function AdminDashboard() {
               </div>
 
               {/* System Status */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Recent Activity */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                {/* Data Overview */}
                 <Card className="bg-[#1a1a1e] border-[#26262c]">
                   <CardHeader>
-                    <CardTitle className="flex items-center space-x-2 text-white">
-                      <Clock className="h-5 w-5" />
-                      <span>System Status</span>
+                    <CardTitle className="flex items-center space-x-2 text-white text-base md:text-lg">
+                      <Database className="h-4 md:h-5 w-4 md:w-5" />
+                      <span>Data Overview</span>
                     </CardTitle>
-                    <CardDescription className="text-[#ADADB8]">
-                      Current system health and status
+                    <CardDescription className="text-[#ADADB8] text-xs md:text-sm">
+                      Current database statistics
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -236,29 +212,25 @@ export default function AdminDashboard() {
                       <div className="flex items-center justify-between p-3 bg-[#26262c]/30 rounded-lg">
                         <div className="flex items-center space-x-2">
                           <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                          <span className="text-sm text-white">Database</span>
+                          <span className="text-xs md:text-sm text-white">Configured Servers</span>
                         </div>
-                        <Badge className="bg-emerald-400/20 text-emerald-400 border-emerald-400/30">
-                          Healthy
-                        </Badge>
+                        <span className="text-white font-medium text-sm">{metrics.activeServers}</span>
                       </div>
 
                       <div className="flex items-center justify-between p-3 bg-[#26262c]/30 rounded-lg">
                         <div className="flex items-center space-x-2">
                           <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                          <span className="text-sm text-white">API Services</span>
+                          <span className="text-xs md:text-sm text-white">Data Points (24h)</span>
                         </div>
-                        <Badge className="bg-emerald-400/20 text-emerald-400 border-emerald-400/30">
-                          Operational
-                        </Badge>
+                        <span className="text-white font-medium text-sm">{metrics.apiRequests.toLocaleString()}</span>
                       </div>
 
                       <div className="flex items-center justify-between p-3 bg-[#26262c]/30 rounded-lg">
                         <div className="flex items-center space-x-2">
                           <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                          <span className="text-sm text-white">Data Collection</span>
+                          <span className="text-xs md:text-sm text-white">Collection Status</span>
                         </div>
-                        <Badge className="bg-emerald-400/20 text-emerald-400 border-emerald-400/30">
+                        <Badge className="bg-emerald-400/20 text-emerald-400 border-emerald-400/30 text-xs">
                           Active
                         </Badge>
                       </div>
@@ -266,51 +238,50 @@ export default function AdminDashboard() {
                       <div className="flex items-center justify-between p-3 bg-[#26262c]/30 rounded-lg">
                         <div className="flex items-center space-x-2">
                           <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                          <span className="text-sm text-white">Realtime Subscriptions</span>
+                          <span className="text-xs md:text-sm text-white">Last Updated</span>
                         </div>
-                        <Badge className="bg-emerald-400/20 text-emerald-400 border-emerald-400/30">
-                          Connected
-                        </Badge>
+                        <span className="text-white font-medium text-xs">{new Date().toLocaleTimeString()}</span>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                {/* Quick Info */}
+                {/* Navigation Shortcuts */}
                 <Card className="bg-[#1a1a1e] border-[#26262c]">
                   <CardHeader>
-                    <CardTitle className="flex items-center space-x-2 text-white">
-                      <Activity className="h-5 w-5" />
-                      <span>Quick Info</span>
+                    <CardTitle className="flex items-center space-x-2 text-white text-base md:text-lg">
+                      <Activity className="h-4 md:h-5 w-4 md:w-5" />
+                      <span>Quick Navigation</span>
                     </CardTitle>
-                    <CardDescription className="text-[#ADADB8]">
-                      Important system information
+                    <CardDescription className="text-[#ADADB8] text-xs md:text-sm">
+                      Access key admin features
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-3 text-sm">
-                      <div className="flex justify-between items-center p-3 bg-[#26262c]/30 rounded-lg">
-                        <span className="text-[#ADADB8]">Visitor Tracking</span>
-                        <Badge className="bg-[#9147ff]/20 text-[#9147ff] border-[#9147ff]/30">
-                          Enabled
-                        </Badge>
-                      </div>
-
-                      <div className="flex justify-between items-center p-3 bg-[#26262c]/30 rounded-lg">
-                        <span className="text-[#ADADB8]">Data Retention</span>
-                        <span className="text-white font-medium">7 days</span>
-                      </div>
-
-                      <div className="flex justify-between items-center p-3 bg-[#26262c]/30 rounded-lg">
-                        <span className="text-[#ADADB8]">Heartbeat Interval</span>
-                        <span className="text-white font-medium">30 seconds</span>
-                      </div>
-
-                      <div className="flex justify-between items-center p-3 bg-[#26262c]/30 rounded-lg">
-                        <span className="text-[#ADADB8]">Inactive Timeout</span>
-                        <span className="text-white font-medium">5 minutes</span>
-                      </div>
-                    </div>
+                  <CardContent className="space-y-3">
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start bg-[#26262c]/30 border-[#40404a] text-white hover:bg-[#26262c]/50 text-sm"
+                      onClick={() => window.location.href = '/admin/data'}
+                    >
+                      <Database className="h-4 w-4 mr-2" />
+                      Server Management
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start bg-[#26262c]/30 border-[#40404a] text-white hover:bg-[#26262c]/50 text-sm"
+                      onClick={() => window.location.href = '/admin/visitors'}
+                    >
+                      <Users className="h-4 w-4 mr-2" />
+                      Visitor Analytics
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start bg-[#26262c]/30 border-[#40404a] text-white hover:bg-[#26262c]/50 text-sm"
+                      onClick={() => window.location.href = '/admin/notifications'}
+                    >
+                      <Bell className="h-4 w-4 mr-2" />
+                      Notifications
+                    </Button>
                   </CardContent>
                 </Card>
               </div>
@@ -320,8 +291,8 @@ export default function AdminDashboard() {
                 <div className="flex items-start space-x-3">
                   <AlertTriangle className="h-5 w-5 text-[#004D61] flex-shrink-0 mt-0.5" />
                   <div>
-                    <h3 className="text-sm font-semibold text-white">Admin Panel Information</h3>
-                    <p className="text-sm text-[#ADADB8] mt-1">
+                    <h3 className="text-xs md:text-sm font-semibold text-white">Admin Panel Information</h3>
+                    <p className="text-xs md:text-sm text-[#ADADB8] mt-1">
                       This admin panel provides real-time visibility into site visitors, system metrics, and data management. 
                       All visitor data is tracked securely and automatically cleaned up after 7 days. Use the navigation menu 
                       to access detailed analytics, notification management, and system settings.
