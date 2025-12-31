@@ -28,6 +28,7 @@ import {
   type ServerCapacityData
 } from "@/lib/data"
 import { useLiveServerData } from "@/hooks/use-live-server-data"
+import { useRestartPrediction } from "@/hooks/use-restart-prediction"
 import PlayerCountChart from "./player-count-chart-lw"
 import ServerStatsCards from "./server-stats-cards"
 import { MultiServerSelect } from "./multi-server-select"
@@ -195,6 +196,16 @@ export default function Dashboard() {
   } = useLiveServerData(selectedServers, {
     pollingInterval: 30000, // Poll every 30 seconds
     enabled: selectedServers.length > 0
+  })
+
+  // Restart prediction hook - analyzes historical data to predict server restarts
+  const {
+    predictions: restartPredictions,
+    loading: restartPredictionsLoading
+  } = useRestartPrediction(selectedServers, {
+    pollingInterval: 5 * 60 * 1000, // Poll every 5 minutes
+    enabled: selectedServers.length > 0,
+    daysBack: 14
   })
 
   const slugMaps = useMemo(() => buildServerSlugMaps(servers), [servers])
@@ -780,6 +791,7 @@ export default function Dashboard() {
                   viewerData={currentViewData}
                   liveData={liveServers[serverId]}
                   liveLoading={liveLoading}
+                  restartPrediction={restartPredictions[serverId] || null}
                   onViewChanges={() => {
                     setSelectedServerForChanges(serverId)
                     setServerChangesPanelOpen(true)
