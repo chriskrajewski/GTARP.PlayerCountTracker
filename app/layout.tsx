@@ -68,7 +68,8 @@ export const metadata: Metadata = {
       { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
     apple: [
-      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+      { url: "/apple-touch-icon-precomposed.png", sizes: "180x180", type: "image/png" },
     ],
     shortcut: ["/favicon.png"],
   },
@@ -134,6 +135,11 @@ export default function RootLayout({
         <meta name="application-name" content="GTARP Tracker" />
         <meta name="msapplication-TileColor" content="#06070b" />
         <meta name="msapplication-config" content="/browserconfig.xml" />
+        
+        {/* iOS PWA Icons - Explicit link tags required for iOS */}
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-precomposed.png" />
         
         {/* Force dark mode */}
         <meta name="color-scheme" content="dark" />
