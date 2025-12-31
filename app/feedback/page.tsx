@@ -7,10 +7,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
-import { Loader2, CheckCircle2, ArrowLeft, ExternalLink } from "lucide-react";
+import { Loader2, CheckCircle2, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Metadata } from "next";
+import { CommonLayout } from "@/components/common-layout";
 
 // Define types for feedback submission
 type FeedbackType = 'bug' | 'feature' | 'feedback';
@@ -98,19 +98,10 @@ export default function FeedbackPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-black">
-      {/* Simple header with back button */}
-      <div className="bg-[#0e0e10] p-4 flex items-center border-b border-[#26262c]">
-        <Link href="/" className="mr-3">
-          <ArrowLeft className="h-5 w-5 text-white" />
-        </Link>
-        <h1 className="text-base font-bold text-white">Send Feedback</h1>
-      </div>
-
-      {/* Main content */}
-      <div className="flex-1 p-4 bg-black">
+    <CommonLayout showBackButton pageTitle="Send Feedback">
+      <div className="py-4">
         {isSuccess ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
+          <div className="flex flex-col items-center justify-center text-center">
             <div className="bg-[#0e0e10] p-6 rounded-lg border border-[#26262c] max-w-md w-full">
               <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
               <h2 className="text-xl font-semibold text-white mb-2">Thank You!</h2>
@@ -232,6 +223,6 @@ export default function FeedbackPage() {
           </form>
         )}
       </div>
-    </div>
+    </CommonLayout>
   );
 } 

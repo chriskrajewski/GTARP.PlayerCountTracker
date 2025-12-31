@@ -20,6 +20,9 @@ import { motion, AnimatePresence, MobileMenu, MobileMenuItem, MotionButton } fro
 import { fadeInUp, springs } from '@/lib/motion';
 import { SlideoutPanel } from '@/components/slideout-panel';
 import { ChangelogPanel } from '@/components/changelog-panel';
+import { PWABottomDock } from '@/components/pwa-bottom-dock';
+import { usePWAStandalone } from '@/hooks/use-pwa-standalone';
+import { cn } from '@/lib/utils';
 
 // Create an instance of the Mixpanel object, your token is already added to this snippet
       mixpanel.init('13440c630224bb2155944bc8de971af7', {
@@ -188,6 +191,34 @@ export function CommonLayout({
   const [showChangelogPanel, setShowChangelogPanel] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
+  // PWA standalone mode detection
+  const { isPWA, isLoading: isPWALoading } = usePWAStandalone();
+  
+  // Track if we're on mobile for dock visibility
+  const [isMobileView, setIsMobileView] = useState(false);
+  
+  // Debug: Check for URL param to force show dock for testing
+  const [forceShowDock, setForceShowDock] = useState(false);
+  
+  useEffect(() => {
+    const checkMobile = () => setIsMobileView(window.innerWidth < 640);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    // Check for debug param to force show dock for testing (development only)
+    if (process.env.NODE_ENV === 'development') {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('pwa_dock') === 'true') {
+        setForceShowDock(true);
+      }
+    }
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+  
+  // Show dock in PWA mode on mobile, or when debug param is set (dev only)
+  const showPWADock = (isPWA && isMobileView && !isPWALoading) || forceShowDock;
+  
   // Feature gates - Temporarily force to true for debugging
   // const isFeedbackEnabled = useFeatureGate(FEATURE_GATES.FEEDBACK_FORM);
   // const isChangelogEnabled = useFeatureGate(FEATURE_GATES.CHANGELOG);
@@ -223,12 +254,14 @@ export function CommonLayout({
       {/* HEADER - Premium Cyberpunk Design                                   */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       <motion.header 
-        className="relative text-white px-3 sm:px-4 flex items-center justify-between sticky top-0 z-50 flex-wrap overflow-hidden"
+        className="relative text-white px-3 sm:px-4 flex items-center justify-between sticky top-0 z-50 flex-wrap overflow-hidden ios-safe-header"
         style={{ 
           background: 'linear-gradient(180deg, rgba(10, 10, 12, 0.98) 0%, rgba(14, 14, 16, 0.95) 100%)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
           minHeight: '60px',
+          // iOS Safe Area - add padding top for status bar
+          paddingTop: 'max(0.75rem, env(safe-area-inset-top, 0px))',
         }}
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -325,25 +358,27 @@ export function CommonLayout({
           />
         </motion.div>
 
-        {/* Mobile menu button */}
-        <div className="flex items-center sm:hidden order-2 relative z-10">
-          <motion.button 
-            onClick={(e) => {
-              e.stopPropagation();
-              setMobileMenuOpen(!mobileMenuOpen);
-            }} 
-            className="p-2 rounded-lg text-white bg-[#18181b]/80 border border-[#26262c] hover:border-cyan-500/30 transition-all backdrop-blur-sm"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <motion.div
-              animate={{ rotate: mobileMenuOpen ? 90 : 0 }}
-              transition={{ duration: 0.2 }}
+        {/* Mobile menu button - Hidden in PWA dock mode */}
+        {!showPWADock && (
+          <div className="flex items-center sm:hidden order-2 relative z-10">
+            <motion.button 
+              onClick={(e) => {
+                e.stopPropagation();
+                setMobileMenuOpen(!mobileMenuOpen);
+              }} 
+              className="p-2 rounded-lg text-white bg-[#18181b]/80 border border-[#26262c] hover:border-cyan-500/30 transition-all backdrop-blur-sm"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
             >
-              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </motion.div>
-          </motion.button>
-        </div>
+              <motion.div
+                animate={{ rotate: mobileMenuOpen ? 90 : 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </motion.div>
+            </motion.button>
+          </div>
+        )}
 
         {/* Header Buttons - Desktop with stagger animation */}
         <motion.div 
@@ -434,8 +469,9 @@ export function CommonLayout({
           </motion.div>
         </motion.div>
         
-        {/* Mobile menu - Expanded with Animation */}
-        <MobileMenu isOpen={mobileMenuOpen} className="w-full py-3 sm:hidden order-4">
+        {/* Mobile menu - Expanded with Animation (Hidden in PWA dock mode) */}
+        {!showPWADock && (
+          <MobileMenu isOpen={mobileMenuOpen} className="w-full py-3 sm:hidden order-4">
           <div 
             onClick={(e) => e.stopPropagation()}
             className="relative"
@@ -545,6 +581,7 @@ export function CommonLayout({
             </div>
           </div>
         </MobileMenu>
+        )}
       </motion.header>
 
       {/* Notification Banners */}
@@ -570,7 +607,11 @@ export function CommonLayout({
 
       {/* Main content with page transition */}
       <motion.main 
-        className="flex-1 overflow-y-auto relative z-10"
+        className={cn(
+          "flex-1 overflow-y-auto relative z-10",
+          showPWADock && "pwa-dock-content-padding" // Add bottom padding for dock with safe area
+        )}
+        style={showPWADock ? { paddingBottom: 'calc(72px + env(safe-area-inset-bottom, 0px))' } : undefined}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ 
@@ -623,6 +664,16 @@ export function CommonLayout({
       >
         <ChangelogPanel isOpen={showChangelogPanel} />
       </SlideoutPanel>
+
+      {/* PWA Bottom Dock - Native app-like navigation for installed PWA */}
+      <AnimatePresence>
+        {showPWADock && (
+          <PWABottomDock
+            onChangelogClick={() => setShowChangelogPanel(true)}
+            onExportClick={() => setShowExportDialog(true)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 } 
