@@ -1,13 +1,19 @@
 "use client";
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useServiceWorkerRegistration, useCacheAdminPages } from '@/hooks/use-service-worker';
+import { PWAInstallPrompt } from './pwa-install-prompt';
 
 /**
  * PWA Provider Component
  * 
  * Initializes service worker registration and PWA features for the application.
  * Handles offline support, caching, and app installation prompts.
+ * 
+ * Features:
+ * - Service worker registration for offline support
+ * - Admin page caching for offline access
+ * - PWA install prompt with beautiful UI
  */
 export function PWAProvider({ children }: { children: React.ReactNode }) {
   // Register service worker
@@ -16,30 +22,15 @@ export function PWAProvider({ children }: { children: React.ReactNode }) {
   // Cache admin pages for offline access
   useCacheAdminPages();
 
-  useEffect(() => {
-    // Handle PWA installation prompt
-    let deferredPrompt: any;
+  // Enable debug mode in development to always show the prompt
+  // Set to false to test production behavior in dev mode
+  const isDebugMode = false; // Change to true to enable debug mode
 
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      console.info('PWA install prompt available');
-    };
-
-    const handleAppInstalled = () => {
-      console.info('PWA installed successfully');
-      deferredPrompt = null;
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleAppInstalled);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', handleAppInstalled);
-    };
-  }, []);
-
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <PWAInstallPrompt position="bottom" forceShow={isDebugMode} />
+    </>
+  );
 }
 
