@@ -318,6 +318,12 @@ export async function GET(request: NextRequest) {
       const seen = new Set<string>();
       const matches: TwitchStream[] = [];
       let debugCount = 0;
+      
+      // Debug: Show sample of actual game names from Twitch
+      if (normalized.length > 0) {
+        const sampleGames = new Set(normalized.slice(0, 10).map(s => s._gameLower));
+        console.log(`[LiveTwitch] Sample game names from Twitch (lowercase): [${Array.from(sampleGames).join(', ')}]`);
+      }
 
       for (const s of normalized) {
         // Use AND logic between search types (all specified types must match)
@@ -336,7 +342,7 @@ export async function GET(request: NextRequest) {
         if (debugCount < 6) {
           const willMatch = titleMatch && categoryMatch && tagMatch;
           if (willMatch || debugCount < 3) {
-            console.log(`[LiveTwitch] ${willMatch ? '✓' : '✗'} "${s.name}" - "${s.title.substring(0, 50)}..." | game:"${s.gameName}" | title:${titleMatch} cat:${categoryMatch} tag:${tagMatch}`);
+            console.log(`[LiveTwitch] ${willMatch ? '✓' : '✗'} "${s.name}" - "${s.title.substring(0, 50)}..." | game:"${s.gameName}" (lower:"${s._gameLower}") | title:${titleMatch} cat:${categoryMatch} tag:${tagMatch}`);
             debugCount++;
           }
         }
