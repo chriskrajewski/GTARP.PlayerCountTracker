@@ -115,49 +115,100 @@ async function getGTAGameId(clientId: string, token: string): Promise<string> {
   return gameId;
 }
 
+async function getGameIds(clientId: string, token: string, gameNames: string[]): Promise<Map<string, string>> {
+  const gameMap = new Map<string, string>();
+  
+  for (const gameName of gameNames) {
+    try {
+      const response = await fetch(
+        `https://api.twitch.tv/helix/games?name=${encodeURIComponent(gameName)}`,
+        {
+          headers: {
+            'Client-ID': clientId,
+            'Authorization': `Bearer ${token}`
+          },
+          signal: AbortSignal.timeout(10000)
+        }
+      );
+
+      if (!response.ok) {
+        console.warn(`[Streams API] Failed to get game ID for "${gameName}": ${response.status}`);
+        continue;
+      }
+
+      const data = await response.json();
+      const gameId = data.data?.[0]?.id;
+      if (gameId) {
+        gameMap.set(gameName, gameId);
+        console.log(`[Streams API] Got game ID for "${gameName}": ${gameId}`);
+      }
+    } catch (error) {
+      console.error(`[Streams API] Error getting game ID for "${gameName}":`, error);
+    }
+  }
+
+  return gameMap;
+}
+
+async function fetchStreamsFromGames(
+  clientId: string,
+  token: string,
+  gameIds: string[],
+  maxPages: number = 5
+): Promise<TwitchApiStream[]> {
+  const streams: TwitchApiStream[] = [];
+
+  for (const gameId of gameIds) {
+    let cursor: string | null = null;
+    let pageCount = 0;
+
+    try {
+      while (pageCount < maxPages) {
+        const params = new URLSearchParams({
+          game_id: gameId,
+          first: '100'
+        });
+        if (cursor) params.set('after', cursor);
+
+        const response = await fetch(
+          `https://api.twitch.tv/helix/streams?${params}`,
+          {
+            headers: {
+              'Client-ID': clientId,
+              'Authorization': `Bearer ${token}`
+            },
+            signal: AbortSignal.timeout(15000)
+          }
+        );
+
+        if (!response.ok) {
+          console.error(`[Streams API] Twitch API error for game ${gameId}: ${response.status}`);
+          break;
+        }
+
+        const data = await response.json();
+        const batch = Array.isArray(data.data) ? data.data : [];
+        streams.push(...batch);
+
+        cursor = data.pagination?.cursor || null;
+        if (!cursor || batch.length === 0) break;
+        pageCount++;
+      }
+    } catch (error) {
+      console.error(`[Streams API] Error fetching streams for game ${gameId}:`, error);
+    }
+  }
+
+  return streams;
+}
+
 async function fetchGTAVStreams(
   clientId: string,
   token: string,
   gameId: string,
   maxPages: number = 5
 ): Promise<TwitchApiStream[]> {
-  const streams: TwitchApiStream[] = [];
-  let cursor: string | null = null;
-  let pageCount = 0;
-
-  while (pageCount < maxPages) {
-    const params = new URLSearchParams({
-      game_id: gameId,
-      first: '100'
-    });
-    if (cursor) params.set('after', cursor);
-
-    const response = await fetch(
-      `https://api.twitch.tv/helix/streams?${params}`,
-      {
-        headers: {
-          'Client-ID': clientId,
-          'Authorization': `Bearer ${token}`
-        },
-        signal: AbortSignal.timeout(15000)
-      }
-    );
-
-    if (!response.ok) {
-      console.error(`[Streams API] Twitch API error: ${response.status}`);
-      break;
-    }
-
-    const data = await response.json();
-    const batch = Array.isArray(data.data) ? data.data : [];
-    streams.push(...batch);
-
-    cursor = data.pagination?.cursor || null;
-    if (!cursor || batch.length === 0) break;
-    pageCount++;
-  }
-
-  return streams;
+  return fetchStreamsFromGames(clientId, token, [gameId], maxPages);
 }
 
 async function fetchUserProfiles(
@@ -383,40 +434,62 @@ export async function GET(
       if (clientId) {
         try {
           const accessToken = await getTwitchToken();
-          const gameId = await getGTAGameId(clientId, accessToken);
-          const rawStreams = await fetchGTAVStreams(clientId, accessToken, gameId);
-          const matchedStreams = filterTwitchStreamsByConfig(rawStreams, twitchConfig);
-
-          // Fetch profile images
-          const userIds = matchedStreams.map(s => s.user_id);
-          const profileMap = await fetchUserProfiles(clientId, accessToken, userIds);
-
-          // Convert to unified format
-          for (const stream of matchedStreams) {
-            const key = stream.user_name.toLowerCase();
-            if (seenStreamers.has(key)) continue;
-            seenStreamers.add(key);
-
-            const formattedThumbnail = stream.thumbnail_url
-              .replace('{width}', '440')
-              .replace('{height}', '248');
-
-            allStreams.push({
-              id: stream.id,
-              user_id: stream.user_id,
-              user_name: stream.user_name,
-              game_name: stream.game_name,
-              title: stream.title,
-              viewer_count: stream.viewer_count,
-              started_at: stream.started_at,
-              thumbnail_url: formattedThumbnail,
-              tags: stream.tags || [],
-              profile_image_url: profileMap.get(stream.user_id),
-              platform: 'twitch'
-            });
+          
+          // Collect all unique category keywords from config
+          const categoryKeywords = new Set<string>();
+          for (const config of twitchConfig) {
+            if (config.search_type === 'category') {
+              categoryKeywords.add(config.search_keyword);
+            }
           }
+          
+          // Get game IDs for all categories mentioned in config
+          // Always include GTA V as a default
+          const gamesToFetch = ['Grand Theft Auto V', ...Array.from(categoryKeywords)];
+          console.log(`[Streams API] ${serverId} - Fetching Twitch streams from games: ${gamesToFetch.join(', ')}`);
+          
+          const gameIdMap = await getGameIds(clientId, accessToken, gamesToFetch);
+          const gameIds = Array.from(gameIdMap.values());
+          
+          if (gameIds.length === 0) {
+            console.warn(`[Streams API] ${serverId} - No game IDs found for Twitch`);
+          } else {
+            const rawStreams = await fetchStreamsFromGames(clientId, accessToken, gameIds);
+            console.log(`[Streams API] ${serverId} - Fetched ${rawStreams.length} total Twitch streams from ${gameIds.length} games`);
+            
+            const matchedStreams = filterTwitchStreamsByConfig(rawStreams, twitchConfig);
 
-          console.log(`[Streams API] Twitch: ${matchedStreams.length} streams for ${serverId}`);
+            // Fetch profile images
+            const userIds = matchedStreams.map(s => s.user_id);
+            const profileMap = await fetchUserProfiles(clientId, accessToken, userIds);
+
+            // Convert to unified format
+            for (const stream of matchedStreams) {
+              const key = stream.user_name.toLowerCase();
+              if (seenStreamers.has(key)) continue;
+              seenStreamers.add(key);
+
+              const formattedThumbnail = stream.thumbnail_url
+                .replace('{width}', '440')
+                .replace('{height}', '248');
+
+              allStreams.push({
+                id: stream.id,
+                user_id: stream.user_id,
+                user_name: stream.user_name,
+                game_name: stream.game_name,
+                title: stream.title,
+                viewer_count: stream.viewer_count,
+                started_at: stream.started_at,
+                thumbnail_url: formattedThumbnail,
+                tags: stream.tags || [],
+                profile_image_url: profileMap.get(stream.user_id),
+                platform: 'twitch'
+              });
+            }
+
+            console.log(`[Streams API] Twitch: ${matchedStreams.length} streams for ${serverId}`);
+          }
         } catch (error) {
           console.error('[Streams API] Twitch error:', error);
         }
