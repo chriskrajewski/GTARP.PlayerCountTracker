@@ -75,92 +75,125 @@ async function getTwitchToken(): Promise<string | null> {
 }
 
 /**
- * Get GTA V game ID from Twitch
+ * Get game IDs from Twitch by name
+ */
+async function getGameIds(clientId: string, token: string, gameNames: string[]): Promise<Map<string, string>> {
+  const gameMap = new Map<string, string>();
+  
+  try {
+    for (const gameName of gameNames) {
+      const response = await fetch(
+        `https://api.twitch.tv/helix/games?name=${encodeURIComponent(gameName)}`,
+        {
+          headers: {
+            'Client-ID': clientId,
+            'Authorization': `Bearer ${token}`
+          },
+          signal: AbortSignal.timeout(10000)
+        }
+      );
+
+      if (!response.ok) {
+        console.warn(`Failed to get game ID for "${gameName}": ${response.status}`);
+        continue;
+      }
+
+      const data = await response.json();
+      const gameId = data.data?.[0]?.id;
+      if (gameId) {
+        gameMap.set(gameName, gameId);
+        console.log(`[LiveTwitch] Got game ID for "${gameName}": ${gameId}`);
+      }
+    }
+  } catch (error) {
+    console.error('Error getting game IDs:', error);
+  }
+
+  return gameMap;
+}
+
+/**
+ * Get GTA V game ID from Twitch (legacy, kept for compatibility)
  */
 async function getGTAGameId(clientId: string, token: string): Promise<string | null> {
-  try {
-    const response = await fetch(
-      `https://api.twitch.tv/helix/games?name=${encodeURIComponent('Grand Theft Auto V')}`,
-      {
-        headers: {
-          'Client-ID': clientId,
-          'Authorization': `Bearer ${token}`
-        },
-        signal: AbortSignal.timeout(10000)
+  const gameMap = await getGameIds(clientId, token, ['Grand Theft Auto V']);
+  return gameMap.get('Grand Theft Auto V') || null;
+}
+
+/**
+ * Fetch live streams from Twitch for multiple games (limited pagination to reduce API load)
+ */
+async function fetchLiveStreamsFromGames(
+  clientId: string,
+  token: string,
+  gameIds: string[]
+): Promise<TwitchStream[]> {
+  const streams: TwitchStream[] = [];
+  const maxPages = 5; // Limit pagination to prevent excessive API calls
+  
+  for (const gameId of gameIds) {
+    let cursor: string | null = null;
+    let pageCount = 0;
+
+    try {
+      while (pageCount < maxPages) {
+        const params = new URLSearchParams({
+          game_id: gameId,
+          first: '100'
+        });
+        if (cursor) params.set('after', cursor);
+
+        const response = await fetch(
+          `https://api.twitch.tv/helix/streams?${params}`,
+          {
+            headers: {
+              'Client-ID': clientId,
+              'Authorization': `Bearer ${token}`
+            },
+            signal: AbortSignal.timeout(15000)
+          }
+        );
+
+        if (!response.ok) {
+          break;
+        }
+
+        const data = await response.json();
+        const batch = Array.isArray(data.data) ? data.data : [];
+
+        for (const stream of batch) {
+          const tags = Array.isArray(stream.tags) ? stream.tags : (Array.isArray(stream.tag_ids) ? [] : []);
+          streams.push({
+            name: stream.user_name,
+            viewers: stream.viewer_count,
+            title: stream.title,
+            gameName: stream.game_name,
+            tags
+          });
+        }
+
+        cursor = data.pagination?.cursor || null;
+        if (!cursor) break;
+        pageCount++;
       }
-    );
-
-    if (!response.ok) {
-      return null;
+    } catch (error) {
+      console.error(`Error fetching live Twitch streams for game ${gameId}:`, error);
     }
-
-    const data = await response.json();
-    return data.data?.[0]?.id || null;
-  } catch (error) {
-    console.error('Error getting GTA game ID:', error);
-    return null;
   }
+
+  return streams;
 }
 
 /**
  * Fetch live GTA V streams from Twitch (limited pagination to reduce API load)
+ * Legacy function - kept for compatibility
  */
 async function fetchLiveGTAVStreams(
   clientId: string,
   token: string,
   gameId: string
 ): Promise<TwitchStream[]> {
-  const streams: TwitchStream[] = [];
-  let cursor: string | null = null;
-  const maxPages = 5; // Limit pagination to prevent excessive API calls
-  let pageCount = 0;
-
-  try {
-    while (pageCount < maxPages) {
-      const params = new URLSearchParams({
-        game_id: gameId,
-        first: '100'
-      });
-      if (cursor) params.set('after', cursor);
-
-      const response = await fetch(
-        `https://api.twitch.tv/helix/streams?${params}`,
-        {
-          headers: {
-            'Client-ID': clientId,
-            'Authorization': `Bearer ${token}`
-          },
-          signal: AbortSignal.timeout(15000)
-        }
-      );
-
-      if (!response.ok) {
-        break;
-      }
-
-      const data = await response.json();
-      const batch = Array.isArray(data.data) ? data.data : [];
-
-      for (const stream of batch) {
-        const tags = Array.isArray(stream.tags) ? stream.tags : (Array.isArray(stream.tag_ids) ? [] : []);
-        streams.push({
-          name: stream.user_name,
-          viewers: stream.viewer_count,
-          title: stream.title,
-          gameName: stream.game_name,
-          tags
-        });
-      }
-
-      cursor = data.pagination?.cursor || null;
-      if (!cursor) break;
-      pageCount++;
-    }
-  } catch (error) {
-    console.error('Error fetching live Twitch streams:', error);
-  }
-
-  return streams;
+  return fetchLiveStreamsFromGames(clientId, token, [gameId]);
 }
 
 /**
@@ -238,15 +271,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get GTA V game ID
-    const gameId = await getGTAGameId(clientId, token);
-    if (!gameId) {
-      return NextResponse.json(
-        { error: 'Failed to get GTA V game ID from Twitch' },
-        { status: 500 }
-      );
-    }
-
     // Load per-server search config from Supabase (no hardcoded mappings)
     if (bustCache) {
       console.log('[LiveTwitch] Cache bust requested - clearing stream config cache');
@@ -257,12 +281,38 @@ export async function GET(request: NextRequest) {
     const rawConfig = await getStreamSearchConfigMap(serverIds, 'twitch');
     const configByServer = normalizeConfigMap(rawConfig);
 
+    // Collect all unique category keywords from all servers
+    const allCategoryKeywords = new Set<string>();
+    for (const cfg of configByServer.values()) {
+      for (const rule of cfg) {
+        if (rule.search_type === 'category') {
+          allCategoryKeywords.add(rule.search_keyword);
+        }
+      }
+    }
+
+    // Get game IDs for all categories mentioned in config
+    // Always include GTA V as a default
+    const gamesToFetch = ['Grand Theft Auto V', ...Array.from(allCategoryKeywords)];
+    console.log(`[LiveTwitch] Fetching streams from games: ${gamesToFetch.join(', ')}`);
+    
+    const gameIdMap = await getGameIds(clientId, token, gamesToFetch);
+    const gameIds = Array.from(gameIdMap.values());
+
+    if (gameIds.length === 0) {
+      return NextResponse.json(
+        { error: 'Failed to get any game IDs from Twitch' },
+        { status: 500 }
+      );
+    }
+
     // Build response object
     const servers: Record<string, TwitchServerData> = {};
     const timestamp = new Date().toISOString();
 
-    // Fetch live GTA V streams once, then apply per-server filtering.
-    const allStreams = await fetchLiveGTAVStreams(clientId, token, gameId);
+    // Fetch live streams from all configured games
+    const allStreams = await fetchLiveStreamsFromGames(clientId, token, gameIds);
+    console.log(`[LiveTwitch] Fetched ${allStreams.length} total streams from ${gameIds.length} games`);
 
     // Normalize once for matching efficiency
     const normalized = allStreams.map(s => ({
