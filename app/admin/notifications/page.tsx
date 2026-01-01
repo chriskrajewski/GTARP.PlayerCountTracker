@@ -37,6 +37,7 @@ import { createBrowserClient } from '@/lib/supabase-browser';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import MDEditor from '@uiw/react-md-editor';
+import { formatToLocalTimezone } from '@/lib/timezone-utils';
 
 interface NotificationBanner {
   id: number;
@@ -621,7 +622,7 @@ export default function AdminNotificationsPage() {
                             <TableCell className="text-white">{banner.priority}</TableCell>
                             <TableCell className="text-[#ADADB8]">{banner.view_count}</TableCell>
                             <TableCell className="text-[#ADADB8]">
-                              {new Date(banner.created_at).toLocaleDateString()}
+                              {formatToLocalTimezone(banner.created_at, 'date')}
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center space-x-2">

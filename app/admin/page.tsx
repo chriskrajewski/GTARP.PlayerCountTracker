@@ -22,6 +22,7 @@ import {
 import { LiveVisitorCount } from '@/components/LiveVisitorCount';
 import { createBrowserClient } from '@/lib/supabase-browser';
 import { useToast } from '@/hooks/use-toast';
+import { formatToLocalTimezone } from '@/lib/timezone-utils';
 
 /**
  * Admin Dashboard
@@ -240,7 +241,7 @@ export default function AdminDashboard() {
                           <CheckCircle2 className="h-4 w-4 text-emerald-400" />
                           <span className="text-xs md:text-sm text-white">Last Updated</span>
                         </div>
-                        <span className="text-white font-medium text-xs">{new Date().toLocaleTimeString()}</span>
+                        <span className="text-white font-medium text-xs">{formatToLocalTimezone(new Date(), 'time')}</span>
                       </div>
                     </div>
                   </CardContent>

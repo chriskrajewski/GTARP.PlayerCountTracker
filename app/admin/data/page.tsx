@@ -41,6 +41,7 @@ import { DataCollectionStatus, APIUsageMetrics } from '@/lib/admin-types';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { format, addDays } from 'date-fns';
+import { formatToLocalTimezone } from '@/lib/timezone-utils';
 import { ServerManagementPanel } from '@/components/admin/server-management-panel';
 
 export default function AdminDataPage() {
@@ -402,7 +403,7 @@ export default function AdminDataPage() {
                                   
                                   <div className="text-center">
                                     <p className="text-white font-medium">
-                                      {new Date(server.last_collection).toLocaleString()}
+                                      {formatToLocalTimezone(server.last_collection, 'full')}
                                     </p>
                                     <p className="text-[#ADADB8]">Last Collection</p>
                                   </div>

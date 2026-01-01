@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { createBrowserClient } from '@/lib/supabase-browser';
 import { format } from 'date-fns';
+import { formatToLocalTimezone } from '@/lib/timezone-utils';
 
 interface VisitorDetailModalProps {
   sessionId: string | null;
@@ -265,11 +266,11 @@ export function VisitorDetailModal({ sessionId, isOpen, onClose, sessionData }: 
                       </div>
                       <div>
                         <p className="text-[#ADADB8] text-xs">Created</p>
-                        <p className="text-white">{format(new Date(session.created_at), 'MMM dd, HH:mm:ss')}</p>
+                        <p className="text-white">{formatToLocalTimezone(session.created_at, 'full')}</p>
                       </div>
                       <div>
                         <p className="text-[#ADADB8] text-xs">Last Activity</p>
-                        <p className="text-white">{format(new Date(session.last_heartbeat), 'MMM dd, HH:mm:ss')}</p>
+                        <p className="text-white">{formatToLocalTimezone(session.last_heartbeat, 'full')}</p>
                       </div>
                       <div>
                         <p className="text-[#ADADB8] text-xs">Returning Visitor</p>
@@ -552,7 +553,7 @@ export function VisitorDetailModal({ sessionId, isOpen, onClose, sessionData }: 
                         </div>
                       </div>
                       <p className="text-xs text-[#ADADB8]">
-                        {format(new Date(view.view_timestamp), 'MMM dd, yyyy HH:mm:ss')}
+                        {formatToLocalTimezone(view.view_timestamp, 'full')}
                       </p>
                     </div>
                   </CardContent>
@@ -594,7 +595,7 @@ export function VisitorDetailModal({ sessionId, isOpen, onClose, sessionData }: 
                         </div>
                       </div>
                       <p className="text-xs text-[#ADADB8]">
-                        {format(new Date(perf.measured_at), 'MMM dd, yyyy HH:mm:ss')}
+                        {formatToLocalTimezone(perf.measured_at, 'full')}
                       </p>
                     </div>
                   </CardContent>
@@ -623,7 +624,7 @@ export function VisitorDetailModal({ sessionId, isOpen, onClose, sessionData }: 
                         </pre>
                       )}
                       <p className="text-xs text-[#ADADB8]">
-                        {format(new Date(error.error_timestamp), 'MMM dd, yyyy HH:mm:ss')}
+                        {formatToLocalTimezone(error.error_timestamp, 'full')}
                       </p>
                     </div>
                   </CardContent>
@@ -653,7 +654,7 @@ export function VisitorDetailModal({ sessionId, isOpen, onClose, sessionData }: 
                       )}
                       <p className="text-xs text-[#ADADB8]">{event.page_url}</p>
                       <p className="text-xs text-[#ADADB8]">
-                        {format(new Date(event.event_timestamp), 'MMM dd, yyyy HH:mm:ss')}
+                        {formatToLocalTimezone(event.event_timestamp, 'full')}
                       </p>
                     </div>
                   </CardContent>

@@ -67,7 +67,7 @@ export function AlertsCard({ alerts, onAlertUpdate }: AlertsCardProps) {
     }
   };
 
-  const formatTimeAgo = (timestamp: string) => {
+  const formatTimeAgoLocal = (timestamp: string) => {
     const now = new Date();
     const time = new Date(timestamp);
     const diffInMinutes = Math.floor((now.getTime() - time.getTime()) / (1000 * 60));
@@ -204,7 +204,7 @@ export function AlertsCard({ alerts, onAlertUpdate }: AlertsCardProps) {
           <div className="space-y-3">
             {displayedAlerts.map((alert) => {
               const Icon = getAlertIcon(alert.type, alert.severity);
-              const timeAgo = formatTimeAgo(alert.timestamp);
+              const timeAgo = formatTimeAgoLocal(alert.timestamp);
               const isResolving = resolvingAlert === alert.id;
               
               return (

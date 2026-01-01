@@ -30,6 +30,7 @@ import { useRestartPredictions } from '@/hooks/use-restart-predictions';
 import { RestartCountdown } from '@/components/restart-prediction-countdown';
 import { RestartPredictionsTab } from '@/components/restart-predictions-tab';
 import { cn } from '@/lib/utils';
+import { formatToLocalTimezone } from '@/lib/timezone-utils';
 
 interface StreamSearchConfig {
   id?: string;
@@ -403,7 +404,7 @@ export function ServerManagementPanel() {
                         <p className="text-sm text-[#ADADB8]">Data Start Date</p>
                         <p className="text-white font-medium">
                           {server.data_start_date 
-                            ? new Date(server.data_start_date).toLocaleDateString()
+                            ? formatToLocalTimezone(server.data_start_date, 'date')
                             : 'Not set'
                           }
                         </p>
