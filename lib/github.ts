@@ -46,7 +46,7 @@ export async function getAnonymizedCommits() {
   const repoOwner = process.env.GITHUB_REPO_OWNER || "chriskrajewski";
   const repoName = process.env.GITHUB_REPO_NAME || "GTARP.PlayerCountTracker";
   
-  // Optional GitHub token for higher rate limits
+  // Optional GitHub token for higher rate limits and private repo access
   const githubToken = process.env.GITHUB_TOKEN;
   
   let retries = 0;
@@ -83,7 +83,7 @@ export async function getAnonymizedCommits() {
               
               // Filter out merge pull request commits
               if (commit.commit && commit.commit.message && 
-                  commit.commit.message.trim().startsWith('Merge pull request') || commit.commit.message.trim().startsWith('Merge branch')) {
+                  (commit.commit.message.trim().startsWith('Merge pull request') || commit.commit.message.trim().startsWith('Merge branch'))) {
                 return false;
               }
               
@@ -100,13 +100,20 @@ export async function getAnonymizedCommits() {
       retries++;
       
       // Check if we should retry based on the error
-      if (error.status === 403 && error.headers && error.headers['x-ratelimit-remaining'] === '0') {
-        console.error("GitHub API rate limit exceeded. Retrying later.");
+      if (error.status === 403) {
+        if (error.headers && error.headers['x-ratelimit-remaining'] === '0') {
+          console.error("GitHub API rate limit exceeded. Retrying later.");
+        } else {
+          console.error("GitHub API access denied (403). Check if GITHUB_TOKEN has 'repo' scope for private repositories.");
+        }
         
         // If this is not our last retry, wait before trying again
         if (retries < MAX_RETRIES) {
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * retries));
         }
+      } else if (error.status === 404) {
+        console.error(`GitHub repository not found: ${repoOwner}/${repoName}. Check GITHUB_REPO_OWNER and GITHUB_REPO_NAME environment variables.`);
+        return [];
       } else if (retries < MAX_RETRIES) {
         // For other errors, retry with backoff
         console.error(`Error fetching GitHub commits (attempt ${retries}):`, error);

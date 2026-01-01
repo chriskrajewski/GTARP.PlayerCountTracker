@@ -19,7 +19,7 @@ import mixpanel from "mixpanel-browser";
 import { motion, AnimatePresence, MobileMenu, MobileMenuItem, MotionButton } from '@/components/ui/motion';
 import { fadeInUp, springs } from '@/lib/motion';
 import { SlideoutPanel } from '@/components/slideout-panel';
-import { ChangelogPanel } from '@/components/changelog-panel';
+import { SiteUpdatesPanel } from '@/components/site-updates/site-updates-panel';
 import { PWABottomDock } from '@/components/pwa-bottom-dock';
 import { usePWAStandalone } from '@/hooks/use-pwa-standalone';
 import { cn } from '@/lib/utils';
@@ -188,7 +188,7 @@ export function CommonLayout({
 }: CommonLayoutProps) {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showResourceDialog, setShowResourceDialog] = useState(false);
-  const [showChangelogPanel, setShowChangelogPanel] = useState(false);
+  const [showSiteUpdatesPanel, setShowSiteUpdatesPanel] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   // PWA standalone mode detection
@@ -202,7 +202,7 @@ export function CommonLayout({
   
   // Feature flags
   const isFeedbackEnabled = useFeatureFlag(FEATURE_FLAGS.FEEDBACK);
-  const isChangelogEnabled = useFeatureFlag(FEATURE_FLAGS.CHANGELOG);
+  const isSiteUpdatesEnabled = useFeatureFlag(FEATURE_FLAGS.SITE_UPDATES);
   const isServerChangesEnabled = useFeatureFlag(FEATURE_FLAGS.SERVER_CHANGES);
   const isCsvExportEnabled = useFeatureFlag(FEATURE_FLAGS.CSV_EXPORT);
   const isMultiStreamEnabled = useFeatureFlag(FEATURE_FLAGS.MULTI_STREAM);
@@ -404,11 +404,11 @@ export function CommonLayout({
             </motion.div>
           )}
           
-          {isChangelogEnabled && (
+          {isSiteUpdatesEnabled && (
             <motion.div variants={fadeInUp}>
-              <HeaderButton onClick={() => setShowChangelogPanel(true)}>
+              <HeaderButton onClick={() => setShowSiteUpdatesPanel(true)}>
                 <ClipboardList className="h-3.5 w-3.5" />
-                Changelog
+                Site Updates
               </HeaderButton>
             </motion.div>
           )}
@@ -513,17 +513,17 @@ export function CommonLayout({
                   </MobileMenuItem>
                 )}
                 
-                {isChangelogEnabled && (
+                {isSiteUpdatesEnabled && (
                   <MobileMenuItem>
                     <button 
                       onClick={() => {
-                        setShowChangelogPanel(true);
+                        setShowSiteUpdatesPanel(true);
                         setMobileMenuOpen(false);
                       }}
                       className="flex w-full items-center gap-2 px-4 py-2.5 bg-[#18181b]/80 text-white rounded-lg border border-[#26262c] hover:border-cyan-500/30 transition-all text-sm font-medium backdrop-blur-sm"
                     >
                       <ClipboardList className="h-4 w-4 text-cyan-400" />
-                      Changelog
+                      Site Updates
                     </button>
                   </MobileMenuItem>
                 )}
@@ -660,19 +660,19 @@ export function CommonLayout({
       </Dialog>
 
       <SlideoutPanel
-        isOpen={showChangelogPanel}
-        onClose={() => setShowChangelogPanel(false)}
-        title="Changelog"
-        description="Recent updates and improvements"
+        isOpen={showSiteUpdatesPanel}
+        onClose={() => setShowSiteUpdatesPanel(false)}
+        title="Site Updates"
+        description="Recent changes, roadmap, and git commits"
       >
-        <ChangelogPanel isOpen={showChangelogPanel} />
+        <SiteUpdatesPanel isOpen={showSiteUpdatesPanel} />
       </SlideoutPanel>
 
       {/* PWA Bottom Dock - Native app-like navigation for installed PWA */}
       <AnimatePresence>
         {showPWADock && (
           <PWABottomDock
-            onChangelogClick={() => setShowChangelogPanel(true)}
+            onSiteUpdatesClick={() => setShowSiteUpdatesPanel(true)}
             onExportClick={() => setShowExportDialog(true)}
           />
         )}

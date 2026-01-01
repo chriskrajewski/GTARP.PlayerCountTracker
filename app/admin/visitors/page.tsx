@@ -37,6 +37,7 @@ import {
 import { createBrowserClient } from '@/lib/supabase-browser';
 import { useToast } from '@/hooks/use-toast';
 import { format, subDays } from 'date-fns';
+import { formatToLocalTimezone, formatDateForExport } from '@/lib/timezone-utils';
 
 /**
  * Enhanced Visitor Analytics Page
@@ -210,7 +211,7 @@ export default function EnhancedVisitorAnalyticsPage() {
         ['Session ID', 'Created', 'Device', 'Browser', 'OS', 'Country', 'Pages', 'Duration (s)', 'Engagement', 'Returning', 'Load Time (ms)', 'Errors'],
         ...visitors.map(v => [
           v.session_id,
-          format(new Date(v.created_at), 'yyyy-MM-dd HH:mm:ss'),
+          formatDateForExport(v.created_at),
           v.device_type || 'N/A',
           v.browser_name || 'N/A',
           v.os_name || 'N/A',
