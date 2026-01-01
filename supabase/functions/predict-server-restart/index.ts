@@ -78,8 +78,15 @@ interface CronResult {
 
 /**
  * Detects restart events from player count data
- * A restart is identified by a rapid drop (>80%) to near-zero (<5 players)
- * followed by recovery within 30 minutes
+ * A restart is identified by a significant drop in player count followed by recovery.
+ * 
+ * Detection criteria:
+ * 1. Drop of >50% from previous peak within a 60-minute window
+ * 2. Reaches near-zero state (<10 players)
+ * 3. Recovery to >20% of pre-restart level within 30 minutes
+ * 
+ * This is more lenient than the original to catch real restart events that may have
+ * gradual player drops or partial recoveries.
  */
 function detectRestartEvents(data: PlayerCountRecord[]): RestartEvent[] {
   if (data.length < 2) return [];
@@ -89,49 +96,82 @@ function detectRestartEvents(data: PlayerCountRecord[]): RestartEvent[] {
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
 
+  // Track the peak player count in a rolling window
+  let peakCount = 0;
+  let peakIndex = 0;
+
   for (let i = 1; i < sortedData.length; i++) {
-    const prev = sortedData[i - 1];
     const curr = sortedData[i];
+    const prev = sortedData[i - 1];
 
     const timeDiffMs = new Date(curr.timestamp).getTime() - new Date(prev.timestamp).getTime();
     const timeDiffMinutes = timeDiffMs / (1000 * 60);
 
-    // Only check within 30 minute window
-    if (timeDiffMinutes > 30) continue;
+    // Update peak if current is higher
+    if (curr.player_count > peakCount) {
+      peakCount = curr.player_count;
+      peakIndex = i;
+    }
 
-    const dropPercentage = ((prev.player_count - curr.player_count) / Math.max(prev.player_count, 1)) * 100;
+    // Skip if time gap is too large (>60 minutes) - indicates data gap
+    if (timeDiffMinutes > 60) {
+      peakCount = curr.player_count;
+      peakIndex = i;
+      continue;
+    }
 
-    // Criteria: >80% drop AND reaches near-zero (<5 players)
-    if (dropPercentage > 80 && curr.player_count < 5) {
+    // Check for significant drop from peak
+    const dropPercentage = ((peakCount - curr.player_count) / Math.max(peakCount, 1)) * 100;
+    const isNearZero = curr.player_count < 10;
+
+    // Criteria: >50% drop AND reaches near-zero (<10 players)
+    if (dropPercentage > 50 && isNearZero) {
       // Look ahead to confirm recovery
       let recoveryFound = false;
       let recoveryTime = 0;
       let recoveryIndex = -1;
+      let recoveryCount = 0;
 
-      for (let j = i + 1; j < Math.min(i + 20, sortedData.length); j++) {
+      // Search for recovery within 45 minutes
+      for (let j = i + 1; j < Math.min(i + 30, sortedData.length); j++) {
         const future = sortedData[j];
         const recoveryDiffMs = new Date(future.timestamp).getTime() - new Date(curr.timestamp).getTime();
         const recoveryDiffMinutes = recoveryDiffMs / (1000 * 60);
 
-        if (recoveryDiffMinutes > 30) break;
+        if (recoveryDiffMinutes > 45) break;
 
-        // Recovery when player count reaches >10% of pre-restart level
-        if (future.player_count > prev.player_count * 0.1) {
+        // Recovery when player count reaches >20% of pre-restart level
+        if (future.player_count > peakCount * 0.2) {
           recoveryFound = true;
           recoveryTime = Math.round(recoveryDiffMinutes);
           recoveryIndex = j;
+          recoveryCount = future.player_count;
           break;
         }
       }
 
       if (recoveryFound) {
-        events.push({
-          timestamp: curr.timestamp,
-          playerCountBefore: prev.player_count,
-          playerCountAfter: curr.player_count,
-          downtimeMinutes: recoveryTime,
+        // Avoid duplicate detections - check if we already have an event close to this time
+        const isDuplicate = events.some(e => {
+          const timeDiff = Math.abs(
+            new Date(e.timestamp).getTime() - new Date(curr.timestamp).getTime()
+          ) / (1000 * 60);
+          return timeDiff < 10; // Within 10 minutes
         });
-        i = recoveryIndex; // Skip ahead to avoid duplicates
+
+        if (!isDuplicate) {
+          events.push({
+            timestamp: curr.timestamp,
+            playerCountBefore: peakCount,
+            playerCountAfter: curr.player_count,
+            downtimeMinutes: recoveryTime,
+          });
+          
+          // Reset peak for next detection cycle
+          peakCount = recoveryCount;
+          peakIndex = recoveryIndex;
+          i = recoveryIndex; // Skip ahead to avoid overlapping detections
+        }
       }
     }
   }
@@ -409,35 +449,53 @@ async function savePredictionToCache(prediction: MLPrediction): Promise<void> {
 
 /**
  * Save detected restart events to database
+ * Persists detected restart events and cleans up old events (>14 days)
  */
 async function saveRestartEvents(serverId: string, events: RestartEvent[]): Promise<void> {
-  if (events.length === 0) return;
+  if (events.length === 0) {
+    console.log(`[ML Prediction] No restart events to save for ${serverId}`);
+    return;
+  }
 
-  // Delete old events for this server (keep only last 14 days worth)
-  const twoWeeksAgo = new Date();
-  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+  try {
+    // Delete old events for this server (keep only last 14 days worth)
+    const twoWeeksAgo = new Date();
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
 
-  await supabase
-    .from("server_restart_events")
-    .delete()
-    .eq("server_id", serverId)
-    .lt("event_timestamp", twoWeeksAgo.toISOString());
+    const { error: deleteError } = await supabase
+      .from("server_restart_events")
+      .delete()
+      .eq("server_id", serverId)
+      .lt("event_timestamp", twoWeeksAgo.toISOString());
 
-  // Insert new events
-  const eventsToInsert = events.map((event) => ({
-    server_id: serverId,
-    event_timestamp: event.timestamp,
-    player_count_before: event.playerCountBefore,
-    player_count_after: event.playerCountAfter,
-    downtime_minutes: event.downtimeMinutes,
-  }));
+    if (deleteError) {
+      console.warn(`[ML Prediction] Warning deleting old events for ${serverId}:`, deleteError);
+    }
 
-  const { error } = await supabase
-    .from("server_restart_events")
-    .upsert(eventsToInsert, { onConflict: "server_id,event_timestamp" });
+    // Insert new events
+    const eventsToInsert = events.map((event) => ({
+      server_id: serverId,
+      event_timestamp: event.timestamp,
+      player_count_before: event.playerCountBefore,
+      player_count_after: event.playerCountAfter,
+      downtime_minutes: event.downtimeMinutes,
+    }));
 
-  if (error) {
-    console.error(`[ML Prediction] Error saving restart events:`, error);
+    console.log(`[ML Prediction] Saving ${eventsToInsert.length} restart events for ${serverId}`);
+
+    const { error: insertError, data } = await supabase
+      .from("server_restart_events")
+      .upsert(eventsToInsert, { onConflict: "server_id,event_timestamp" });
+
+    if (insertError) {
+      console.error(`[ML Prediction] Error saving restart events for ${serverId}:`, insertError);
+      throw insertError;
+    }
+
+    console.log(`[ML Prediction] Successfully saved ${eventsToInsert.length} restart events for ${serverId}`);
+  } catch (error) {
+    console.error(`[ML Prediction] Failed to save restart events for ${serverId}:`, error);
+    throw error;
   }
 }
 
@@ -447,6 +505,8 @@ async function saveRestartEvents(serverId: string, events: RestartEvent[]): Prom
 async function generatePrediction(serverId: string, daysBack: number = 14): Promise<MLPrediction> {
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - daysBack);
+
+  console.log(`[ML Prediction] Generating prediction for ${serverId} (last ${daysBack} days)`);
 
   // Fetch player count data
   const { data: playerData, error } = await supabase
@@ -462,9 +522,21 @@ async function generatePrediction(serverId: string, daysBack: number = 14): Prom
   }
 
   const records = (playerData || []) as PlayerCountRecord[];
+  console.log(`[ML Prediction] Fetched ${records.length} player count records for ${serverId}`);
 
   // Detect restart events
   const events = detectRestartEvents(records);
+  console.log(`[ML Prediction] Detected ${events.length} restart events for ${serverId}`);
+
+  if (events.length > 0) {
+    console.log(`[ML Prediction] Event details for ${serverId}:`, events.map(e => ({
+      timestamp: e.timestamp,
+      before: e.playerCountBefore,
+      after: e.playerCountAfter,
+      downtime: e.downtimeMinutes
+    })));
+  }
+
   const intervals = calculateIntervals(events);
 
   // Calculate average downtime
@@ -491,9 +563,12 @@ async function generatePrediction(serverId: string, daysBack: number = 14): Prom
 
   // Save to cache
   await savePredictionToCache(prediction);
+  console.log(`[ML Prediction] Saved prediction to cache for ${serverId}`);
 
-  // Save detected events
-  await saveRestartEvents(serverId, events);
+  // Save detected events to database
+  if (events.length > 0) {
+    await saveRestartEvents(serverId, events);
+  }
 
   return prediction;
 }
