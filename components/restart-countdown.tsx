@@ -109,34 +109,35 @@ export const RestartCountdown = memo(function RestartCountdown({
     return () => clearInterval(interval)
   }, [prediction?.nextRestartTime])
 
-  // Don't render if no prediction or no next restart time
-  if (!prediction || !prediction.nextRestartTime || timeRemaining === null) {
-    // Show "learning" state if we have insufficient data or irregular pattern
-    if (prediction && (prediction.detectedPattern === null || prediction.detectedPattern === 'Irregular restarts')) {
-      return (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={springs.snappy}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg border backdrop-blur-sm"
-          style={{
-            background: 'rgba(0, 217, 255, 0.1)',
-            borderColor: 'rgba(0, 217, 255, 0.2)'
-          }}
-        >
-          {/* Clock icon */}
-          <Clock className="h-4 w-4 text-cyan-400" />
+  // Show "learning" state when there is no restart time specified
+  if (prediction && !prediction.nextRestartTime) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={springs.snappy}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-lg border backdrop-blur-sm"
+        style={{
+          background: 'rgba(0, 217, 255, 0.1)',
+          borderColor: 'rgba(0, 217, 255, 0.2)'
+        }}
+      >
+        {/* Clock icon */}
+        <Clock className="h-4 w-4 text-cyan-400" />
 
-          {/* Learning text */}
-          <div className="flex flex-col items-start gap-0.5">
-            <span className="text-xs font-bold text-cyan-400">
-              learning
-            </span>
-            <span className="text-[9px] text-gray-500">est. restart</span>
-          </div>
-        </motion.div>
-      )
-    }
+        {/* Learning text */}
+        <div className="flex flex-col items-start gap-0.5">
+          <span className="text-xs font-bold text-cyan-400">
+            learning
+          </span>
+          <span className="text-[9px] text-gray-500">est. restart</span>
+        </div>
+      </motion.div>
+    )
+  }
+
+  // Don't render if no prediction or no countdown time remaining
+  if (!prediction || timeRemaining === null) {
     return null
   }
 
