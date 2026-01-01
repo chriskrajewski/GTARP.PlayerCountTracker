@@ -139,6 +139,13 @@ export function GitCommitsTab({ isOpen }: GitCommitsTabProps) {
         <div>
           <p className="text-red-300 font-medium">Unable to load git commits</p>
           <p className="text-red-300/80 text-sm mt-1">{error}</p>
+          <p className="text-red-300/70 text-xs mt-2">
+            {error.includes('access denied') || error.includes('403') 
+              ? 'The GitHub token may not have the required permissions. Ensure GITHUB_TOKEN has the "repo" scope.'
+              : error.includes('not found') || error.includes('404')
+              ? 'The repository could not be found. Check GITHUB_REPO_OWNER and GITHUB_REPO_NAME settings.'
+              : 'Please check your network connection and try again.'}
+          </p>
           <button
             onClick={() => setRetryCount(prev => prev + 1)}
             className="mt-3 text-sm bg-red-500/20 text-red-300 px-3 py-1 rounded-md hover:bg-red-500/30 transition-colors"

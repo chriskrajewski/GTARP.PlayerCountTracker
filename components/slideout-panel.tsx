@@ -84,7 +84,8 @@ export function SlideoutPanel({
       <SheetContent 
         side={side}
         hideDefaultClose={true}
-        className="w-full sm:w-[1000px] md:w-[1250px] lg:w-[1500px] p-0 flex flex-col border-0 shadow-none bg-transparent overflow-visible"
+        className="p-0 flex flex-col border-0 shadow-none bg-transparent overflow-visible"
+        style={{ width: '55vw', maxWidth: '950px' }}
       >
         {/* Main panel container with glass effect */}
         <motion.div
