@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, memo } from 'react'
+import { useState, useEffect, memo, useCallback } from 'react'
 import { motion } from 'motion/react'
 import { AlertTriangle, Clock, TrendingDown } from 'lucide-react'
 import { RestartPrediction } from '@/lib/restart-prediction'
@@ -77,7 +77,21 @@ export const RestartCountdown = memo(function RestartCountdown({
   prediction,
   loading = false
 }: RestartCountdownProps) {
-  const [timeRemaining, setTimeRemaining] = useState<number | null>(null)
+  // Calculate initial time remaining synchronously
+  const getInitialTimeRemaining = useCallback((): number | null => {
+    if (!prediction || !prediction.nextRestartTime) return null
+    try {
+      const now = new Date().getTime()
+      const restartTime = new Date(prediction.nextRestartTime).getTime()
+      const remaining = restartTime - now
+      return remaining > 0 ? remaining : null
+    } catch (error) {
+      console.error('Error calculating initial time remaining:', error)
+      return null
+    }
+  }, [prediction])
+
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(() => getInitialTimeRemaining())
   const [urgency, setUrgency] = useState<'upcoming' | 'imminent' | 'very-soon'>('upcoming')
 
   // Update countdown every second
@@ -109,8 +123,13 @@ export const RestartCountdown = memo(function RestartCountdown({
     return () => clearInterval(interval)
   }, [prediction?.nextRestartTime])
 
+  // Don't render if no prediction
+  if (!prediction) {
+    return null
+  }
+
   // Show "learning" state when there is no restart time specified
-  if (prediction && !prediction.nextRestartTime) {
+  if (!prediction.nextRestartTime) {
     return (
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
@@ -136,9 +155,31 @@ export const RestartCountdown = memo(function RestartCountdown({
     )
   }
 
-  // Don't render if no prediction or no countdown time remaining
-  if (!prediction || timeRemaining === null) {
-    return null
+  // Show "learning" if no time remaining (restart time has passed)
+  if (timeRemaining === null) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={springs.snappy}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-lg border backdrop-blur-sm"
+        style={{
+          background: 'rgba(0, 217, 255, 0.1)',
+          borderColor: 'rgba(0, 217, 255, 0.2)'
+        }}
+      >
+        {/* Clock icon */}
+        <Clock className="h-4 w-4 text-cyan-400" />
+
+        {/* Learning text */}
+        <div className="flex flex-col items-start gap-0.5">
+          <span className="text-xs font-bold text-cyan-400">
+            learning
+          </span>
+          <span className="text-[9px] text-gray-500">est. restart</span>
+        </div>
+      </motion.div>
+    )
   }
 
   const urgencyStyles = getUrgencyStyles(urgency)
