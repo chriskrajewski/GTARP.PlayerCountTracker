@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RestartEventsTimeline } from '@/components/restart-events-timeline';
 import { cn } from '@/lib/utils';
+import { formatToLocalTimezone } from '@/lib/timezone-utils';
 import type { RestartPrediction } from '@/hooks/use-restart-predictions';
 
 interface RestartPredictionsTabProps {
@@ -56,16 +57,7 @@ function getConfidenceDisplay(confidence: number) {
  */
 function formatDate(dateString: string | null): string {
   if (!dateString) return 'Unknown';
-  const date = new Date(dateString);
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    timeZone: 'UTC',
-  });
+  return formatToLocalTimezone(dateString, 'full');
 }
 
 /**

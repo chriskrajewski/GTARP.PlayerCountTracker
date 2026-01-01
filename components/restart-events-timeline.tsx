@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { formatToLocalTimezone } from '@/lib/timezone-utils';
 import type { RestartEvent } from '@/hooks/use-restart-predictions';
 
 interface RestartEventsTimelineProps {
@@ -17,16 +18,7 @@ interface RestartEventsTimelineProps {
  * Formats a date for display
  */
 function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    timeZone: 'UTC',
-  });
+  return formatToLocalTimezone(dateString, 'full');
 }
 
 /**
