@@ -278,20 +278,50 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
+      // Pre-group rules by search type for efficient matching (same approach as /api/streams/[serverId])
+      const titleKeywords: string[] = [];
+      const categoryKeywords: string[] = [];
+      const tagKeywords: string[] = [];
+
+      for (const rule of cfg) {
+        const keyword = (rule.search_keyword || '').trim().toLowerCase();
+        if (!keyword) continue;
+
+        switch (rule.search_type) {
+          case 'title':
+            titleKeywords.push(keyword);
+            break;
+          case 'category':
+            categoryKeywords.push(keyword);
+            break;
+          case 'tag':
+            tagKeywords.push(keyword);
+            break;
+        }
+      }
+
       // De-dupe matched streams per server (a stream may match multiple keywords)
       const seen = new Set<string>();
       const matches: TwitchStream[] = [];
 
       for (const s of normalized) {
         let isMatch = false;
-        for (const rule of cfg) {
-          const keyword = (rule.search_keyword || '').toLowerCase().trim();
-          if (!keyword) continue;
-          if (rule.search_type === 'title' && s._titleLower.includes(keyword)) { isMatch = true; break; }
-          // Category and tag should be exact matches to avoid "matches everything" config mistakes.
-          if (rule.search_type === 'category' && s._gameLower === keyword) { isMatch = true; break; }
-          if (rule.search_type === 'tag' && s._tagsLower.some(t => t === keyword)) { isMatch = true; break; }
+
+        // Check title keywords (partial match)
+        if (!isMatch && titleKeywords.length > 0 && titleKeywords.some(k => s._titleLower.includes(k))) {
+          isMatch = true;
         }
+
+        // Check category keywords (exact match)
+        if (!isMatch && categoryKeywords.length > 0 && categoryKeywords.some(k => s._gameLower === k)) {
+          isMatch = true;
+        }
+
+        // Check tag keywords (exact match)
+        if (!isMatch && tagKeywords.length > 0 && tagKeywords.some(k => s._tagsLower.includes(k))) {
+          isMatch = true;
+        }
+
         if (!isMatch) continue;
 
         // Use streamer name as stable identifier within the GTA V listing.
