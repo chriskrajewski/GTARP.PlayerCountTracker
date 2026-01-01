@@ -14,7 +14,9 @@ import {
   LogOut,
   ChevronRight,
   Menu,
-  X
+  X,
+  History,
+  Map
 } from 'lucide-react';
 import { AdminLogoutButton } from '@/components/admin-login-supabase';
 import { Button } from '@/components/ui/button';
@@ -45,6 +47,18 @@ const ADMIN_MENU_ITEMS = [
     href: '/admin/notifications',
     icon: Bell,
     description: 'Manage notification banners'
+  },
+  {
+    label: 'Site Updates',
+    href: '/admin/site-updates',
+    icon: History,
+    description: 'Manage recent changes and updates'
+  },
+  {
+    label: 'Roadmap',
+    href: '/admin/roadmap',
+    icon: Map,
+    description: 'Manage roadmap items and features'
   },
   {
     label: 'Server Management',

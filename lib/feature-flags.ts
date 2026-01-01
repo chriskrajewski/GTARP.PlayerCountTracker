@@ -34,6 +34,8 @@ export const FEATURE_FLAGS = {
   // Site features
   FEEDBACK: 'feedback',
   CHANGELOG: 'changelog',
+  SITE_UPDATES: 'site_updates',
+  ROADMAP: 'roadmap',
   SERVER_CHANGES: 'server_changes',
   CSV_EXPORT: 'csv_export',
   MULTI_STREAM: 'multi_stream',
@@ -85,6 +87,8 @@ export function FeatureFlagProvider({ children }: FeatureFlagProviderProps) {
       setFlags({
         [FEATURE_FLAGS.FEEDBACK]: true,
         [FEATURE_FLAGS.CHANGELOG]: true,
+        [FEATURE_FLAGS.SITE_UPDATES]: true,
+        [FEATURE_FLAGS.ROADMAP]: true,
         [FEATURE_FLAGS.SERVER_CHANGES]: true,
         [FEATURE_FLAGS.CSV_EXPORT]: true,
         [FEATURE_FLAGS.MULTI_STREAM]: true,

@@ -42,7 +42,7 @@ interface DockItem {
 
 interface PWABottomDockProps {
   onFeedbackClick?: () => void;
-  onChangelogClick?: () => void;
+  onSiteUpdatesClick?: () => void;
   onExportClick?: () => void;
   className?: string;
 }
@@ -163,7 +163,7 @@ const DockItemButton = memo(function DockItemButton({
 
 export const PWABottomDock = memo(function PWABottomDock({
   onFeedbackClick,
-  onChangelogClick,
+  onSiteUpdatesClick,
   onExportClick,
   className
 }: PWABottomDockProps) {
@@ -193,10 +193,10 @@ export const PWABottomDock = memo(function PWABottomDock({
       accentColor: '#A855F7'
     },
     {
-      id: 'changelog',
+      id: 'updates',
       label: 'Updates',
       icon: ClipboardList,
-      onClick: onChangelogClick,
+      onClick: onSiteUpdatesClick,
       accentColor: '#F59E0B'
     },
     {

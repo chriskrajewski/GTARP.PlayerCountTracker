@@ -6,7 +6,7 @@ export const metadata = {
   description: "View recent changes, roadmap, and git commits for the FiveM Player Count Tracker"
 };
 
-export default function ChangelogPage() {
+export default function SiteUpdatesPage() {
   return (
     <CommonLayout showBackButton pageTitle="Site Updates">
       <div className="py-6">
@@ -17,4 +17,4 @@ export default function ChangelogPage() {
       </div>
     </CommonLayout>
   );
-} 
+}
