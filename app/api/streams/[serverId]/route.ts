@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerName } from '@/lib/data';
-import { getStreamSearchConfigByPlatform, getStreamSearchConfig, type StreamSearchConfig } from '@/lib/stream-config';
+import { getStreamSearchConfigByPlatform, type StreamSearchConfig } from '@/lib/stream-config';
 import {
   getKickStreamsByCategoryQuery,
   getKickTopStreams,
@@ -241,21 +241,20 @@ function filterTwitchStreamsByConfig(
     const gameLower = (stream.game_name || '').toLowerCase();
     const tagsLower = (stream.tags || []).map(t => (t || '').toLowerCase());
 
-    let isMatch = false;
-
-    if (titleKeywords.length > 0 && titleKeywords.some(k => titleLower.includes(k))) {
-      isMatch = true;
-    }
-
-    if (!isMatch && categoryKeywords.length > 0 && categoryKeywords.some(k => gameLower === k)) {
-      isMatch = true;
-    }
-
-    if (!isMatch && tagKeywords.length > 0 && tagKeywords.some(k => tagsLower.includes(k))) {
-      isMatch = true;
-    }
-
-    if (!isMatch) continue;
+    // Use AND logic between search types (all specified types must match)
+    // Use OR logic within each search type (any keyword in that type can match)
+    
+    // Check title keywords (partial match) - OR within titles
+    const titleMatch = titleKeywords.length === 0 || titleKeywords.some(k => titleLower.includes(k));
+    
+    // Check category keywords (exact match) - OR within categories
+    const categoryMatch = categoryKeywords.length === 0 || categoryKeywords.some(k => gameLower === k);
+    
+    // Check tag keywords (exact match) - OR within tags
+    const tagMatch = tagKeywords.length === 0 || tagKeywords.some(k => tagsLower.includes(k));
+    
+    // ALL specified search types must match (AND logic between types)
+    if (!titleMatch || !categoryMatch || !tagMatch) continue;
 
     const key = (stream.user_name || '').toLowerCase();
     if (!key || seen.has(key)) continue;

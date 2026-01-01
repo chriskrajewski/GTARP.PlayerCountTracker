@@ -305,24 +305,20 @@ export async function GET(request: NextRequest) {
       const matches: TwitchStream[] = [];
 
       for (const s of normalized) {
-        let isMatch = false;
-
-        // Check title keywords (partial match)
-        if (!isMatch && titleKeywords.length > 0 && titleKeywords.some(k => s._titleLower.includes(k))) {
-          isMatch = true;
-        }
-
-        // Check category keywords (exact match)
-        if (!isMatch && categoryKeywords.length > 0 && categoryKeywords.some(k => s._gameLower === k)) {
-          isMatch = true;
-        }
-
-        // Check tag keywords (exact match)
-        if (!isMatch && tagKeywords.length > 0 && tagKeywords.some(k => s._tagsLower.includes(k))) {
-          isMatch = true;
-        }
-
-        if (!isMatch) continue;
+        // Use AND logic between search types (all specified types must match)
+        // Use OR logic within each search type (any keyword in that type can match)
+        
+        // Check title keywords (partial match) - OR within titles
+        const titleMatch = titleKeywords.length === 0 || titleKeywords.some(k => s._titleLower.includes(k));
+        
+        // Check category keywords (exact match) - OR within categories
+        const categoryMatch = categoryKeywords.length === 0 || categoryKeywords.some(k => s._gameLower === k);
+        
+        // Check tag keywords (exact match) - OR within tags
+        const tagMatch = tagKeywords.length === 0 || tagKeywords.some(k => s._tagsLower.includes(k));
+        
+        // ALL specified search types must match (AND logic between types)
+        if (!titleMatch || !categoryMatch || !tagMatch) continue;
 
         // Use streamer name as stable identifier within the GTA V listing.
         const key = (s.name || '').toLowerCase();
