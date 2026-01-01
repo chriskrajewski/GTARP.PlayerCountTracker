@@ -15,6 +15,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { RestartEventsTimeline } from '@/components/restart-events-timeline';
 import { cn } from '@/lib/utils';
 import type { RestartPrediction } from '@/hooks/use-restart-predictions';
 
@@ -389,52 +390,7 @@ export function RestartPredictionsTab({
 
       {/* Timeline Visualization */}
       {prediction.detectedEventsCount && prediction.detectedEventsCount > 0 && (
-        <Card className="bg-[#1a1a1e] border-[#26262c]">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center space-x-2">
-              <Calendar className="h-5 w-5 text-[#9147ff]" />
-              <span>Restart Timeline</span>
-            </CardTitle>
-            <CardDescription className="text-[#ADADB8]">
-              Visual representation of detected restart events
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {/* Timeline visualization */}
-              <div className="relative">
-                {/* Vertical line */}
-                <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gradient-to-b from-[#9147ff] to-[#40404a]" />
-
-                {/* Timeline items */}
-                <div className="space-y-4 pl-16">
-                  {Array.from({ length: Math.min(prediction.detectedEventsCount, 5) }).map((_, i) => (
-                    <div key={i} className="relative">
-                      {/* Timeline dot */}
-                      <div className="absolute -left-12 top-1 w-3 h-3 rounded-full bg-[#9147ff] border-2 border-[#1a1a1e]" />
-
-                      {/* Timeline item content */}
-                      <div className="bg-[#26262c]/50 rounded-lg p-3">
-                        <p className="text-xs text-[#ADADB8]">Restart Event {i + 1}</p>
-                        <p className="text-sm font-medium text-white mt-1">
-                          Detected restart pattern
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-
-                  {prediction.detectedEventsCount > 5 && (
-                    <div className="text-center py-2">
-                      <p className="text-xs text-[#ADADB8]">
-                        +{prediction.detectedEventsCount - 5} more events in history
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <RestartEventsTimeline events={prediction.detectedEvents} />
       )}
 
       {/* Info Box */}

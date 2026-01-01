@@ -18,6 +18,16 @@ interface DbPrediction {
 }
 
 /**
+ * Represents a detected restart event
+ */
+interface RestartEvent {
+  timestamp: string
+  playerCountBefore: number
+  playerCountAfter: number
+  downtime: number // minutes
+}
+
+/**
  * RestartPrediction format returned to clients
  */
 interface RestartPrediction {
@@ -27,7 +37,7 @@ interface RestartPrediction {
   detectedPattern: string | null
   lastRestartTime: string | null
   averageDowntime: number
-  detectedEvents: never[]
+  detectedEvents: RestartEvent[]
   patternType?: string
   mlReasoning?: string
   isStale?: boolean
@@ -128,9 +138,38 @@ async function getCachedPredictions(serverIds: string[]): Promise<RestartPredict
   // Cast predictions to typed array
   const dbPredictions = (predictions || []) as DbPrediction[]
 
+  // Fetch restart events for all servers
+  const { data: eventsData, error: eventsError } = await supabase
+    .from('server_restart_events')
+    .select('*')
+    .in('server_id', serverIds)
+    .order('event_timestamp', { ascending: false })
+    .limit(100) // Get up to 100 events per server
+
+  if (eventsError) {
+    console.error('Error fetching restart events:', eventsError)
+  }
+
+  // Group events by server_id
+  const eventsByServer = new Map<string, RestartEvent[]>()
+  if (eventsData) {
+    for (const event of eventsData as any[]) {
+      if (!eventsByServer.has(event.server_id)) {
+        eventsByServer.set(event.server_id, [])
+      }
+      eventsByServer.get(event.server_id)!.push({
+        timestamp: event.event_timestamp,
+        playerCountBefore: event.player_count_before || 0,
+        playerCountAfter: event.player_count_after || 0,
+        downtime: event.downtime_minutes || 0
+      })
+    }
+  }
+
   // Map database records to RestartPrediction format
   return serverIds.map(serverId => {
     const dbPrediction = dbPredictions.find(p => p.server_id === serverId)
+    const events = eventsByServer.get(serverId) || []
 
     if (!dbPrediction) {
       return {
@@ -140,7 +179,7 @@ async function getCachedPredictions(serverIds: string[]): Promise<RestartPredict
         detectedPattern: null,
         lastRestartTime: null,
         averageDowntime: 0,
-        detectedEvents: [],
+        detectedEvents: events,
         isStale: true,
         mlReasoning: 'No prediction available. Waiting for cron job to generate.'
       }
@@ -157,7 +196,7 @@ async function getCachedPredictions(serverIds: string[]): Promise<RestartPredict
       detectedPattern: dbPrediction.detected_pattern,
       lastRestartTime: dbPrediction.last_restart_time,
       averageDowntime: dbPrediction.average_downtime || 0,
-      detectedEvents: [],
+      detectedEvents: events,
       patternType: dbPrediction.pattern_type || undefined,
       mlReasoning: dbPrediction.ml_reasoning || undefined,
       isStale,

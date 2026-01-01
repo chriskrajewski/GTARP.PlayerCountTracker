@@ -3,6 +3,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 /**
+ * Represents a detected restart event
+ */
+export interface RestartEvent {
+  timestamp: string;
+  playerCountBefore: number;
+  playerCountAfter: number;
+  downtime: number; // minutes
+}
+
+/**
  * Represents a server restart prediction
  */
 export interface RestartPrediction {
@@ -12,7 +22,7 @@ export interface RestartPrediction {
   detectedPattern: string | null;
   lastRestartTime: string | null;
   averageDowntime: number;
-  detectedEvents: never[];
+  detectedEvents: RestartEvent[];
   patternType?: string;
   mlReasoning?: string;
   isStale?: boolean;

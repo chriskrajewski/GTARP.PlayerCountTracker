@@ -408,6 +408,40 @@ async function savePredictionToCache(prediction: MLPrediction): Promise<void> {
 }
 
 /**
+ * Save detected restart events to database
+ */
+async function saveRestartEvents(serverId: string, events: RestartEvent[]): Promise<void> {
+  if (events.length === 0) return;
+
+  // Delete old events for this server (keep only last 14 days worth)
+  const twoWeeksAgo = new Date();
+  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
+  await supabase
+    .from("server_restart_events")
+    .delete()
+    .eq("server_id", serverId)
+    .lt("event_timestamp", twoWeeksAgo.toISOString());
+
+  // Insert new events
+  const eventsToInsert = events.map((event) => ({
+    server_id: serverId,
+    event_timestamp: event.timestamp,
+    player_count_before: event.playerCountBefore,
+    player_count_after: event.playerCountAfter,
+    downtime_minutes: event.downtimeMinutes,
+  }));
+
+  const { error } = await supabase
+    .from("server_restart_events")
+    .upsert(eventsToInsert, { onConflict: "server_id,event_timestamp" });
+
+  if (error) {
+    console.error(`[ML Prediction] Error saving restart events:`, error);
+  }
+}
+
+/**
  * Generate prediction for a single server
  */
 async function generatePrediction(serverId: string, daysBack: number = 14): Promise<MLPrediction> {
@@ -457,6 +491,9 @@ async function generatePrediction(serverId: string, daysBack: number = 14): Prom
 
   // Save to cache
   await savePredictionToCache(prediction);
+
+  // Save detected events
+  await saveRestartEvents(serverId, events);
 
   return prediction;
 }
