@@ -300,9 +300,17 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      // Debug: Log filtering configuration
+      console.log(`[LiveTwitch] ${serverId} - Filtering ${normalized.length} streams with:`);
+      console.log(`  Title keywords: [${titleKeywords.join(', ')}]`);
+      console.log(`  Category keywords: [${categoryKeywords.join(', ')}]`);
+      console.log(`  Tag keywords: [${tagKeywords.join(', ')}]`);
+      console.log(`  Logic: ${titleKeywords.length > 0 ? 'title' : ''}${titleKeywords.length > 0 && categoryKeywords.length > 0 ? ' AND ' : ''}${categoryKeywords.length > 0 ? 'category' : ''}${(titleKeywords.length > 0 || categoryKeywords.length > 0) && tagKeywords.length > 0 ? ' AND ' : ''}${tagKeywords.length > 0 ? 'tag' : ''}`);
+
       // De-dupe matched streams per server (a stream may match multiple keywords)
       const seen = new Set<string>();
       const matches: TwitchStream[] = [];
+      let debugCount = 0;
 
       for (const s of normalized) {
         // Use AND logic between search types (all specified types must match)
@@ -317,6 +325,15 @@ export async function GET(request: NextRequest) {
         // Check tag keywords (exact match) - OR within tags
         const tagMatch = tagKeywords.length === 0 || tagKeywords.some(k => s._tagsLower.includes(k));
         
+        // Debug first 3 matches and first 3 non-matches
+        if (debugCount < 6) {
+          const willMatch = titleMatch && categoryMatch && tagMatch;
+          if (willMatch || debugCount < 3) {
+            console.log(`[LiveTwitch] ${willMatch ? '✓' : '✗'} "${s.name}" - "${s.title.substring(0, 50)}..." | game:"${s.gameName}" | title:${titleMatch} cat:${categoryMatch} tag:${tagMatch}`);
+            debugCount++;
+          }
+        }
+        
         // ALL specified search types must match (AND logic between types)
         if (!titleMatch || !categoryMatch || !tagMatch) continue;
 
@@ -327,6 +344,8 @@ export async function GET(request: NextRequest) {
         matches.push({ name: s.name, viewers: s.viewers, title: s.title, gameName: s.gameName, tags: s.tags });
       }
 
+      console.log(`[LiveTwitch] ${serverId} - Matched ${matches.length} streams from ${normalized.length} total`);
+      
       if (matches.length > 200) {
         console.warn(`[LiveTwitch] High Twitch match count for ${serverId}: ${matches.length}. Keywords=${cfg.map(r => `${r.search_type}:${r.search_keyword}`).join(', ')}`);
       }
