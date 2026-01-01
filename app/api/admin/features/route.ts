@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAdminRequest } from '@/lib/admin-auth-server';
-import { FeatureFlag } from '@/lib/admin-types';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+/**
+ * Admin API endpoint for managing feature flags
+ * Requires admin authentication
+ */
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,11 +19,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Since you don't have feature flags in your database, return empty array
-    // In a real implementation, you would have a feature_flags table
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const { data: flags, error } = await supabase
+      .from('feature_flags')
+      .select('*')
+      .order('category', { ascending: true })
+      .order('name', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching feature flags:', error);
+      return NextResponse.json(
+        { success: false, error: 'Failed to fetch feature flags' },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({
       success: true,
-      data: [],
+      data: flags || [],
       timestamp: new Date().toISOString(),
     });
 
@@ -38,31 +60,83 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    // Mock creating a new feature flag
-    const newFeatureFlag: FeatureFlag = {
-      id: Date.now().toString(),
-      name: body.name,
-      key: body.key || (typeof body.name === 'string' ? body.name.toLowerCase().replace(/\s+/g, '_') : `feature_${Date.now()}`),
-      description: body.description,
-      is_enabled: body.is_enabled || false,
-      environment: body.environment || 'development',
-      rollout_percentage: body.rollout_percentage || 0,
-      conditions: body.conditions || {},
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      created_by: 'admin',
-    };
+    const { data: newFlag, error } = await supabase
+      .from('feature_flags')
+      .insert({
+        key: body.key,
+        name: body.name,
+        description: body.description || null,
+        is_enabled: body.is_enabled ?? false,
+        category: body.category || 'general',
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating feature flag:', error);
+      return NextResponse.json(
+        { success: false, error: 'Failed to create feature flag' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
-      data: newFeatureFlag,
+      data: newFlag,
       message: 'Feature flag created successfully',
       timestamp: new Date().toISOString(),
     });
 
   } catch (error) {
     console.error('Feature flag creation error:', error);
+    return NextResponse.json(
+      { success: false, error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    if (!validateAdminRequest(request)) {
+      return NextResponse.json(
+        { success: false, error: 'Admin authentication required' },
+        { status: 401 }
+      );
+    }
+
+    return NextResponse.json(
+      { success: false, error: 'Use PATCH /api/admin/features/{id} instead' },
+      { status: 400 }
+    );
+
+  } catch (error) {
+    console.error('Feature flag update error:', error);
+    return NextResponse.json(
+      { success: false, error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    if (!validateAdminRequest(request)) {
+      return NextResponse.json(
+        { success: false, error: 'Admin authentication required' },
+        { status: 401 }
+      );
+    }
+
+    return NextResponse.json(
+      { success: false, error: 'Use DELETE /api/admin/features/{id} instead' },
+      { status: 400 }
+    );
+
+  } catch (error) {
+    console.error('Feature flag deletion error:', error);
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }

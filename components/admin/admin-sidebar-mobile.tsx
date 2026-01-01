@@ -10,6 +10,7 @@ import {
   Bell,
   Database,
   Settings,
+  Flag,
   LogOut,
   ChevronRight,
   Menu,
@@ -50,6 +51,12 @@ const ADMIN_MENU_ITEMS = [
     href: '/admin/data',
     icon: Database,
     description: 'Manage servers and data collection'
+  },
+  {
+    label: 'Feature Flags',
+    href: '/admin/features',
+    icon: Flag,
+    description: 'Control feature visibility'
   },
   {
     label: 'Settings',

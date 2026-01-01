@@ -3,34 +3,19 @@
 import { CommonLayout } from '@/components/common-layout';
 import { AdminBannerControls } from '@/components/admin-banner-controls';
 import { AdminProtected } from '@/components/admin-login';
-import { useFeatureGate, FEATURE_GATES } from '@/lib/statsig';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function AdminBannersPage() {
-  const isNotificationBannersEnabled = useFeatureGate(FEATURE_GATES.NOTIFICATION_BANNERS);
-
+  // Notification banners are always enabled (not controlled by feature flags)
+  // They're a core admin feature
+  
   return (
     <AdminProtected>
-      {!isNotificationBannersEnabled ? (
-        <CommonLayout showBackButton pageTitle="Admin - Notification Banners">
-          <Card className="bg-[#0e0e10] border-[#26262c]">
-            <CardContent className="p-6">
-              <div className="text-center py-8">
-                <h2 className="text-xl font-semibold text-white mb-2">
-                  Feature Not Available
-                </h2>
-                <p className="text-[#ADADB8]">
-                  Notification banners are currently disabled. Please contact an administrator to enable this feature.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </CommonLayout>
-      ) : (
-        <CommonLayout showBackButton pageTitle="Admin - Notification Banners">
-          <div className="space-y-6">
-            {/* Page Header */}
-            <div className="text-center">
+      <CommonLayout showBackButton pageTitle="Admin - Notification Banners">
+        <div className="space-y-6">
+          {/* Page Header */}
+          <div className="text-center">
               <h1 className="text-3xl font-bold text-white mb-2">
                 Notification Banner Administration
               </h1>
@@ -99,7 +84,6 @@ export default function AdminBannersPage() {
             </Card>
           </div>
         </CommonLayout>
-      )}
     </AdminProtected>
   );
 }

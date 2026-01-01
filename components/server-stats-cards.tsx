@@ -12,6 +12,7 @@ import { type LiveServerData } from "@/hooks/use-live-server-data"
 import { type RestartPrediction } from "@/lib/restart-prediction"
 import { RestartCountdown } from "@/components/restart-countdown"
 import { memo } from "react"
+import { useFeatureFlag, FEATURE_FLAGS } from "@/lib/feature-flags"
 
 // Kick icon component (they don't have an official icon in lucide)
 function KickIcon({ className }: { className?: string }) {
@@ -167,6 +168,12 @@ export default function ServerStatsCards({
   restartPrediction,
   onViewChanges
 }: ServerStatsCardsProps) {
+  // Feature flags
+  const showStreamsButton = useFeatureFlag(FEATURE_FLAGS.SERVER_CARD_STREAMS);
+  const showChangesButton = useFeatureFlag(FEATURE_FLAGS.SERVER_CARD_CHANGES);
+  const showRestartCountdown = useFeatureFlag(FEATURE_FLAGS.SERVER_CARD_RESTART);
+  const showCapacityIndicator = useFeatureFlag(FEATURE_FLAGS.SERVER_CARD_CAPACITY);
+  
   // Historical stats (peak/average from Supabase data)
   const { peak: historicalPeak, average: historicalAverage } = getServerStats(playerData, serverId)
   const { streamPeak, streamAverage } = getStreamerStats(streamerData, serverId)
@@ -275,12 +282,14 @@ export default function ServerStatsCards({
             </div>
             
             {/* Restart Countdown - positioned between server name and capacity */}
-            <div className="flex-shrink-0">
-              <RestartCountdown prediction={restartPrediction || null} />
-            </div>
+            {showRestartCountdown && (
+              <div className="flex-shrink-0">
+                <RestartCountdown prediction={restartPrediction || null} />
+              </div>
+            )}
             
             {/* Current Capacity indicator - shows on every card */}
-            {latestCapacity && (
+            {showCapacityIndicator && latestCapacity && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -396,54 +405,56 @@ export default function ServerStatsCards({
         
         {/* Footer */}
         <CardFooter className="pt-3 pb-4 flex items-center gap-2 relative z-10">
-          <Link href={`/streams/${serverId}`} className="flex-1">
-            <motion.button
-              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-300 border backdrop-blur-sm"
-              style={{
-                background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
-                borderColor: 'rgba(0, 217, 255, 0.15)',
-              }}
-              whileHover={{ 
-                borderColor: 'rgba(0, 217, 255, 0.4)',
-                boxShadow: '0 0 15px rgba(0, 217, 255, 0.1)'
-              }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <motion.div
-                className="flex items-center gap-1"
-                animate={{ 
-                  opacity: currentStreams > 0 ? [1, 0.6, 1] : 1
+          {showStreamsButton && (
+            <Link href={`/streams/${serverId}`} className="flex-1">
+              <motion.button
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-300 border backdrop-blur-sm"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+                  borderColor: 'rgba(0, 217, 255, 0.15)',
                 }}
-                transition={{ 
-                  duration: 2, 
-                  repeat: currentStreams > 0 ? Infinity : 0,
-                  ease: "easeInOut"
+                whileHover={{ 
+                  borderColor: 'rgba(0, 217, 255, 0.4)',
+                  boxShadow: '0 0 15px rgba(0, 217, 255, 0.1)'
                 }}
+                whileTap={{ scale: 0.98 }}
               >
-                {hasLiveTwitchData && (
-                  <Twitch className="h-3.5 w-3.5 text-purple-400" />
-                )}
-                {hasLiveKickData && (
-                  <KickIcon className="h-3.5 w-3.5" style={{ color: '#53FC18' }} />
-                )}
-                {!hasLiveTwitchData && !hasLiveKickData && (
-                  <Twitch className="h-3.5 w-3.5 text-purple-400" />
-                )}
-              </motion.div>
-              <span className="text-white">Streams</span>
-              <motion.span 
-                className="inline-flex items-center justify-center bg-cyan-500/20 text-cyan-400 rounded-full h-4 min-w-4 px-1 text-[10px] font-bold border border-cyan-500/30"
-                key={currentStreams}
-                initial={{ scale: 1.2 }}
-                animate={{ scale: 1 }}
-                transition={springs.bouncy}
-              >
-                {currentStreams}
-              </motion.span>
-            </motion.button>
-          </Link>
+                <motion.div
+                  className="flex items-center gap-1"
+                  animate={{ 
+                    opacity: currentStreams > 0 ? [1, 0.6, 1] : 1
+                  }}
+                  transition={{ 
+                    duration: 2, 
+                    repeat: currentStreams > 0 ? Infinity : 0,
+                    ease: "easeInOut"
+                  }}
+                >
+                  {hasLiveTwitchData && (
+                    <Twitch className="h-3.5 w-3.5 text-purple-400" />
+                  )}
+                  {hasLiveKickData && (
+                    <KickIcon className="h-3.5 w-3.5" style={{ color: '#53FC18' }} />
+                  )}
+                  {!hasLiveTwitchData && !hasLiveKickData && (
+                    <Twitch className="h-3.5 w-3.5 text-purple-400" />
+                  )}
+                </motion.div>
+                <span className="text-white">Streams</span>
+                <motion.span 
+                  className="inline-flex items-center justify-center bg-cyan-500/20 text-cyan-400 rounded-full h-4 min-w-4 px-1 text-[10px] font-bold border border-cyan-500/30"
+                  key={currentStreams}
+                  initial={{ scale: 1.2 }}
+                  animate={{ scale: 1 }}
+                  transition={springs.bouncy}
+                >
+                  {currentStreams}
+                </motion.span>
+              </motion.button>
+            </Link>
+          )}
           
-          {onViewChanges && (
+          {showChangesButton && onViewChanges && (
             <motion.button 
               onClick={onViewChanges}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-300 border backdrop-blur-sm text-white"
