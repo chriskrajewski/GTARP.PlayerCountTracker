@@ -34,6 +34,14 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 // IMPORTANT:
 // Config comes from Supabase `stream_search_config` only.
 // We intentionally do not keep any hardcoded per-server fallback mappings.
+// Use STREAM_SEARCH_CONFIG_TABLE env var to switch to dev table (default: stream_search_config)
+
+const STREAM_CONFIG_TABLE = process.env.STREAM_SEARCH_CONFIG_TABLE || 'stream_search_config';
+
+// Log which table is being used on first import
+if (typeof window === 'undefined') {
+  console.log(`[StreamConfig] Using table: ${STREAM_CONFIG_TABLE}`);
+}
 
 /**
  * Get stream search configuration for a specific server
@@ -51,7 +59,7 @@ export async function getStreamSearchConfig(serverId: string): Promise<StreamSea
     const supabase = createServerClient();
     
     const { data, error } = await supabase
-      .from('stream_search_config')
+      .from(STREAM_CONFIG_TABLE)
       .select('*')
       .eq('server_id', serverId)
       .eq('is_active', true)
@@ -106,7 +114,7 @@ export async function getAllStreamSearchConfig(): Promise<StreamSearchConfig[]> 
     const supabase = createServerClient();
     
     const { data, error } = await supabase
-      .from('stream_search_config')
+      .from(STREAM_CONFIG_TABLE)
       .select('*')
       .eq('is_active', true)
       .order('server_id')
@@ -166,7 +174,7 @@ export async function getStreamSearchConfigMap(
   try {
     const supabase = createServerClient();
     let query = supabase
-      .from('stream_search_config')
+      .from(STREAM_CONFIG_TABLE)
       .select('*')
       .eq('is_active', true)
       .in('server_id', serverIds);
@@ -184,10 +192,19 @@ export async function getStreamSearchConfigMap(
       return map;
     }
 
+    console.log(`[StreamConfig] Loaded ${(data || []).length} config rows from ${STREAM_CONFIG_TABLE} for servers: ${serverIds.join(', ')}${platform ? ` (platform: ${platform})` : ''}`);
+    
     for (const row of (data || []) as StreamSearchConfig[]) {
       const current = map.get(row.server_id) ?? [];
       current.push(row);
       map.set(row.server_id, current);
+    }
+    
+    // Debug log for each server
+    for (const [serverId, configs] of map.entries()) {
+      if (configs.length > 0) {
+        console.log(`[StreamConfig] ${serverId}: ${configs.map(c => `${c.search_type}:"${c.search_keyword}"`).join(', ')}`);
+      }
     }
   } catch (error) {
     console.error('[StreamConfig] Error fetching config map:', error);
