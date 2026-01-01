@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Loader2, ExternalLink, Twitch, X } from "lucide-react";
-import { useFeatureGate, FEATURE_GATES } from "@/lib/statsig";
 import { trackStreamClick } from "@/lib/gtag";
 
 // Kick icon component (they don't have an official icon in lucide)

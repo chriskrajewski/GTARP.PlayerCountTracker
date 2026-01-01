@@ -107,6 +107,13 @@ class AdminAPI {
     });
   }
 
+  private async patch<T = any>(endpoint: string, data?: any): Promise<AdminAPIResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
   private async delete<T = any>(endpoint: string): Promise<AdminAPIResponse<T>> {
     return this.request<T>(endpoint, { method: 'DELETE' });
   }
@@ -375,7 +382,7 @@ class AdminAPI {
   }
 
   async updateFeatureFlag(flagId: string, data: Partial<FeatureFlag>): Promise<AdminAPIResponse<FeatureFlag>> {
-    return this.put<FeatureFlag>(`/features/${flagId}`, data);
+    return this.patch<FeatureFlag>(`/features/${flagId}`, data);
   }
 
   async createFeatureFlag(data: Omit<FeatureFlag, 'id' | 'created_at' | 'updated_at' | 'created_by'>): Promise<AdminAPIResponse<FeatureFlag>> {

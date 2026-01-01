@@ -7,7 +7,7 @@ import { AnimatePresence } from 'motion/react';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
-import { useFeatureGate, FEATURE_GATES } from '@/lib/statsig';
+import { useFeatureFlag, FEATURE_FLAGS } from '@/lib/feature-flags';
 import { cn } from '@/lib/utils';
 import { PWABottomDock } from '@/components/pwa-bottom-dock';
 import { usePWAStandalone } from '@/hooks/use-pwa-standalone';
@@ -80,7 +80,7 @@ export default function MultiStreamPage() {
   const searchParams = useSearchParams();
   
   // Feature flag check
-  const isMultiStreamEnabled = useFeatureGate(FEATURE_GATES.MULTI_STREAM);
+  const isMultiStreamEnabled = useFeatureFlag(FEATURE_FLAGS.MULTI_STREAM);
   
   // PWA standalone mode detection
   const { isPWA, isLoading: isPWALoading } = usePWAStandalone();

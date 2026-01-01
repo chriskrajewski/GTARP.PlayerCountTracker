@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { DataStartPopup } from '@/components/data-start-popup';
 import { DataRefreshPopup } from '@/components/data-refresh-popup';
 import { DataStatusIndicator } from '@/components/data-status-indicator';
-import { useFeatureGate, FEATURE_GATES } from '@/lib/statsig';
+import { useFeatureFlag, FEATURE_FLAGS } from '@/lib/feature-flags';
 import Image from 'next/image';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { NotificationBannerList, useNotificationBanners } from '@/components/notification-banner';
@@ -200,6 +200,13 @@ export function CommonLayout({
   // Debug: Check for URL param to force show dock for testing
   const [forceShowDock, setForceShowDock] = useState(false);
   
+  // Feature flags
+  const isFeedbackEnabled = useFeatureFlag(FEATURE_FLAGS.FEEDBACK);
+  const isChangelogEnabled = useFeatureFlag(FEATURE_FLAGS.CHANGELOG);
+  const isServerChangesEnabled = useFeatureFlag(FEATURE_FLAGS.SERVER_CHANGES);
+  const isCsvExportEnabled = useFeatureFlag(FEATURE_FLAGS.CSV_EXPORT);
+  const isMultiStreamEnabled = useFeatureFlag(FEATURE_FLAGS.MULTI_STREAM);
+  
   useEffect(() => {
     const checkMobile = () => setIsMobileView(window.innerWidth < 640);
     checkMobile();
@@ -219,19 +226,7 @@ export function CommonLayout({
   // Show dock in PWA mode on mobile, or when debug param is set (dev only)
   const showPWADock = (isPWA && isMobileView && !isPWALoading) || forceShowDock;
   
-  // Feature gates - Temporarily force to true for debugging
-  // const isFeedbackEnabled = useFeatureGate(FEATURE_GATES.FEEDBACK_FORM);
-  // const isChangelogEnabled = useFeatureGate(FEATURE_GATES.CHANGELOG);
-  // const isCsvExportEnabled = useFeatureGate(FEATURE_GATES.CSV_EXPORT);
-  // const isNotificationBannersEnabled = useFeatureGate(FEATURE_GATES.NOTIFICATION_BANNERS);
-  
-  // FORCE ENABLE for debugging
-  const isFeedbackEnabled = true;
-  const isChangelogEnabled = true;
-  const isCsvExportEnabled = true;
-  const isNotificationBannersEnabled = true;
-  
-  // Notification banners
+  // Notification banners - always enabled (not controlled by feature flags)
   const { banners, dismissBanner } = useNotificationBanners();
   
 
@@ -418,12 +413,14 @@ export function CommonLayout({
             </motion.div>
           )}
 
-          <motion.div variants={fadeInUp}>
-            <HeaderButton href="/serverchangelog">
-              <History className="h-3.5 w-3.5" />
-              Server Changes
-            </HeaderButton>
-          </motion.div>
+          {isServerChangesEnabled && (
+            <motion.div variants={fadeInUp}>
+              <HeaderButton href="/serverchangelog">
+                <History className="h-3.5 w-3.5" />
+                Server Changes
+              </HeaderButton>
+            </motion.div>
+          )}
           
           {isCsvExportEnabled && (
             <motion.div variants={fadeInUp}>
@@ -434,12 +431,14 @@ export function CommonLayout({
             </motion.div>
           )}
           
-          <motion.div variants={fadeInUp}>
-            <HeaderButton href="/multi-stream">
-              <Video className="h-3.5 w-3.5" />
-              Multi Stream
-            </HeaderButton>
-          </motion.div>
+          {isMultiStreamEnabled && (
+            <motion.div variants={fadeInUp}>
+              <HeaderButton href="/multi-stream">
+                <Video className="h-3.5 w-3.5" />
+                Multi Stream
+              </HeaderButton>
+            </motion.div>
+          )}
 
           <motion.div variants={fadeInUp}>
             <TooltipProvider>
@@ -529,16 +528,18 @@ export function CommonLayout({
                   </MobileMenuItem>
                 )}
 
-                <MobileMenuItem>
-                  <Link 
-                    href="/serverchangelog" 
-                    className="flex w-full items-center gap-2 px-4 py-2.5 bg-[#18181b]/80 text-white rounded-lg border border-[#26262c] hover:border-cyan-500/30 transition-all text-sm font-medium backdrop-blur-sm"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    <History className="h-4 w-4 text-cyan-400" />
-                    Server Changes
-                  </Link>
-                </MobileMenuItem>
+                {isServerChangesEnabled && (
+                  <MobileMenuItem>
+                    <Link 
+                      href="/serverchangelog" 
+                      className="flex w-full items-center gap-2 px-4 py-2.5 bg-[#18181b]/80 text-white rounded-lg border border-[#26262c] hover:border-cyan-500/30 transition-all text-sm font-medium backdrop-blur-sm"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <History className="h-4 w-4 text-cyan-400" />
+                      Server Changes
+                    </Link>
+                  </MobileMenuItem>
+                )}
                 
                {isCsvExportEnabled && (
                   <MobileMenuItem>
@@ -555,16 +556,18 @@ export function CommonLayout({
                   </MobileMenuItem>
                 )}
                 
-                <MobileMenuItem>
-                  <Link 
-                    href="/multi-stream" 
-                    className="flex w-full items-center gap-2 px-4 py-2.5 bg-[#18181b]/80 text-white rounded-lg border border-[#26262c] hover:border-cyan-500/30 transition-all text-sm font-medium backdrop-blur-sm"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    <Video className="h-4 w-4 text-cyan-400" />
-                    Multi Stream
-                  </Link>
-                </MobileMenuItem>
+                {isMultiStreamEnabled && (
+                  <MobileMenuItem>
+                    <Link 
+                      href="/multi-stream" 
+                      className="flex w-full items-center gap-2 px-4 py-2.5 bg-[#18181b]/80 text-white rounded-lg border border-[#26262c] hover:border-cyan-500/30 transition-all text-sm font-medium backdrop-blur-sm"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <Video className="h-4 w-4 text-cyan-400" />
+                      Multi Stream
+                    </Link>
+                  </MobileMenuItem>
+                )}
 
                 <MobileMenuItem>
                   <a 
@@ -586,7 +589,7 @@ export function CommonLayout({
 
       {/* Notification Banners */}
       <AnimatePresence>
-        {isNotificationBannersEnabled && banners.length > 0 && (
+        {banners.length > 0 && (
           <motion.div 
             className="relative z-40"
             initial={{ opacity: 0, y: -20 }}

@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react"
 import { AlertCircle, Loader2 } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
-import { useFeatureGate, FEATURE_GATES } from "@/lib/statsig"
 
 type Commit = {
   id: string
@@ -51,7 +50,6 @@ export function ChangelogPanel({ isOpen }: ChangelogPanelProps) {
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
   const maxRetries = 2
-  const isEnabled = useFeatureGate(FEATURE_GATES.CHANGELOG)
 
   useEffect(() => {
     if (!isOpen) return
@@ -118,20 +116,8 @@ export function ChangelogPanel({ isOpen }: ChangelogPanelProps) {
       }
     }
 
-    if (isEnabled) {
-      fetchChangelog()
-    } else {
-      setIsLoading(false)
-    }
-  }, [isOpen, retryCount, isEnabled])
-
-  if (!isEnabled) {
-    return (
-      <div className="bg-[#18181b] p-4 rounded-md text-center border border-[#26262c]">
-        <p className="text-[#ADADB8]">The changelog is currently unavailable.</p>
-      </div>
-    )
-  }
+    fetchChangelog()
+  }, [isOpen, retryCount])
 
   if (isLoading) {
     return (

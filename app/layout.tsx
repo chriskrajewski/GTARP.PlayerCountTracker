@@ -8,11 +8,11 @@ import { Analytics } from "@vercel/analytics/react"
 import { Suspense } from "react"
 import { SpeedInsights } from "@vercel/speed-insights/react"
 import Script from "next/script";
-import StatsigProvider from "@/components/statsig-provider";
 import GoogleAnalytics from "@/components/google-analytics";
 import { BotIDProvider } from "@/components/botid-provider"
 import { VisitorTrackingProvider } from "@/components/visitor-tracking-provider"
 import { PWAProvider } from "@/components/pwa-provider"
+import { FeatureFlagProvider } from "@/lib/feature-flags"
 import mixpanel from "mixpanel-browser";
 
 // Create an instance of the Mixpanel object, your token is already added to this snippet
@@ -170,8 +170,6 @@ export default function RootLayout({
             font-size: 16px !important;
           }
         `}} />
-        <script src="https://cdn.jsdelivr.net/npm/@statsig/js-client@3/build/statsig-js-client+session-replay+web-analytics.min.js?apikey=client-Nu49JS6kPL97gZnvHVQZF64xQpf7aCGgRMdLm3wrEt5">
-        </script>
         {(process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'development') && process.env.NEXT_PUBLIC_GA_TRACKING_ID && (
           <>
             <Script src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_TRACKING_ID}`} strategy="afterInteractive" />
@@ -214,7 +212,7 @@ export default function RootLayout({
       }}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} forcedTheme="dark" disableTransitionOnChange>
           <PWAProvider>
-            <StatsigProvider>
+            <FeatureFlagProvider>
               <Suspense>
                 <BotIDProvider />
                 <GoogleAnalytics />
@@ -223,7 +221,7 @@ export default function RootLayout({
                 <Analytics />
                 <SpeedInsights />
               </Suspense>
-            </StatsigProvider>
+            </FeatureFlagProvider>
           </PWAProvider>
         </ThemeProvider>
       </body>

@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { AlertCircle } from "lucide-react";
-import { useFeatureGate, FEATURE_GATES } from "@/lib/statsig";
 
 type Commit = {
   id: string;
@@ -33,7 +32,6 @@ export default function Changelog() {
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const maxRetries = 2;
-  const isEnabled = useFeatureGate(FEATURE_GATES.CHANGELOG);
 
   useEffect(() => {
     async function fetchChangelog() {
@@ -104,12 +102,8 @@ export default function Changelog() {
       }
     }
 
-    if (isEnabled) {
-      fetchChangelog();
-    } else {
-      setIsLoading(false);
-    }
-  }, [retryCount, isEnabled]);
+    fetchChangelog();
+  }, [retryCount]);
 
   // Format date to be more readable
   const formatDate = (dateString: string) => {
@@ -145,22 +139,6 @@ export default function Changelog() {
       return "Error displaying message";
     }
   };
-
-  if (!isEnabled) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Changelog</CardTitle>
-          <CardDescription>Recent updates to the application</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="bg-gray-800 p-4 rounded-md text-center">
-            <p className="text-gray-400">The changelog is currently unavailable.</p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
 
   if (isLoading) {
     return (
