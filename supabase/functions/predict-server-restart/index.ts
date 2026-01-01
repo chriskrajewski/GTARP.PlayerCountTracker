@@ -462,7 +462,9 @@ async function saveRestartEvents(serverId: string, events: RestartEvent[]): Prom
     const twoWeeksAgo = new Date();
     twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
 
-    const { error: deleteError } = await supabase
+    console.log(`[ML Prediction] Cleaning up events older than ${twoWeeksAgo.toISOString()} for ${serverId}`);
+
+    const { error: deleteError, count: deletedCount } = await supabase
       .from("server_restart_events")
       .delete()
       .eq("server_id", serverId)
@@ -470,9 +472,11 @@ async function saveRestartEvents(serverId: string, events: RestartEvent[]): Prom
 
     if (deleteError) {
       console.warn(`[ML Prediction] Warning deleting old events for ${serverId}:`, deleteError);
+    } else {
+      console.log(`[ML Prediction] Deleted ${deletedCount} old events for ${serverId}`);
     }
 
-    // Insert new events
+    // Prepare events for insertion
     const eventsToInsert = events.map((event) => ({
       server_id: serverId,
       event_timestamp: event.timestamp,
@@ -481,11 +485,15 @@ async function saveRestartEvents(serverId: string, events: RestartEvent[]): Prom
       downtime_minutes: event.downtimeMinutes,
     }));
 
-    console.log(`[ML Prediction] Saving ${eventsToInsert.length} restart events for ${serverId}`);
+    console.log(`[ML Prediction] Inserting ${eventsToInsert.length} restart events for ${serverId}`);
 
+    // Use upsert with the unique constraint we just created
     const { error: insertError, data } = await supabase
       .from("server_restart_events")
-      .upsert(eventsToInsert, { onConflict: "server_id,event_timestamp" });
+      .upsert(eventsToInsert, { 
+        onConflict: "server_id,event_timestamp",
+        ignoreDuplicates: false 
+      });
 
     if (insertError) {
       console.error(`[ML Prediction] Error saving restart events for ${serverId}:`, insertError);
