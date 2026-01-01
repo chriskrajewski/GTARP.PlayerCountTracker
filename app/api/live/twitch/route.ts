@@ -190,6 +190,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const serverIdsParam = searchParams.get('serverIds');
+    const bustCache = searchParams.get('bustCache') === 'true';
 
     if (!serverIdsParam) {
       return NextResponse.json(
@@ -247,6 +248,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Load per-server search config from Supabase (no hardcoded mappings)
+    if (bustCache) {
+      console.log('[LiveTwitch] Cache bust requested - clearing stream config cache');
+      const { clearStreamConfigCache } = await import('@/lib/stream-config');
+      clearStreamConfigCache();
+    }
+    
     const rawConfig = await getStreamSearchConfigMap(serverIds, 'twitch');
     const configByServer = normalizeConfigMap(rawConfig);
 

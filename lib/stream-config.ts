@@ -192,10 +192,19 @@ export async function getStreamSearchConfigMap(
       return map;
     }
 
+    console.log(`[StreamConfig] Loaded ${(data || []).length} config rows from ${STREAM_CONFIG_TABLE} for servers: ${serverIds.join(', ')}${platform ? ` (platform: ${platform})` : ''}`);
+    
     for (const row of (data || []) as StreamSearchConfig[]) {
       const current = map.get(row.server_id) ?? [];
       current.push(row);
       map.set(row.server_id, current);
+    }
+    
+    // Debug log for each server
+    for (const [serverId, configs] of map.entries()) {
+      if (configs.length > 0) {
+        console.log(`[StreamConfig] ${serverId}: ${configs.map(c => `${c.search_type}:"${c.search_keyword}"`).join(', ')}`);
+      }
     }
   } catch (error) {
     console.error('[StreamConfig] Error fetching config map:', error);
