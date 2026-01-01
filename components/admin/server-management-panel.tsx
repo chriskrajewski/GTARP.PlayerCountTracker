@@ -26,6 +26,9 @@ import {
 } from 'lucide-react';
 import { adminAPI } from '@/lib/admin-api';
 import { useToast } from '@/hooks/use-toast';
+import { useRestartPredictions } from '@/hooks/use-restart-predictions';
+import { RestartCountdown } from '@/components/restart-prediction-countdown';
+import { RestartPredictionsTab } from '@/components/restart-predictions-tab';
 import { cn } from '@/lib/utils';
 
 interface StreamSearchConfig {
@@ -70,6 +73,14 @@ export function ServerManagementPanel() {
   });
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
+
+  // Get server IDs for restart predictions
+  const serverIds = servers.map(s => s.server_id);
+  const { getPrediction, refresh: refreshPredictions } = useRestartPredictions(
+    serverIds,
+    60000, // Auto-refresh every 60 seconds
+    true   // Enabled
+  );
 
   const fetchServers = async () => {
     try {
@@ -387,7 +398,7 @@ export function ServerManagementPanel() {
                       </Badge>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
                       <div>
                         <p className="text-sm text-[#ADADB8]">Data Start Date</p>
                         <p className="text-white font-medium">
@@ -416,6 +427,14 @@ export function ServerManagementPanel() {
                         <p className="text-white font-medium">
                           {server.stream_search_config.length} active
                         </p>
+                      </div>
+
+                      <div>
+                        <RestartCountdown
+                          nextRestartTime={getPrediction(server.server_id)?.nextRestartTime || null}
+                          confidence={getPrediction(server.server_id)?.confidence || 0}
+                          isStale={getPrediction(server.server_id)?.isStale}
+                        />
                       </div>
                     </div>
 
@@ -462,10 +481,11 @@ export function ServerManagementPanel() {
 
                         {editingServer && (
                           <Tabs defaultValue="general" className="w-full">
-                            <TabsList className="grid w-full grid-cols-3 bg-[#26262c]">
+                            <TabsList className="grid w-full grid-cols-4 bg-[#26262c]">
                               <TabsTrigger value="general" className="text-white">General</TabsTrigger>
                               <TabsTrigger value="colors" className="text-white">Colors</TabsTrigger>
                               <TabsTrigger value="streams" className="text-white">Stream Config</TabsTrigger>
+                              <TabsTrigger value="predictions" className="text-white">Restart Predictions</TabsTrigger>
                             </TabsList>
 
                             {/* General Tab */}
@@ -624,6 +644,14 @@ export function ServerManagementPanel() {
                                   Add Stream Config
                                 </Button>
                               </div>
+                            </TabsContent>
+
+                            {/* Restart Predictions Tab */}
+                            <TabsContent value="predictions" className="space-y-4 mt-4">
+                              <RestartPredictionsTab
+                                prediction={getPrediction(editingServer.server_id)}
+                                onRefresh={refreshPredictions}
+                              />
                             </TabsContent>
                           </Tabs>
                         )}
