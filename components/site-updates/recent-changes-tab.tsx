@@ -5,6 +5,7 @@ import { AlertCircle, Sparkles, TrendingUp, Wrench, Bell } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import ReactMarkdown from "react-markdown";
 import type { Database } from "@/lib/supabase.types";
 
 type SiteUpdate = Database['public']['Tables']['site_updates']['Row'];
@@ -153,6 +154,9 @@ export function RecentChangesTab({ isOpen }: RecentChangesTabProps) {
               {updates.map((update, index) => {
                 const typeConfig = TYPE_CONFIG[update.type as keyof typeof TYPE_CONFIG] || TYPE_CONFIG.announcement;
                 const Icon = typeConfig.icon;
+                // Use markdown content if available, otherwise use plain content
+                const displayContent = update.content_markdown || update.content;
+                const isMarkdown = !!update.content_markdown;
 
                 return (
                   <div key={update.id}>
@@ -161,7 +165,7 @@ export function RecentChangesTab({ isOpen }: RecentChangesTabProps) {
                         <Icon className={cn("h-4 w-4 mt-0.5 flex-shrink-0", typeConfig.color)} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <h4 className="text-sm font-semibold text-white truncate">
+                            <h4 className="text-sm font-semibold text-white">
                               {update.title}
                             </h4>
                             <Badge
@@ -175,10 +179,19 @@ export function RecentChangesTab({ isOpen }: RecentChangesTabProps) {
                               {typeConfig.label}
                             </Badge>
                           </div>
-                          <p className="text-xs text-[#ADADB8] mb-2">
-                            {update.content.substring(0, 150)}
-                            {update.content.length > 150 ? "..." : ""}
-                          </p>
+                          <div className="text-xs text-[#ADADB8] mb-2 whitespace-normal break-words">
+                            {isMarkdown ? (
+                              <ReactMarkdown className="prose prose-invert prose-sm max-w-none">
+                                {displayContent.substring(0, 300)}
+                                {displayContent.length > 300 ? "\n\n..." : ""}
+                              </ReactMarkdown>
+                            ) : (
+                              <>
+                                {displayContent.substring(0, 300)}
+                                {displayContent.length > 300 ? "..." : ""}
+                              </>
+                            )}
+                          </div>
                           <span className="text-xs text-[#ADADB8]/60">
                             {formatDate(update.publish_date || update.created_at)}
                           </span>
@@ -221,7 +234,7 @@ export function RecentChangesTab({ isOpen }: RecentChangesTabProps) {
                         {commit.id.substring(0, 7)}
                       </span>
                     </div>
-                    <p className="text-sm text-[#EFEFF1]">{commit.message}</p>
+                    <p className="text-sm text-[#EFEFF1] whitespace-normal break-words">{commit.message}</p>
                   </div>
                   {index < Math.min(commits.length - 1, 9) && (
                     <Separator className="mt-3 bg-[#26262c]" />

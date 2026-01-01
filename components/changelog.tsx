@@ -132,8 +132,8 @@ export default function Changelog() {
     try {
       // Split by new lines and take only the first line (the subject)
       const firstLine = (message || "").split("\n")[0];
-      // Truncate if too long
-      return firstLine.length > 200 ? `${firstLine.substring(0, 200)}...` : firstLine;
+      // Return the full first line without truncation
+      return firstLine;
     } catch (err) {
       console.error("Error formatting message:", err);
       return "Error displaying message";
@@ -211,7 +211,7 @@ export default function Changelog() {
                       {commit.id}
                     </span>
                   </div>
-                  <p className="text-sm">{formatMessage(commit.message)}</p>
+                  <p className="text-sm whitespace-normal break-words">{formatMessage(commit.message)}</p>
                 </div>
                 {index < commits.length - 1 && <Separator className="mt-4" />}
               </div>

@@ -381,13 +381,15 @@ export default function AdminRoadmapPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="status" className="text-white">Status</Label>
-                        <Select value={formData.status} onValueChange={(value: any) => handleInputChange('status', value)}>
+                        <Select value={formData.status} onValueChange={(value: any) => {
+                          handleInputChange('status', value);
+                        }}>
                           <SelectTrigger className="bg-[#18181b] border-[#26262c] text-white">
                             <SelectValue placeholder="Select status" />
                           </SelectTrigger>
-                          <SelectContent className="bg-[#18181b] border-[#26262c]">
+                          <SelectContent className="bg-[#18181b] border-[#26262c] text-white">
                             {STATUS_OPTIONS.map((option) => (
-                              <SelectItem key={option.value} value={option.value} className="text-white hover:bg-[#26262c]">
+                              <SelectItem key={option.value} value={option.value} className="text-white">
                                 {option.label}
                               </SelectItem>
                             ))}
@@ -403,7 +405,7 @@ export default function AdminRoadmapPage() {
                           min="1"
                           max="10"
                           value={formData.priority}
-                          onChange={(e) => handleInputChange('priority', parseInt(e.target.value))}
+                          onChange={(e) => handleInputChange('priority', parseInt(e.target.value) || 1)}
                           className="bg-[#18181b] border-[#26262c] text-white"
                         />
                       </div>
@@ -412,13 +414,18 @@ export default function AdminRoadmapPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="category" className="text-white">Category</Label>
-                        <Select value={formData.category} onValueChange={(value) => handleInputChange('category', value)}>
+                        <Select value={formData.category || ''} onValueChange={(value) => {
+                          handleInputChange('category', value);
+                        }}>
                           <SelectTrigger className="bg-[#18181b] border-[#26262c] text-white">
                             <SelectValue placeholder="Select category" />
                           </SelectTrigger>
-                          <SelectContent className="bg-[#18181b] border-[#26262c]">
+                          <SelectContent className="bg-[#18181b] border-[#26262c] text-white">
+                            <SelectItem value="" className="text-white">
+                              None
+                            </SelectItem>
                             {CATEGORIES.map((cat) => (
-                              <SelectItem key={cat} value={cat} className="text-white hover:bg-[#26262c]">
+                              <SelectItem key={cat} value={cat} className="text-white">
                                 {cat}
                               </SelectItem>
                             ))}
@@ -432,7 +439,7 @@ export default function AdminRoadmapPage() {
                           id="display_order"
                           type="number"
                           value={formData.display_order}
-                          onChange={(e) => handleInputChange('display_order', parseInt(e.target.value))}
+                          onChange={(e) => handleInputChange('display_order', parseInt(e.target.value) || 0)}
                           className="bg-[#18181b] border-[#26262c] text-white"
                         />
                       </div>

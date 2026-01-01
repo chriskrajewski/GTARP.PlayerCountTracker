@@ -4,11 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { VoteButton } from "./vote-button";
 import { Sparkles, TrendingUp, Wrench, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
+import ReactMarkdown from "react-markdown";
 
 interface RoadmapItemCardProps {
   id: number;
   title: string;
   description: string;
+  description_markdown?: string;
   status: "planned" | "in_progress" | "completed" | "cancelled";
   priority: number;
   category?: string;
@@ -69,6 +71,7 @@ export function RoadmapItemCard({
   id,
   title,
   description,
+  description_markdown,
   status,
   priority,
   category,
@@ -78,6 +81,10 @@ export function RoadmapItemCard({
   const statusConfig = STATUS_CONFIG[status];
   const priorityLabel = PRIORITY_LABELS[priority as keyof typeof PRIORITY_LABELS];
   const priorityColor = PRIORITY_COLORS[priority as keyof typeof PRIORITY_COLORS];
+  
+  // Use markdown description if available, otherwise use plain description
+  const displayDescription = description_markdown || description;
+  const isMarkdown = !!description_markdown;
 
   return (
     <div
@@ -89,8 +96,16 @@ export function RoadmapItemCard({
       {/* Header */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-semibold text-white truncate">{title}</h3>
-          <p className="text-xs text-[#ADADB8] truncate mt-1">{description}</p>
+          <h3 className="text-sm font-semibold text-white">{title}</h3>
+          <div className="text-xs text-[#ADADB8] mt-1 whitespace-normal break-words">
+            {isMarkdown ? (
+              <ReactMarkdown className="prose prose-invert prose-sm max-w-none">
+                {displayDescription}
+              </ReactMarkdown>
+            ) : (
+              displayDescription
+            )}
+          </div>
         </div>
       </div>
 

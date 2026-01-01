@@ -146,7 +146,7 @@ export function RoadmapTab({ isOpen }: RoadmapTabProps) {
           </p>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-6 pr-2">
           {(Object.keys(groupedItems) as Array<keyof typeof groupedItems>).map(status => {
             const statusItems = groupedItems[status];
             if (statusItems.length === 0) return null;
