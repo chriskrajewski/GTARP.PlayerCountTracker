@@ -36,7 +36,14 @@ const CreateUpdateSchema = z.object({
   type: z.enum(['feature', 'improvement', 'bugfix', 'announcement']).default('announcement'),
   priority: z.number().int().min(1).max(10).default(1),
   is_published: z.boolean().default(false),
-  publish_date: z.string().datetime().optional(),
+  publish_date: z.string().optional().transform(val => {
+    if (!val) return undefined;
+    // Handle datetime-local format (no timezone) by appending Z for UTC
+    if (val && !val.includes('Z') && !val.includes('+')) {
+      return new Date(val).toISOString();
+    }
+    return val;
+  }),
   tags: z.array(z.string()).optional(),
   created_by: z.string().optional(),
 });

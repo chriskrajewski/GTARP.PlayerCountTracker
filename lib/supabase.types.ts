@@ -155,6 +155,136 @@ export type Database = {
           dismissed_at?: string
         }
       }
+      site_updates: {
+        Row: {
+          id: number
+          created_at: string
+          updated_at: string
+          title: string
+          content: string
+          content_markdown: string | null
+          type: string
+          priority: number
+          tags: string[] | null
+          is_published: boolean
+          publish_date: string | null
+          created_by: string | null
+          view_count: number | null
+        }
+        Insert: {
+          title: string
+          content: string
+          content_markdown?: string | null
+          type?: string
+          priority?: number
+          tags?: string[] | null
+          is_published?: boolean
+          publish_date?: string | null
+          created_by?: string | null
+          view_count?: number | null
+        }
+        Update: {
+          title?: string
+          content?: string
+          content_markdown?: string | null
+          type?: string
+          priority?: number
+          tags?: string[] | null
+          is_published?: boolean
+          publish_date?: string | null
+          created_by?: string | null
+          view_count?: number | null
+        }
+      }
+      roadmap_items: {
+        Row: {
+          id: number
+          created_at: string
+          updated_at: string
+          title: string
+          description: string
+          description_markdown: string | null
+          status: string
+          priority: number
+          category: string | null
+          is_published: boolean
+          display_order: number
+          vote_count: number | null
+          created_by: string | null
+        }
+        Insert: {
+          title: string
+          description: string
+          description_markdown?: string | null
+          status?: string
+          priority?: number
+          category?: string | null
+          is_published?: boolean
+          display_order?: number
+          vote_count?: number | null
+          created_by?: string | null
+        }
+        Update: {
+          title?: string
+          description?: string
+          description_markdown?: string | null
+          status?: string
+          priority?: number
+          category?: string | null
+          is_published?: boolean
+          display_order?: number
+          vote_count?: number | null
+          created_by?: string | null
+        }
+      }
+      roadmap_votes: {
+        Row: {
+          id: number
+          roadmap_item_id: number
+          user_id: string
+          voted_at: string
+        }
+        Insert: {
+          roadmap_item_id: number
+          user_id: string
+          voted_at?: string
+        }
+        Update: {
+          roadmap_item_id?: number
+          user_id?: string
+          voted_at?: string
+        }
+      }
+      feature_flags: {
+        Row: {
+          id: number
+          key: string
+          name: string
+          description: string | null
+          is_enabled: boolean | null
+          category: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          key: string
+          name: string
+          description?: string | null
+          is_enabled?: boolean | null
+          category?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          key?: string
+          name?: string
+          description?: string | null
+          is_enabled?: boolean | null
+          category?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+      }
       server_restart_predictions: {
         Row: {
           id: number

@@ -251,7 +251,7 @@ export function SlideoutPanel({
           {/* CONTENT AREA */}
           {/* ═══════════════════════════════════════════════════════════════ */}
           <motion.div
-            className="flex-1 overflow-y-auto relative z-10 px-8 py-6"
+            className="flex-1 overflow-y-auto relative z-10 px-8 py-6 pb-16"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.4, duration: 0.5 }}
@@ -282,7 +282,7 @@ export function SlideoutPanel({
           {/* ═══════════════════════════════════════════════════════════════ */}
           {/* FOOTER GLOW */}
           {/* ═══════════════════════════════════════════════════════════════ */}
-          <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#0a0a0c] via-[#0a0a0c]/80 to-transparent pointer-events-none z-20 rounded-bl-3xl" />
+          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[#0a0a0c] via-[#0a0a0c]/50 to-transparent pointer-events-none z-20 rounded-bl-3xl" />
           
           {/* Bottom accent line */}
           <motion.div

@@ -160,14 +160,14 @@ export function RecentChangesTab({ isOpen }: RecentChangesTabProps) {
                       <div className="flex items-start gap-3">
                         <Icon className={cn("h-4 w-4 mt-0.5 flex-shrink-0", typeConfig.color)} />
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h4 className="text-sm font-semibold text-white truncate">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <h4 className="text-sm font-semibold text-white">
                               {update.title}
                             </h4>
                             <Badge
                               variant="outline"
                               className={cn(
-                                "text-xs border-0",
+                                "text-xs border-0 flex-shrink-0",
                                 typeConfig.color,
                                 typeConfig.bgColor
                               )}
@@ -175,9 +175,8 @@ export function RecentChangesTab({ isOpen }: RecentChangesTabProps) {
                               {typeConfig.label}
                             </Badge>
                           </div>
-                          <p className="text-xs text-[#ADADB8] mb-2">
-                            {update.content.substring(0, 150)}
-                            {update.content.length > 150 ? "..." : ""}
+                          <p className="text-xs text-[#ADADB8] mb-2 whitespace-pre-wrap">
+                            {update.content}
                           </p>
                           <span className="text-xs text-[#ADADB8]/60">
                             {formatDate(update.publish_date || update.created_at)}

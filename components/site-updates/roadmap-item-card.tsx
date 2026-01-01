@@ -89,8 +89,8 @@ export function RoadmapItemCard({
       {/* Header */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-semibold text-white truncate">{title}</h3>
-          <p className="text-xs text-[#ADADB8] truncate mt-1">{description}</p>
+          <h3 className="text-sm font-semibold text-white">{title}</h3>
+          <p className="text-xs text-[#ADADB8] mt-1 whitespace-pre-wrap">{description}</p>
         </div>
       </div>
 
