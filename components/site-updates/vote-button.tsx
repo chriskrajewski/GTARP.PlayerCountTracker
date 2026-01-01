@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Heart } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { useToast } from "@/hooks/use-toast";
 
 interface VoteButtonProps {
