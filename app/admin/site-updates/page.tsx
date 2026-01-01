@@ -13,10 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { useAdminAuth } from '@/lib/admin-auth';
+import { createBrowserClient } from '@/lib/supabase-browser';
 import MDEditor from '@uiw/react-md-editor';
 import type { Database } from '@/lib/supabase.types';
 
@@ -58,30 +57,30 @@ export default function AdminSiteUpdatesPage() {
   const [editingUpdate, setEditingUpdate] = useState<SiteUpdate | null>(null);
   const [showForm, setShowForm] = useState(false);
   const { toast } = useToast();
-  const { token } = useAdminAuth();
 
-  // Fetch updates
+  // Fetch updates using Supabase client directly
   const fetchUpdates = async () => {
     try {
       setLoading(true);
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
+      const supabase = createBrowserClient();
       
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const response = await fetch('/api/site-updates?include_unpublished=true&limit=100', {
-        headers,
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch updates');
+      const { data, error } = await supabase
+        .from('site_updates')
+        .select('*')
+        .order('publish_date', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching updates:', error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch updates",
+          variant: "destructive"
+        });
+        return;
       }
 
-      const data = await response.json();
-      setUpdates(data.updates || []);
+      setUpdates(data || []);
     } catch (error) {
       console.error('Error fetching updates:', error);
       toast({
@@ -95,10 +94,8 @@ export default function AdminSiteUpdatesPage() {
   };
 
   useEffect(() => {
-    if (token) {
-      fetchUpdates();
-    }
-  }, [token]);
+    fetchUpdates();
+  }, []);
 
   // Form handlers
   const handleInputChange = (field: keyof UpdateFormData, value: any) => {
@@ -109,39 +106,34 @@ export default function AdminSiteUpdatesPage() {
     e.preventDefault();
     
     try {
+      const supabase = createBrowserClient();
+      
       const submitData = {
         title: formData.title,
         content: formData.content,
-        content_markdown: formData.content_markdown,
+        content_markdown: formData.content_markdown || null,
         type: formData.type,
         priority: formData.priority,
         is_published: formData.is_published,
-        publish_date: formData.publish_date,
+        publish_date: formData.publish_date ? new Date(formData.publish_date).toISOString() : null,
         tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
       };
 
       const isEditing = editingUpdate !== null;
-      const url = isEditing 
-        ? `/api/site-updates?id=${editingUpdate.id}`
-        : '/api/site-updates';
       
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
-      
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const response = await fetch(url, {
-        method: isEditing ? 'PUT' : 'POST',
-        headers,
-        body: JSON.stringify(submitData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save update');
+      if (isEditing) {
+        const { error } = await supabase
+          .from('site_updates')
+          .update(submitData)
+          .eq('id', editingUpdate.id);
+          
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('site_updates')
+          .insert(submitData);
+          
+        if (error) throw error;
       }
 
       toast({
@@ -185,20 +177,14 @@ export default function AdminSiteUpdatesPage() {
     }
 
     try {
-      const headers: HeadersInit = {};
+      const supabase = createBrowserClient();
       
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const response = await fetch(`/api/site-updates?id=${updateId}`, {
-        method: 'DELETE',
-        headers,
-      });
+      const { error } = await supabase
+        .from('site_updates')
+        .delete()
+        .eq('id', updateId);
 
-      if (!response.ok) {
-        throw new Error('Failed to delete update');
-      }
+      if (error) throw error;
 
       toast({
         title: "Success",
@@ -218,23 +204,14 @@ export default function AdminSiteUpdatesPage() {
 
   const togglePublished = async (update: SiteUpdate) => {
     try {
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
+      const supabase = createBrowserClient();
       
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const response = await fetch(`/api/site-updates?id=${update.id}`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({ is_published: !update.is_published }),
-      });
+      const { error } = await supabase
+        .from('site_updates')
+        .update({ is_published: !update.is_published })
+        .eq('id', update.id);
 
-      if (!response.ok) {
-        throw new Error('Failed to update');
-      }
+      if (error) throw error;
 
       await fetchUpdates();
     } catch (error) {
@@ -249,11 +226,18 @@ export default function AdminSiteUpdatesPage() {
 
   if (loading) {
     return (
-      <Card className="w-full bg-[#0e0e10] border-[#26262c]">
-        <CardContent className="p-6">
-          <div className="text-center text-white">Loading updates...</div>
-        </CardContent>
-      </Card>
+      <AdminProtected>
+        <div className="flex flex-col md:flex-row h-screen bg-[#0e0e10]">
+          <AdminSidebarMobile />
+          <div className="flex-1 flex items-center justify-center md:ml-64 mt-16 md:mt-0">
+            <Card className="w-full max-w-md bg-[#0e0e10] border-[#26262c]">
+              <CardContent className="p-6">
+                <div className="text-center text-white">Loading updates...</div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </AdminProtected>
     );
   }
 

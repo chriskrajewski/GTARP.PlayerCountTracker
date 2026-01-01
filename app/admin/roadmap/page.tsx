@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Eye, EyeOff, Calendar, TrendingUp } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, EyeOff, TrendingUp } from 'lucide-react';
 import { AdminProtected } from '@/components/admin-login';
 import { AdminSidebarMobile } from '@/components/admin/admin-sidebar-mobile';
 import { Button } from '@/components/ui/button';
@@ -13,10 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { useAdminAuth } from '@/lib/admin-auth';
+import { createBrowserClient } from '@/lib/supabase-browser';
 import MDEditor from '@uiw/react-md-editor';
 import type { Database } from '@/lib/supabase.types';
 
@@ -66,30 +65,29 @@ export default function AdminRoadmapPage() {
   const [editingItem, setEditingItem] = useState<RoadmapItem | null>(null);
   const [showForm, setShowForm] = useState(false);
   const { toast } = useToast();
-  const { token } = useAdminAuth();
 
-  // Fetch roadmap items
+  // Fetch roadmap items using Supabase client directly
   const fetchItems = async () => {
     try {
       setLoading(true);
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
+      const supabase = createBrowserClient();
       
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const response = await fetch('/api/roadmap?include_unpublished=true&limit=100', {
-        headers,
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch roadmap items');
+      const { data, error } = await supabase
+        .from('roadmap_items')
+        .select('*')
+        .order('display_order', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching roadmap items:', error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch roadmap items",
+          variant: "destructive"
+        });
+        return;
       }
 
-      const data = await response.json();
-      setItems(data.items || []);
+      setItems(data || []);
     } catch (error) {
       console.error('Error fetching items:', error);
       toast({
@@ -103,10 +101,8 @@ export default function AdminRoadmapPage() {
   };
 
   useEffect(() => {
-    if (token) {
-      fetchItems();
-    }
-  }, [token]);
+    fetchItems();
+  }, []);
 
   // Form handlers
   const handleInputChange = (field: keyof RoadmapFormData, value: any) => {
@@ -117,39 +113,34 @@ export default function AdminRoadmapPage() {
     e.preventDefault();
     
     try {
+      const supabase = createBrowserClient();
+      
       const submitData = {
         title: formData.title,
         description: formData.description,
-        description_markdown: formData.description_markdown,
+        description_markdown: formData.description_markdown || null,
         status: formData.status,
         priority: formData.priority,
-        category: formData.category,
+        category: formData.category || null,
         is_published: formData.is_published,
         display_order: formData.display_order,
       };
 
       const isEditing = editingItem !== null;
-      const url = isEditing 
-        ? `/api/roadmap?id=${editingItem.id}`
-        : '/api/roadmap';
       
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
-      
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const response = await fetch(url, {
-        method: isEditing ? 'PUT' : 'POST',
-        headers,
-        body: JSON.stringify(submitData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save roadmap item');
+      if (isEditing) {
+        const { error } = await supabase
+          .from('roadmap_items')
+          .update(submitData)
+          .eq('id', editingItem.id);
+          
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('roadmap_items')
+          .insert(submitData);
+          
+        if (error) throw error;
       }
 
       toast({
@@ -193,20 +184,14 @@ export default function AdminRoadmapPage() {
     }
 
     try {
-      const headers: HeadersInit = {};
+      const supabase = createBrowserClient();
       
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const response = await fetch(`/api/roadmap?id=${itemId}`, {
-        method: 'DELETE',
-        headers,
-      });
+      const { error } = await supabase
+        .from('roadmap_items')
+        .delete()
+        .eq('id', itemId);
 
-      if (!response.ok) {
-        throw new Error('Failed to delete item');
-      }
+      if (error) throw error;
 
       toast({
         title: "Success",
@@ -226,23 +211,14 @@ export default function AdminRoadmapPage() {
 
   const togglePublished = async (item: RoadmapItem) => {
     try {
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
+      const supabase = createBrowserClient();
       
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const response = await fetch(`/api/roadmap?id=${item.id}`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({ is_published: !item.is_published }),
-      });
+      const { error } = await supabase
+        .from('roadmap_items')
+        .update({ is_published: !item.is_published })
+        .eq('id', item.id);
 
-      if (!response.ok) {
-        throw new Error('Failed to update');
-      }
+      if (error) throw error;
 
       await fetchItems();
     } catch (error) {
@@ -257,11 +233,18 @@ export default function AdminRoadmapPage() {
 
   if (loading) {
     return (
-      <Card className="w-full bg-[#0e0e10] border-[#26262c]">
-        <CardContent className="p-6">
-          <div className="text-center text-white">Loading roadmap items...</div>
-        </CardContent>
-      </Card>
+      <AdminProtected>
+        <div className="flex flex-col md:flex-row h-screen bg-[#0e0e10]">
+          <AdminSidebarMobile />
+          <div className="flex-1 flex items-center justify-center md:ml-64 mt-16 md:mt-0">
+            <Card className="w-full max-w-md bg-[#0e0e10] border-[#26262c]">
+              <CardContent className="p-6">
+                <div className="text-center text-white">Loading roadmap items...</div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </AdminProtected>
     );
   }
 

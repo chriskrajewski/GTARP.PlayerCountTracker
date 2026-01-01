@@ -73,9 +73,9 @@ export default function Changelog() {
           ))
           .map((commit: Commit) => ({
             ...commit,
-            // Keep the full message without truncation
+            // Ensure the message is a reasonable length
             message: typeof commit.message === 'string' 
-              ? commit.message
+              ? commit.message.substring(0, 300) 
               : 'Invalid message format'
           }));
         
@@ -130,8 +130,10 @@ export default function Changelog() {
   const formatMessage = (message: string) => {
     // Security: Ensure the message is treated as plain text
     try {
-      // Return the full message, allowing it to wrap naturally
-      return message || "";
+      // Split by new lines and take only the first line (the subject)
+      const firstLine = (message || "").split("\n")[0];
+      // Truncate if too long
+      return firstLine.length > 200 ? `${firstLine.substring(0, 200)}...` : firstLine;
     } catch (err) {
       console.error("Error formatting message:", err);
       return "Error displaying message";
@@ -209,7 +211,7 @@ export default function Changelog() {
                       {commit.id}
                     </span>
                   </div>
-                  <p className="text-sm whitespace-pre-wrap break-words">{formatMessage(commit.message)}</p>
+                  <p className="text-sm">{formatMessage(commit.message)}</p>
                 </div>
                 {index < commits.length - 1 && <Separator className="mt-4" />}
               </div>
