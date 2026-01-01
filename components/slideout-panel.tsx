@@ -251,7 +251,7 @@ export function SlideoutPanel({
           {/* CONTENT AREA */}
           {/* ═══════════════════════════════════════════════════════════════ */}
           <motion.div
-            className="flex-1 overflow-y-auto relative z-10 px-8 py-6 pr-4"
+            className="flex-1 overflow-y-auto relative z-10 px-8 py-6"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.4, duration: 0.5 }}

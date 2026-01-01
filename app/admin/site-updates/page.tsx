@@ -373,15 +373,13 @@ export default function AdminSiteUpdatesPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="type" className="text-white">Type</Label>
-                        <Select value={formData.type} onValueChange={(value: any) => {
-                          handleInputChange('type', value);
-                        }}>
+                        <Select value={formData.type} onValueChange={(value: any) => handleInputChange('type', value)}>
                           <SelectTrigger className="bg-[#18181b] border-[#26262c] text-white">
                             <SelectValue placeholder="Select type" />
                           </SelectTrigger>
-                          <SelectContent className="bg-[#18181b] border-[#26262c] text-white">
+                          <SelectContent className="bg-[#18181b] border-[#26262c]">
                             {UPDATE_TYPE_OPTIONS.map((option) => (
-                              <SelectItem key={option.value} value={option.value} className="text-white">
+                              <SelectItem key={option.value} value={option.value} className="text-white hover:bg-[#26262c]">
                                 {option.label}
                               </SelectItem>
                             ))}
@@ -397,7 +395,7 @@ export default function AdminSiteUpdatesPage() {
                           min="1"
                           max="10"
                           value={formData.priority}
-                          onChange={(e) => handleInputChange('priority', parseInt(e.target.value) || 1)}
+                          onChange={(e) => handleInputChange('priority', parseInt(e.target.value))}
                           className="bg-[#18181b] border-[#26262c] text-white"
                         />
                       </div>

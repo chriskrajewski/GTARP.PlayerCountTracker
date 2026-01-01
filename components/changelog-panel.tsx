@@ -91,7 +91,7 @@ export function ChangelogPanel({ isOpen }: ChangelogPanelProps) {
           .map((commit: Commit) => ({
             ...commit,
             message: typeof commit.message === 'string'
-              ? commit.message.substring(0, 300)
+              ? commit.message
               : 'Invalid message format'
           }))
 
@@ -169,7 +169,7 @@ export function ChangelogPanel({ isOpen }: ChangelogPanelProps) {
                     {commit.id.substring(0, 7)}
                   </span>
                 </div>
-                <p className="text-sm text-[#EFEFF1] whitespace-normal break-words">{commit.message}</p>
+                <p className="text-sm text-[#EFEFF1] whitespace-pre-wrap break-words">{commit.message}</p>
               </div>
               {index < commits.length - 1 && <Separator className="mt-4 bg-[#26262c]" />}
             </div>
