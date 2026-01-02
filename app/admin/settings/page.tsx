@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CacheSettingsCard } from '@/components/admin/cache-settings-card';
 import { 
   Settings, 
   RefreshCw,
@@ -17,7 +18,8 @@ import {
   Shield,
   Bell,
   Clock,
-  CheckCircle2
+  CheckCircle2,
+  Zap
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -104,9 +106,10 @@ export default function SettingsPage() {
             <div className="max-w-4xl mx-auto space-y-6">
               
               <Tabs defaultValue="visitor-tracking" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 bg-[#26262c]">
+                <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 bg-[#26262c]">
                   <TabsTrigger value="visitor-tracking" className="text-white text-xs md:text-sm">Visitor Tracking</TabsTrigger>
                   <TabsTrigger value="data-management" className="text-white text-xs md:text-sm">Data Management</TabsTrigger>
+                  <TabsTrigger value="api-cache" className="text-white text-xs md:text-sm">API Cache</TabsTrigger>
                   <TabsTrigger value="system" className="hidden md:block text-white text-xs md:text-sm">System</TabsTrigger>
                 </TabsList>
 
@@ -250,6 +253,11 @@ export default function SettingsPage() {
                       </div>
                     </CardContent>
                   </Card>
+                </TabsContent>
+
+                {/* API Cache Settings */}
+                <TabsContent value="api-cache" className="space-y-6">
+                  <CacheSettingsCard />
                 </TabsContent>
 
                 {/* System Settings */}
