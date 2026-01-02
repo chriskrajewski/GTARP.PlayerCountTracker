@@ -116,7 +116,7 @@ async function fetchKickStreamsForServer(serverId: string): Promise<KickServerDa
       if (!keyword) continue;
 
       // Fetch streams for this category (caching is handled in kick-api.ts)
-      const candidates = await getKickStreamsByCategoryQuery(keyword, 100);
+      const candidates = await getKickStreamsByCategoryQuery(keyword, 200);
 
       for (const s of candidates) {
         const key = (s.channel_slug || s.user_name || '').toLowerCase();
@@ -126,7 +126,7 @@ async function fetchKickStreamsForServer(serverId: string): Promise<KickServerDa
       }
     }
   } else {
-    poolStreams = await getKickTopStreams(100);
+    poolStreams = await getKickTopStreams(200);
   }
 
   const { include, exclude } = partitionKeywords(titleRules.map(r => r.search_keyword));
