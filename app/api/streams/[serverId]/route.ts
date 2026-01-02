@@ -154,7 +154,7 @@ async function fetchStreamsFromGames(
   clientId: string,
   token: string,
   gameIds: string[],
-  maxPages: number = 5
+  maxPages: number = 20
 ): Promise<TwitchApiStream[]> {
   const streams: TwitchApiStream[] = [];
 
@@ -255,6 +255,15 @@ async function fetchUserProfiles(
   return profileMap;
 }
 
+/**
+ * Filter Twitch streams by search configuration
+ * 
+ * Logic:
+ * - Uses AND logic between search types (title, category, tag)
+ * - Uses OR logic within each search type (any keyword can match)
+ * - Supports # prefix for exclude keywords (e.g., #nopixel excludes streams with "nopixel" in title)
+ * - If a search type has no keywords, it's considered a match (passes through)
+ */
 function filterTwitchStreamsByConfig(
   streams: TwitchApiStream[],
   config: StreamSearchConfig[]
@@ -263,25 +272,50 @@ function filterTwitchStreamsByConfig(
     return [];
   }
 
-  const titleKeywords: string[] = [];
-  const categoryKeywords: string[] = [];
-  const tagKeywords: string[] = [];
+  // Partition keywords by search type and include/exclude
+  const titleInclude: string[] = [];
+  const titleExclude: string[] = [];
+  const categoryInclude: string[] = [];
+  const categoryExclude: string[] = [];
+  const tagInclude: string[] = [];
+  const tagExclude: string[] = [];
 
   for (const rule of config) {
     const keyword = (rule.search_keyword || '').trim().toLowerCase();
     if (!keyword) continue;
 
+    // Check if this is an exclude keyword (starts with #)
+    const isExclude = keyword.startsWith('#') && keyword.length > 1;
+    const cleanKeyword = isExclude ? keyword.slice(1) : keyword;
+
     switch (rule.search_type) {
       case 'title':
-        titleKeywords.push(keyword);
+        if (isExclude) {
+          titleExclude.push(cleanKeyword);
+        } else {
+          titleInclude.push(cleanKeyword);
+        }
         break;
       case 'category':
-        categoryKeywords.push(keyword);
+        if (isExclude) {
+          categoryExclude.push(cleanKeyword);
+        } else {
+          categoryInclude.push(cleanKeyword);
+        }
         break;
       case 'tag':
-        tagKeywords.push(keyword);
+        if (isExclude) {
+          tagExclude.push(cleanKeyword);
+        } else {
+          tagInclude.push(cleanKeyword);
+        }
         break;
     }
+  }
+
+  // Log the keywords being used for debugging
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[Streams API] Filter config - Title: [${titleInclude.join(', ')}], Exclude: [${titleExclude.join(', ')}], Category: [${categoryInclude.join(', ')}]`);
   }
 
   const seen = new Set<string>();
@@ -292,19 +326,37 @@ function filterTwitchStreamsByConfig(
     const gameLower = (stream.game_name || '').toLowerCase();
     const tagsLower = (stream.tags || []).map(t => (t || '').toLowerCase());
 
-    // Use AND logic between search types (all specified types must match)
-    // Use OR logic within each search type (any keyword in that type can match)
-    
-    // Check title keywords (partial match) - OR within titles
-    const titleMatch = titleKeywords.length === 0 || titleKeywords.some(k => titleLower.includes(k));
-    
-    // Check category keywords (exact match) - OR within categories
-    const categoryMatch = categoryKeywords.length === 0 || categoryKeywords.some(k => gameLower === k);
-    
-    // Check tag keywords (exact match) - OR within tags
-    const tagMatch = tagKeywords.length === 0 || tagKeywords.some(k => tagsLower.includes(k));
-    
-    // ALL specified search types must match (AND logic between types)
+    // Title matching: 
+    // - If include keywords exist, at least one must match (OR within type)
+    // - If exclude keywords exist, none should match
+    // - If no keywords for this type, it passes (true)
+    let titleMatch = true;
+    if (titleInclude.length > 0) {
+      titleMatch = titleInclude.some(k => titleLower.includes(k));
+    }
+    if (titleMatch && titleExclude.length > 0) {
+      titleMatch = !titleExclude.some(k => titleLower.includes(k));
+    }
+
+    // Category matching (exact match for category name)
+    let categoryMatch = true;
+    if (categoryInclude.length > 0) {
+      categoryMatch = categoryInclude.some(k => gameLower === k);
+    }
+    if (categoryMatch && categoryExclude.length > 0) {
+      categoryMatch = !categoryExclude.some(k => gameLower === k);
+    }
+
+    // Tag matching (exact match for tags)
+    let tagMatch = true;
+    if (tagInclude.length > 0) {
+      tagMatch = tagInclude.some(k => tagsLower.includes(k));
+    }
+    if (tagMatch && tagExclude.length > 0) {
+      tagMatch = !tagExclude.some(k => tagsLower.includes(k));
+    }
+
+    // AND logic between search types - ALL specified types must match
     if (!titleMatch || !categoryMatch || !tagMatch) continue;
 
     const key = (stream.user_name || '').toLowerCase();
@@ -351,7 +403,7 @@ async function fetchKickStreams(
       const keyword = (rule.search_keyword || '').trim().toLowerCase();
       if (!keyword) continue;
 
-      const candidates = await getKickStreamsByCategoryQuery(keyword, 100);
+      const candidates = await getKickStreamsByCategoryQuery(keyword, 200);
       for (const s of candidates) {
         const key = (s.channel_slug || s.user_name || '').toLowerCase();
         if (!key || poolSeen.has(key)) continue;
@@ -360,7 +412,7 @@ async function fetchKickStreams(
       }
     }
   } else {
-    poolStreams = await getKickTopStreams(100);
+    poolStreams = await getKickTopStreams(200);
   }
 
   const { include, exclude } = partitionKeywords(titleRules.map(r => r.search_keyword));
@@ -449,12 +501,23 @@ export async function GET(
           }
           
           // Get game IDs for all categories mentioned in config
-          // Always include GTA V as a default
-          const gamesToFetch = ['Grand Theft Auto V', ...Array.from(categoryKeywords)];
+          // Always include GTA V as a default, but dedupe with config categories
+          const categoryKeywordsLower = new Set(Array.from(categoryKeywords).map(k => k.toLowerCase()));
+          const gamesToFetch: string[] = [];
+          
+          // Add GTA V if not already in config (case-insensitive check)
+          if (!categoryKeywordsLower.has('grand theft auto v')) {
+            gamesToFetch.push('Grand Theft Auto V');
+          }
+          
+          // Add all category keywords from config
+          gamesToFetch.push(...Array.from(categoryKeywords));
+          
           console.log(`[Streams API] ${serverId} - Fetching Twitch streams from games: ${gamesToFetch.join(', ')}`);
           
           const gameIdMap = await getGameIds(clientId, accessToken, gamesToFetch);
-          const gameIds = Array.from(gameIdMap.values());
+          // Dedupe game IDs (in case multiple category names resolve to the same game)
+          const gameIds = [...new Set(Array.from(gameIdMap.values()))];
           
           if (gameIds.length === 0) {
             console.warn(`[Streams API] ${serverId} - No game IDs found for Twitch`);

@@ -131,7 +131,7 @@ export async function getCategoryIdByName(categoryName: string): Promise<number 
 }
 
 /**
- * Fetch livestreams by category ID
+ * Fetch livestreams by category ID with pagination support
  */
 export async function getKickStreamsByCategoryId(
   categoryId: number,
@@ -151,20 +151,38 @@ export async function getKickStreamsByCategoryId(
   }
 
   try {
-    const streams = await client.livestreams.getLivestreams({
-      category_id: categoryId,
-      limit: Math.min(limit, 100), // API max is 100
-      sort: 'viewer_count',
-    });
+    const allStreams: KickStreamData[] = [];
+    let offset = 0;
+    const pageSize = 100; // API max per request
+    const maxRequests = Math.ceil(limit / pageSize);
 
-    if (!streams || !Array.isArray(streams)) {
-      return [];
+    for (let i = 0; i < maxRequests; i++) {
+      const streams = await client.livestreams.getLivestreams({
+        category_id: categoryId,
+        limit: Math.min(pageSize, limit - offset),
+        offset: offset,
+        sort: 'viewer_count',
+      });
+
+      if (!streams || !Array.isArray(streams) || streams.length === 0) {
+        break;
+      }
+
+      const transformed = streams.map(transformLivestream);
+      allStreams.push(...transformed);
+      offset += streams.length;
+
+      // Stop if we've reached the requested limit
+      if (allStreams.length >= limit) {
+        break;
+      }
     }
 
-    const transformed = streams.map(transformLivestream);
+    // Trim to exact limit if needed
+    const result = allStreams.slice(0, limit);
 
-    streamCache.set(cacheKey, { data: transformed, timestamp: Date.now() });
-    return transformed;
+    streamCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    return result;
   } catch (error) {
     console.error(`[KickAPI] Error fetching streams for category ${categoryId}:`, error);
     return [];
@@ -194,7 +212,7 @@ export async function getKickStreamsByCategoryQuery(
 // The getKickStreamsByCategoryQuery function handles caching for any category.
 
 /**
- * Get top streams from Kick (sorted by viewer count)
+ * Get top streams from Kick (sorted by viewer count) with pagination support
  * This is a fallback when no category-based config is provided
  */
 export async function getKickTopStreams(limit: number = 100): Promise<KickStreamData[]> {
@@ -212,19 +230,37 @@ export async function getKickTopStreams(limit: number = 100): Promise<KickStream
   }
 
   try {
-    const streams = await client.livestreams.getLivestreams({
-      limit: Math.min(limit, 100),
-      sort: 'viewer_count',
-    });
+    const allStreams: KickStreamData[] = [];
+    let offset = 0;
+    const pageSize = 100; // API max per request
+    const maxRequests = Math.ceil(limit / pageSize);
 
-    if (!streams || !Array.isArray(streams)) {
-      return [];
+    for (let i = 0; i < maxRequests; i++) {
+      const streams = await client.livestreams.getLivestreams({
+        limit: Math.min(pageSize, limit - offset),
+        offset: offset,
+        sort: 'viewer_count',
+      });
+
+      if (!streams || !Array.isArray(streams) || streams.length === 0) {
+        break;
+      }
+
+      const transformed = streams.map(transformLivestream);
+      allStreams.push(...transformed);
+      offset += streams.length;
+
+      // Stop if we've reached the requested limit
+      if (allStreams.length >= limit) {
+        break;
+      }
     }
 
-    const transformed = streams.map(transformLivestream);
+    // Trim to exact limit if needed
+    const result = allStreams.slice(0, limit);
 
-    streamCache.set(cacheKey, { data: transformed, timestamp: Date.now() });
-    return transformed;
+    streamCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    return result;
   } catch (error) {
     console.error('[KickAPI] Error fetching top streams:', error);
     return [];
