@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStreamSearchConfigMap, type StreamSearchConfig, type SearchType } from '@/lib/stream-config';
+import { getAPICache } from '@/lib/api-cache';
 
 /**
  * Live Twitch Stream Data API
@@ -254,6 +255,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Check cache first
+    const cache = getAPICache();
+    const cacheKey = `twitch_streams_${serverIds.join(',')}`;
+    
+    if (!bustCache) {
+      const cachedData = await cache.get('twitch_live_streams', cacheKey);
+      if (cachedData) {
+        console.log('[LiveTwitch] Returning cached data for servers:', serverIds.join(', '));
+        return NextResponse.json(cachedData, {
+          headers: {
+            'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+            'X-Cache': 'HIT',
+          },
+        });
+      }
+    }
+
     // Get Twitch authentication
     const clientId = process.env.TWITCH_CLIENT_ID;
     if (!clientId) {
@@ -427,13 +445,19 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    return NextResponse.json({
+    const responseData = {
       servers,
       timestamp
-    }, {
+    };
+
+    // Cache the response
+    await cache.set('twitch_live_streams', cacheKey, responseData);
+
+    return NextResponse.json(responseData, {
       headers: {
         // Allow caching for 30 seconds to reduce API load
-        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60'
+        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+        'X-Cache': 'MISS',
       }
     });
   } catch (error) {
