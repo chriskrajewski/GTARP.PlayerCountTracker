@@ -365,7 +365,12 @@ async function fetchKickStreams(
 
   const { include, exclude } = partitionKeywords(titleRules.map(r => r.search_keyword));
 
-  // If no include keywords, can't filter reliably
+  // If we have category rules but no title rules, return all category streams
+  if (categoryRules.length > 0 && include.length === 0) {
+    return poolStreams;
+  }
+
+  // If no include keywords and no category rules, can't filter reliably
   if (include.length === 0) {
     return [];
   }
