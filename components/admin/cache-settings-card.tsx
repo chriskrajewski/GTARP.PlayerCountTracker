@@ -16,6 +16,8 @@ import {
   Database
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { createBrowserClient } from '@/lib/supabase-browser';
+import { getStoredAdminToken } from '@/lib/admin-auth';
 
 interface CacheConfig {
   api_name: string;
@@ -42,6 +44,28 @@ export function CacheSettingsCard() {
   const [clearing, setClearing] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
 
+  // Get auth token helper
+  const getAuthToken = async (): Promise<string | null> => {
+    // First try to get stored admin token (for legacy auth)
+    const storedToken = getStoredAdminToken();
+    if (storedToken) {
+      return storedToken;
+    }
+
+    // Otherwise try to get Supabase session token
+    try {
+      const supabase = createBrowserClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        return session.access_token;
+      }
+    } catch (error) {
+      console.error('Error getting Supabase session:', error);
+    }
+
+    return null;
+  };
+
   // Fetch cache configurations
   useEffect(() => {
     fetchConfigs();
@@ -51,9 +75,20 @@ export function CacheSettingsCard() {
 
   const fetchConfigs = async () => {
     try {
+      const token = await getAuthToken();
+      if (!token) {
+        toast({
+          title: 'Error',
+          description: 'Admin authentication required',
+          variant: 'destructive',
+        });
+        setLoading(false);
+        return;
+      }
+
       const response = await fetch('/api/admin/cache', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_token') || ''}`,
+          'Authorization': `Bearer ${token}`,
         },
       });
 
@@ -64,7 +99,7 @@ export function CacheSettingsCard() {
 
       // Fetch stats for each config
       for (const config of data.data || []) {
-        fetchStats(config.api_name);
+        fetchStats(config.api_name, token);
       }
 
       setLoading(false);
@@ -79,11 +114,14 @@ export function CacheSettingsCard() {
     }
   };
 
-  const fetchStats = async (apiName: string) => {
+  const fetchStats = async (apiName: string, token?: string | null) => {
     try {
+      const authToken = token || (await getAuthToken());
+      if (!authToken) return;
+
       const response = await fetch(`/api/admin/cache?apiName=${apiName}&action=stats`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_token') || ''}`,
+          'Authorization': `Bearer ${authToken}`,
         },
       });
 
@@ -102,11 +140,14 @@ export function CacheSettingsCard() {
   const handleToggleCache = async (apiName: string, enabled: boolean) => {
     setSaving((prev) => ({ ...prev, [apiName]: true }));
     try {
+      const token = await getAuthToken();
+      if (!token) throw new Error('Admin authentication required');
+
       const response = await fetch('/api/admin/cache', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('admin_token') || ''}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           apiName,
@@ -149,11 +190,14 @@ export function CacheSettingsCard() {
 
     setSaving((prev) => ({ ...prev, [apiName]: true }));
     try {
+      const token = await getAuthToken();
+      if (!token) throw new Error('Admin authentication required');
+
       const response = await fetch('/api/admin/cache', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('admin_token') || ''}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           apiName,
@@ -187,10 +231,13 @@ export function CacheSettingsCard() {
   const handleClearCache = async (apiName: string) => {
     setClearing((prev) => ({ ...prev, [apiName]: true }));
     try {
+      const token = await getAuthToken();
+      if (!token) throw new Error('Admin authentication required');
+
       const response = await fetch(`/api/admin/cache?apiName=${apiName}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_token') || ''}`,
+          'Authorization': `Bearer ${token}`,
         },
       });
 
@@ -202,7 +249,7 @@ export function CacheSettingsCard() {
       });
 
       // Refresh stats
-      fetchStats(apiName);
+      fetchStats(apiName, token);
     } catch (error) {
       console.error('Error clearing cache:', error);
       toast({
