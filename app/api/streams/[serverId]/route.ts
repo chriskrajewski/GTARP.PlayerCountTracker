@@ -326,7 +326,7 @@ function partitionKeywords(keywords: string[]): { include: string[]; exclude: st
   for (const raw of keywords) {
     const k = (raw || '').trim().toLowerCase();
     if (!k) continue;
-    if (k.startsWith('!') && k.length > 1) exclude.push(k.slice(1));
+    if (k.startsWith('#') && k.length > 1) exclude.push(k.slice(1));
     else include.push(k);
   }
   return { include, exclude };
