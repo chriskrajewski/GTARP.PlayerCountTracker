@@ -53,7 +53,7 @@ function partitionKeywords(keywords: string[]): { include: string[]; exclude: st
   for (const raw of keywords) {
     const k = (raw || '').trim().toLowerCase();
     if (!k) continue;
-    if (k.startsWith('!') && k.length > 1) exclude.push(k.slice(1));
+    if (k.startsWith('#') && k.length > 1) exclude.push(k.slice(1));
     else include.push(k);
   }
   return { include, exclude };
@@ -131,9 +131,18 @@ async function fetchKickStreamsForServer(serverId: string): Promise<KickServerDa
 
   const { include, exclude } = partitionKeywords(titleRules.map(r => r.search_keyword));
 
-  // If there are no include keywords, we can't do per-server filtering reliably.
-  // Return empty rather than misleading global category totals.
-  if (include.length === 0) {
+  // If we have category rules but no title rules, return all category streams
+  if (categoryRules.length > 0 && include.length === 0) {
+    console.log(`[Kick API] Server ${serverId}: using all ${poolStreams.length} streams from category rules (no title filtering)`);
+    for (const s of poolStreams) {
+      const key = (s.channel_slug || s.user_name || '').toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(s);
+    }
+  } else if (include.length === 0) {
+    // If there are no include keywords and no category rules, we can't do per-server filtering reliably.
+    // Return empty rather than misleading global category totals.
     console.warn(`[Kick API] No include keywords for ${serverId}; returning 0 to avoid unscoped results.`);
   } else {
     // Keep streams that match any include keyword and none of the exclude keywords.
