@@ -79,13 +79,16 @@ self.addEventListener('activate', (event) => {
 
 /**
  * External domains that should bypass service worker caching
- * These are CDNs for Twitch/Kick images that may have CORS/CSP issues
+ * These are CDNs for Twitch/Kick images and media that may have CORS/CSP issues
  */
 const EXTERNAL_IMAGE_DOMAINS = [
   'static-cdn.jtvnw.net',
   'clips-media-assets2.twitch.tv',
   'clips-media-assets.twitch.tv',
   'images.kick.com',
+  'files.kick.com',
+  'clips.kick.com',
+  'player.kick.com',
   'cdn.7tv.app',
 ];
 

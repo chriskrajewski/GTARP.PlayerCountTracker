@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState, memo } from 'react';
-import Hls from 'hls.js';
-import { Play, AlertCircle, ExternalLink, Loader2 } from 'lucide-react';
+import { useState, memo } from 'react';
+import { Play, ExternalLink, Loader2 } from 'lucide-react';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CUSTOM KICK ICON
@@ -13,9 +12,8 @@ const KickIcon = ({ className }: { className?: string }) => (
     viewBox="0 0 24 24" 
     fill="currentColor" 
     className={className}
-    xmlns="http://www.w3.org/2000/svg"
   >
-    <path d="M6 3h4v5h2V6h2V3h4v3h-2v2h-2v2h2v2h2v2h-2v2h-2v-2h-2v5h-2v-5H8v-2H6v-2h2v-2H6V3z"/>
+    <path d="M1.333 0v24h21.334V0H1.333zm17.12 18.347h-4.32l-3.093-4.907-1.653 1.76v3.147H5.654V5.653h3.733v5.28l4.48-5.28h4.427l-4.907 5.44 4.986 7.254h.08z"/>
   </svg>
 );
 
@@ -24,15 +22,15 @@ const KickIcon = ({ className }: { className?: string }) => (
 // ═══════════════════════════════════════════════════════════════════════════
 
 interface KickClipPlayerProps {
-  /** The HLS .m3u8 URL for the clip */
+  /** The original clip URL (HLS .m3u8 - not used for embed) */
   clipUrl: string;
   /** Thumbnail URL for poster image */
   thumbnailUrl: string;
   /** Clip title for accessibility */
   title: string;
-  /** Channel slug for external link */
+  /** Channel slug for embed URL */
   channelSlug: string;
-  /** Clip ID for external link */
+  /** Clip ID for embed URL */
   clipId: string;
   /** Optional className for the container */
   className?: string;
@@ -43,149 +41,48 @@ interface KickClipPlayerProps {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * KickClipPlayer - HLS video player for Kick.com clips
+ * KickClipPlayer - Embedded player for Kick.com clips
  * 
- * Kick clips are stored as HLS (.m3u8) streams. This component uses HLS.js
- * to play these streams in browsers that don't natively support HLS.
- * 
- * Falls back to:
- * 1. Native HLS (Safari/iOS)
- * 2. External link to Kick.com (if HLS.js fails)
+ * Uses Kick's official embed player at player.kick.com
+ * Format: https://player.kick.com/{channel}/clips/{clipId}
  */
 export const KickClipPlayer = memo(function KickClipPlayer({
-  clipUrl,
   thumbnailUrl,
   title,
   channelSlug,
   clipId,
   className = '',
 }: KickClipPlayerProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const hlsRef = useRef<Hls | null>(null);
-  
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [showPlayButton, setShowPlayButton] = useState(true);
+  const [showEmbed, setShowEmbed] = useState(false);
+  const [embedError, setEmbedError] = useState(false);
 
+  // Generate Kick embed URL using their player
+  // Format: https://player.kick.com/{channel}/clips/{clipId}
+  const embedUrl = `https://player.kick.com/${channelSlug}/clips/${clipId}`;
+  
   // Generate external link to Kick
   const externalUrl = `https://kick.com/${channelSlug}?clip=${clipId}`;
 
-  // Initialize HLS player
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !clipUrl) return;
-
-    let hls: Hls | null = null;
-
-    const initPlayer = () => {
-      // Check if the clip URL is a valid HLS stream
-      if (!clipUrl.includes('.m3u8')) {
-        setError('Invalid clip format');
-        setIsLoading(false);
-        return;
-      }
-
-      // Check for HLS.js support
-      if (Hls.isSupported()) {
-        hls = new Hls({
-          enableWorker: true,
-          lowLatencyMode: false,
-          maxBufferLength: 30,
-          maxMaxBufferLength: 60,
-        });
-
-        hls.loadSource(clipUrl);
-        hls.attachMedia(video);
-
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          setIsLoading(false);
-          setError(null);
-        });
-
-        hls.on(Hls.Events.ERROR, (event, data) => {
-          console.error('[KickClipPlayer] HLS error:', data);
-          
-          if (data.fatal) {
-            switch (data.type) {
-              case Hls.ErrorTypes.NETWORK_ERROR:
-                // Try to recover from network error
-                console.log('[KickClipPlayer] Attempting to recover from network error');
-                hls?.startLoad();
-                break;
-              case Hls.ErrorTypes.MEDIA_ERROR:
-                // Try to recover from media error
-                console.log('[KickClipPlayer] Attempting to recover from media error');
-                hls?.recoverMediaError();
-                break;
-              default:
-                // Cannot recover
-                setError('Unable to load clip. Try watching on Kick.');
-                setIsLoading(false);
-                break;
-            }
-          }
-        });
-
-        hlsRef.current = hls;
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        // Native HLS support (Safari, iOS)
-        video.src = clipUrl;
-        
-        video.addEventListener('loadedmetadata', () => {
-          setIsLoading(false);
-          setError(null);
-        });
-
-        video.addEventListener('error', () => {
-          setError('Unable to load clip. Try watching on Kick.');
-          setIsLoading(false);
-        });
-      } else {
-        setError('Your browser does not support HLS playback.');
-        setIsLoading(false);
-      }
-    };
-
-    initPlayer();
-
-    // Cleanup
-    return () => {
-      if (hls) {
-        hls.destroy();
-        hlsRef.current = null;
-      }
-    };
-  }, [clipUrl]);
-
-  // Handle play button click
-  const handlePlay = async () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    try {
-      await video.play();
-      setIsPlaying(true);
-      setShowPlayButton(false);
-    } catch (err) {
-      console.error('[KickClipPlayer] Play error:', err);
-      setError('Unable to play clip. Try watching on Kick.');
-    }
+  // Handle play button click - show the embed
+  const handlePlay = () => {
+    setShowEmbed(true);
+    setIsLoading(true);
   };
 
-  // Handle video events
-  const handlePause = () => {
-    setIsPlaying(false);
-    setShowPlayButton(true);
+  // Handle iframe load
+  const handleIframeLoad = () => {
+    setIsLoading(false);
   };
 
-  const handleEnded = () => {
-    setIsPlaying(false);
-    setShowPlayButton(true);
+  // Handle iframe error
+  const handleIframeError = () => {
+    setEmbedError(true);
+    setIsLoading(false);
   };
 
-  // If there's an error or no HLS support, show fallback
-  if (error) {
+  // If embed errored, show fallback with link
+  if (embedError) {
     return (
       <div className={`relative w-full h-full bg-black ${className}`}>
         <a
@@ -203,8 +100,9 @@ export const KickClipPlayer = memo(function KickClipPlayer({
           
           {/* Error overlay */}
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 p-4">
-            <AlertCircle className="h-8 w-8 text-amber-400 mb-2" />
-            <p className="text-white text-center text-sm mb-4">{error}</p>
+            <p className="text-white text-center text-sm mb-4">
+              Unable to embed clip. Click to watch on Kick.
+            </p>
             
             {/* Watch on Kick button */}
             <div
@@ -223,31 +121,22 @@ export const KickClipPlayer = memo(function KickClipPlayer({
     );
   }
 
-  return (
-    <div className={`relative w-full h-full bg-black ${className}`}>
-      {/* Video element */}
-      <video
-        ref={videoRef}
-        className="w-full h-full"
-        poster={thumbnailUrl}
-        controls={isPlaying}
-        playsInline
-        onPause={handlePause}
-        onEnded={handleEnded}
-        onClick={() => {
-          if (!isPlaying) handlePlay();
-        }}
-      />
-
-      {/* Loading overlay */}
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-          <Loader2 className="h-10 w-10 text-[#53fc18] animate-spin" />
-        </div>
-      )}
-
-      {/* Play button overlay */}
-      {showPlayButton && !isLoading && !error && (
+  // Show thumbnail with play button initially
+  if (!showEmbed) {
+    return (
+      <div className={`relative w-full h-full bg-black ${className}`}>
+        {/* Thumbnail */}
+        <img
+          src={thumbnailUrl}
+          alt={title}
+          className="w-full h-full object-cover"
+          onError={(e) => {
+            // If thumbnail fails, show placeholder
+            e.currentTarget.style.display = 'none';
+          }}
+        />
+        
+        {/* Play button overlay */}
         <div
           className="absolute inset-0 flex items-center justify-center cursor-pointer group"
           onClick={handlePlay}
@@ -276,7 +165,47 @@ export const KickClipPlayer = memo(function KickClipPlayer({
             <span className="text-black text-xs font-medium">Kick Clip</span>
           </div>
         </div>
+
+        {/* External link button (always visible in corner) */}
+        <a
+          href={externalUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute top-2 right-2 z-20 flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-opacity opacity-70 hover:opacity-100"
+          style={{
+            background: 'rgba(0, 0, 0, 0.7)',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <KickIcon className="h-3 w-3 text-[#53fc18]" />
+          <span className="text-white">Kick</span>
+          <ExternalLink className="h-3 w-3 text-gray-400" />
+        </a>
+      </div>
+    );
+  }
+
+  // Show embedded player
+  return (
+    <div className={`relative w-full h-full bg-black ${className}`}>
+      {/* Loading overlay */}
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-10">
+          <Loader2 className="h-10 w-10 text-[#53fc18] animate-spin" />
+        </div>
       )}
+
+      {/* Kick embed iframe */}
+      <iframe
+        src={embedUrl}
+        title={title}
+        className="w-full h-full"
+        allowFullScreen
+        allow="autoplay; encrypted-media; picture-in-picture"
+        onLoad={handleIframeLoad}
+        onError={handleIframeError}
+        style={{ border: 'none' }}
+      />
 
       {/* External link button (always visible in corner) */}
       <a
@@ -287,7 +216,6 @@ export const KickClipPlayer = memo(function KickClipPlayer({
         style={{
           background: 'rgba(0, 0, 0, 0.7)',
         }}
-        onClick={(e) => e.stopPropagation()}
       >
         <KickIcon className="h-3 w-3 text-[#53fc18]" />
         <span className="text-white">Kick</span>
