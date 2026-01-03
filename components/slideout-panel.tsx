@@ -70,6 +70,7 @@ export function SlideoutPanel({
   side = "right",
 }: SlideoutPanelProps) {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
+  const [isMobile, setIsMobile] = useState(false)
   
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -79,13 +80,20 @@ export function SlideoutPanel({
     return () => window.removeEventListener('mousemove', handleMouseMove)
   }, [])
 
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768)
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent 
         side={side}
         hideDefaultClose={true}
         className="p-0 flex flex-col border-0 shadow-none bg-transparent overflow-visible"
-        style={{ width: '55vw', maxWidth: '950px' }}
+        style={{ width: isMobile ? '100vw' : '55vw', maxWidth: isMobile ? '100vw' : '950px' }}
       >
         {/* Main panel container with glass effect */}
         <motion.div
@@ -101,13 +109,13 @@ export function SlideoutPanel({
           }}
         >
           {/* Outer glow effect */}
-          <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500/20 via-teal-500/10 to-cyan-500/20 rounded-l-3xl blur-xl opacity-60" />
+          <div className={`absolute -inset-1 ${isMobile ? 'rounded-none' : 'rounded-l-3xl'} bg-gradient-to-r from-cyan-500/20 via-teal-500/10 to-cyan-500/20 blur-xl opacity-60`} />
           
           {/* Main background */}
-          <div className="absolute inset-0 bg-[#0a0a0c] rounded-l-3xl border-l border-t border-b border-cyan-500/10" />
+          <div className={`absolute inset-0 ${isMobile ? 'rounded-none' : 'rounded-l-3xl'} bg-[#0a0a0c] ${isMobile ? 'border-0' : 'border-l border-t border-b'} border-cyan-500/10`} />
           
           {/* Animated gradient mesh background */}
-          <div className="absolute inset-0 rounded-l-3xl overflow-hidden">
+          <div className={`absolute inset-0 ${isMobile ? 'rounded-none' : 'rounded-l-3xl'} overflow-hidden`}>
             <motion.div
               className="absolute -top-1/2 -right-1/2 w-full h-full bg-gradient-conic from-cyan-500/10 via-transparent to-teal-500/10 rounded-full blur-3xl"
               animate={{ rotate: 360 }}
@@ -127,7 +135,7 @@ export function SlideoutPanel({
           {/* HEADER - The showstopper */}
           {/* ═══════════════════════════════════════════════════════════════ */}
           <motion.div
-            className="relative z-10 px-8 pt-8 pb-6"
+            className={`relative z-10 ${isMobile ? 'px-4 pt-6 pb-4' : 'px-8 pt-8 pb-6'}`}
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1, duration: 0.5 }}
@@ -180,7 +188,7 @@ export function SlideoutPanel({
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3, duration: 0.5 }}
                 >
-                  <h2 className="text-4xl font-black tracking-tight leading-none">
+                  <h2 className={`${isMobile ? 'text-2xl' : 'text-4xl'} font-black tracking-tight leading-none`}>
                     <span className="bg-gradient-to-r from-white via-cyan-100 to-teal-200 bg-clip-text text-transparent drop-shadow-lg">
                       {title}
                     </span>
@@ -236,7 +244,7 @@ export function SlideoutPanel({
 
             {/* Decorative bottom border */}
             <motion.div
-              className="absolute bottom-0 left-8 right-8 h-px"
+              className={`absolute bottom-0 ${isMobile ? 'left-4 right-4' : 'left-8 right-8'} h-px`}
               initial={{ scaleX: 0 }}
               animate={{ scaleX: 1 }}
               transition={{ delay: 0.6, duration: 0.8 }}
@@ -251,7 +259,7 @@ export function SlideoutPanel({
           {/* CONTENT AREA */}
           {/* ═══════════════════════════════════════════════════════════════ */}
           <motion.div
-            className="flex-1 overflow-y-auto relative z-10 px-8 py-6 pb-16"
+            className={`flex-1 overflow-y-auto relative z-10 ${isMobile ? 'px-4 py-4 pb-16' : 'px-8 py-6 pb-16'}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.4, duration: 0.5 }}
@@ -282,11 +290,11 @@ export function SlideoutPanel({
           {/* ═══════════════════════════════════════════════════════════════ */}
           {/* FOOTER GLOW */}
           {/* ═══════════════════════════════════════════════════════════════ */}
-          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[#0a0a0c] via-[#0a0a0c]/50 to-transparent pointer-events-none z-20 rounded-bl-3xl" />
+          <div className={`absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[#0a0a0c] via-[#0a0a0c]/50 to-transparent pointer-events-none z-20 ${isMobile ? 'rounded-none' : 'rounded-bl-3xl'}`} />
           
           {/* Bottom accent line */}
           <motion.div
-            className="absolute bottom-4 left-8 right-8 h-px z-30"
+            className={`absolute bottom-4 ${isMobile ? 'left-4 right-4' : 'left-8 right-8'} h-px z-30`}
             initial={{ scaleX: 0 }}
             animate={{ scaleX: 1 }}
             transition={{ delay: 0.8, duration: 1 }}
