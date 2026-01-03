@@ -211,13 +211,17 @@ export function ServerClips({
   const initialSearchQuery = searchParams.get('search') || '';
   const initialStartDate = searchParams.get('startDate') || '';
   const initialEndDate = searchParams.get('endDate') || '';
-  const initialOrderBy = searchParams.get('orderBy') || 'views-desc';
+  const initialOrderBy1 = searchParams.get('orderBy1') || 'views-desc';
+  const initialOrderBy2 = searchParams.get('orderBy2') || '';
+  const initialOrderBy3 = searchParams.get('orderBy3') || '';
 
   const [selectedStreamer, setSelectedStreamer] = useState(initialStreamer);
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [startDate, setStartDate] = useState(initialStartDate);
   const [endDate, setEndDate] = useState(initialEndDate);
-  const [orderBy, setOrderBy] = useState(initialOrderBy);
+  const [orderBy1, setOrderBy1] = useState(initialOrderBy1);
+  const [orderBy2, setOrderBy2] = useState(initialOrderBy2);
+  const [orderBy3, setOrderBy3] = useState(initialOrderBy3);
 
   // Fetch clips on mount or when serverId changes
   useEffect(() => {
@@ -271,7 +275,7 @@ export function ServerClips({
 
   // Update URL with current filters
   const updateUrlFilters = useCallback(
-    (streamer: string, search: string, sDate: string, eDate: string, order: string) => {
+    (streamer: string, search: string, sDate: string, eDate: string, order1: string, order2: string, order3: string) => {
       const params = new URLSearchParams();
       if (streamer !== 'all') {
         params.set('streamer', streamer);
@@ -285,8 +289,14 @@ export function ServerClips({
       if (eDate) {
         params.set('endDate', eDate);
       }
-      if (order && order !== 'views-desc') {
-        params.set('orderBy', order);
+      if (order1 && order1 !== 'views-desc') {
+        params.set('orderBy1', order1);
+      }
+      if (order2) {
+        params.set('orderBy2', order2);
+      }
+      if (order3) {
+        params.set('orderBy3', order3);
       }
       router.push(`?${params.toString()}`);
     },
@@ -297,45 +307,61 @@ export function ServerClips({
   const handleStreamerChange = useCallback(
     (value: string) => {
       setSelectedStreamer(value);
-      updateUrlFilters(value, searchQuery, startDate, endDate, orderBy);
+      updateUrlFilters(value, searchQuery, startDate, endDate, orderBy1, orderBy2, orderBy3);
     },
-    [updateUrlFilters, searchQuery, startDate, endDate, orderBy]
+    [updateUrlFilters, searchQuery, startDate, endDate, orderBy1, orderBy2, orderBy3]
   );
 
   // Handle search input change
   const handleSearchChange = useCallback(
     (query: string) => {
       setSearchQuery(query);
-      updateUrlFilters(selectedStreamer, query, startDate, endDate, orderBy);
+      updateUrlFilters(selectedStreamer, query, startDate, endDate, orderBy1, orderBy2, orderBy3);
     },
-    [updateUrlFilters, selectedStreamer, startDate, endDate, orderBy]
+    [updateUrlFilters, selectedStreamer, startDate, endDate, orderBy1, orderBy2, orderBy3]
   );
 
   // Handle start date change
   const handleStartDateChange = useCallback(
     (date: string) => {
       setStartDate(date);
-      updateUrlFilters(selectedStreamer, searchQuery, date, endDate, orderBy);
+      updateUrlFilters(selectedStreamer, searchQuery, date, endDate, orderBy1, orderBy2, orderBy3);
     },
-    [updateUrlFilters, selectedStreamer, searchQuery, endDate, orderBy]
+    [updateUrlFilters, selectedStreamer, searchQuery, endDate, orderBy1, orderBy2, orderBy3]
   );
 
   // Handle end date change
   const handleEndDateChange = useCallback(
     (date: string) => {
       setEndDate(date);
-      updateUrlFilters(selectedStreamer, searchQuery, startDate, date, orderBy);
+      updateUrlFilters(selectedStreamer, searchQuery, startDate, date, orderBy1, orderBy2, orderBy3);
     },
-    [updateUrlFilters, selectedStreamer, searchQuery, startDate, orderBy]
+    [updateUrlFilters, selectedStreamer, searchQuery, startDate, orderBy1, orderBy2, orderBy3]
   );
 
-  // Handle order by change
-  const handleOrderByChange = useCallback(
+  // Handle order by changes
+  const handleOrderBy1Change = useCallback(
     (value: string) => {
-      setOrderBy(value);
-      updateUrlFilters(selectedStreamer, searchQuery, startDate, endDate, value);
+      setOrderBy1(value);
+      updateUrlFilters(selectedStreamer, searchQuery, startDate, endDate, value, orderBy2, orderBy3);
     },
-    [updateUrlFilters, selectedStreamer, searchQuery, startDate, endDate]
+    [updateUrlFilters, selectedStreamer, searchQuery, startDate, endDate, orderBy2, orderBy3]
+  );
+
+  const handleOrderBy2Change = useCallback(
+    (value: string) => {
+      setOrderBy2(value);
+      updateUrlFilters(selectedStreamer, searchQuery, startDate, endDate, orderBy1, value, orderBy3);
+    },
+    [updateUrlFilters, selectedStreamer, searchQuery, startDate, endDate, orderBy1, orderBy3]
+  );
+
+  const handleOrderBy3Change = useCallback(
+    (value: string) => {
+      setOrderBy3(value);
+      updateUrlFilters(selectedStreamer, searchQuery, startDate, endDate, orderBy1, orderBy2, value);
+    },
+    [updateUrlFilters, selectedStreamer, searchQuery, startDate, endDate, orderBy1, orderBy2]
   );
 
   // Clear all filters
@@ -344,7 +370,9 @@ export function ServerClips({
     setSearchQuery('');
     setStartDate('');
     setEndDate('');
-    setOrderBy('views-desc');
+    setOrderBy1('views-desc');
+    setOrderBy2('');
+    setOrderBy3('');
     router.push('?');
   }, [router]);
 
@@ -408,40 +436,63 @@ export function ServerClips({
       });
     }
 
-    // Apply sorting
-    const sorted = [...filtered];
-    switch (orderBy) {
-      case 'views-asc':
-        sorted.sort((a, b) => a.view_count - b.view_count);
-        break;
-      case 'views-desc':
-        sorted.sort((a, b) => b.view_count - a.view_count);
-        break;
-      case 'date-newest':
-        sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        break;
-      case 'date-oldest':
-        sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-        break;
-      case 'duration-shortest':
-        sorted.sort((a, b) => a.duration - b.duration);
-        break;
-      case 'duration-longest':
-        sorted.sort((a, b) => b.duration - a.duration);
-        break;
-      case 'title-asc':
-        sorted.sort((a, b) => a.title.localeCompare(b.title));
-        break;
-      case 'title-desc':
-        sorted.sort((a, b) => b.title.localeCompare(a.title));
-        break;
-      default:
-        // Default to views descending
-        sorted.sort((a, b) => b.view_count - a.view_count);
-    }
+    // Helper function to apply sort
+    const applySortCriteria = (a: ClipData, b: ClipData, sortBy: string): number => {
+      switch (sortBy) {
+        case 'views-asc':
+          return a.view_count - b.view_count;
+        case 'views-desc':
+          return b.view_count - a.view_count;
+        case 'date-newest':
+          // Compare only by day, not exact timestamp
+          const dayA = new Date(a.created_at);
+          const dayB = new Date(b.created_at);
+          dayA.setHours(0, 0, 0, 0);
+          dayB.setHours(0, 0, 0, 0);
+          return dayB.getTime() - dayA.getTime();
+        case 'date-oldest':
+          // Compare only by day, not exact timestamp
+          const dayA2 = new Date(a.created_at);
+          const dayB2 = new Date(b.created_at);
+          dayA2.setHours(0, 0, 0, 0);
+          dayB2.setHours(0, 0, 0, 0);
+          return dayA2.getTime() - dayB2.getTime();
+        case 'duration-shortest':
+          return a.duration - b.duration;
+        case 'duration-longest':
+          return b.duration - a.duration;
+        case 'title-asc':
+          return a.title.localeCompare(b.title);
+        case 'title-desc':
+          return b.title.localeCompare(a.title);
+        default:
+          return 0;
+      }
+    };
+
+    // Apply multi-level sorting
+    const sorted = [...filtered].sort((a, b) => {
+      // Apply primary sort
+      let result = applySortCriteria(a, b, orderBy1);
+      if (result !== 0) return result;
+
+      // Apply secondary sort if primary sort resulted in a tie and secondary sort is not 'none'
+      if (orderBy2 && orderBy2 !== 'none') {
+        result = applySortCriteria(a, b, orderBy2);
+        if (result !== 0) return result;
+      }
+
+      // Apply tertiary sort if primary and secondary sorts resulted in a tie and tertiary sort is not 'none'
+      if (orderBy3 && orderBy3 !== 'none') {
+        result = applySortCriteria(a, b, orderBy3);
+        if (result !== 0) return result;
+      }
+
+      return 0;
+    });
 
     return sorted;
-  }, [clips, selectedStreamer, searchQuery, startDate, endDate, orderBy]);
+  }, [clips, selectedStreamer, searchQuery, startDate, endDate, orderBy1, orderBy2, orderBy3]);
 
   return (
     <div className="space-y-6">
@@ -529,14 +580,99 @@ export function ServerClips({
 
             {/* Order By Dropdown */}
             <div className="flex-1 min-w-xs">
-              <label htmlFor="order-by-select" className="text-sm text-gray-400 block mb-2">
-                Sort By
+              <label htmlFor="order-by-select-1" className="text-sm text-gray-400 block mb-2">
+                Sort By (Primary)
               </label>
-              <Select value={orderBy} onValueChange={handleOrderByChange}>
-                <SelectTrigger id="order-by-select" className="w-full bg-gray-800 border-gray-700 text-white">
+              <Select value={orderBy1} onValueChange={handleOrderBy1Change}>
+                <SelectTrigger id="order-by-select-1" className="w-full bg-gray-800 border-gray-700 text-white">
                   <SelectValue placeholder="Sort clips" />
                 </SelectTrigger>
                 <SelectContent className="bg-gray-800 border-gray-700">
+                  <SelectItem value="views-desc" className="text-white">
+                    Views (High to Low)
+                  </SelectItem>
+                  <SelectItem value="views-asc" className="text-white">
+                    Views (Low to High)
+                  </SelectItem>
+                  <SelectItem value="date-newest" className="text-white">
+                    Date (Newest First)
+                  </SelectItem>
+                  <SelectItem value="date-oldest" className="text-white">
+                    Date (Oldest First)
+                  </SelectItem>
+                  <SelectItem value="duration-longest" className="text-white">
+                    Duration (Longest First)
+                  </SelectItem>
+                  <SelectItem value="duration-shortest" className="text-white">
+                    Duration (Shortest First)
+                  </SelectItem>
+                  <SelectItem value="title-asc" className="text-white">
+                    Title (A-Z)
+                  </SelectItem>
+                  <SelectItem value="title-desc" className="text-white">
+                    Title (Z-A)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Secondary and Tertiary Sort Options */}
+          <div className="flex flex-col lg:flex-row gap-4">
+            {/* Order By Dropdown 2 */}
+            <div className="flex-1 min-w-xs">
+              <label htmlFor="order-by-select-2" className="text-sm text-gray-400 block mb-2">
+                Sort By (Secondary) - Optional
+              </label>
+              <Select value={orderBy2} onValueChange={handleOrderBy2Change}>
+                <SelectTrigger id="order-by-select-2" className="w-full bg-gray-800 border-gray-700 text-white">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-700">
+                  <SelectItem value="none" className="text-white">
+                    None
+                  </SelectItem>
+                  <SelectItem value="views-desc" className="text-white">
+                    Views (High to Low)
+                  </SelectItem>
+                  <SelectItem value="views-asc" className="text-white">
+                    Views (Low to High)
+                  </SelectItem>
+                  <SelectItem value="date-newest" className="text-white">
+                    Date (Newest First)
+                  </SelectItem>
+                  <SelectItem value="date-oldest" className="text-white">
+                    Date (Oldest First)
+                  </SelectItem>
+                  <SelectItem value="duration-longest" className="text-white">
+                    Duration (Longest First)
+                  </SelectItem>
+                  <SelectItem value="duration-shortest" className="text-white">
+                    Duration (Shortest First)
+                  </SelectItem>
+                  <SelectItem value="title-asc" className="text-white">
+                    Title (A-Z)
+                  </SelectItem>
+                  <SelectItem value="title-desc" className="text-white">
+                    Title (Z-A)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Order By Dropdown 3 */}
+            <div className="flex-1 min-w-xs">
+              <label htmlFor="order-by-select-3" className="text-sm text-gray-400 block mb-2">
+                Sort By (Tertiary) - Optional
+              </label>
+              <Select value={orderBy3} onValueChange={handleOrderBy3Change}>
+                <SelectTrigger id="order-by-select-3" className="w-full bg-gray-800 border-gray-700 text-white">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-700">
+                  <SelectItem value="none" className="text-white">
+                    None
+                  </SelectItem>
                   <SelectItem value="views-desc" className="text-white">
                     Views (High to Low)
                   </SelectItem>

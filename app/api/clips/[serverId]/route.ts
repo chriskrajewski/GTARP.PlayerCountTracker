@@ -83,8 +83,8 @@ export async function GET(
 
     const { data: serverExists } = await supabase
       .from('server_xref')
-      .select('id')
-      .eq('id', serverId)
+      .select('server_id')
+      .eq('server_id', serverId)
       .single();
 
     if (!serverExists) {
