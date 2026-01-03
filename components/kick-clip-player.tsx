@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, memo } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
+import Hls from 'hls.js';
 import { Play, ExternalLink, Loader2 } from 'lucide-react';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -41,12 +42,10 @@ interface KickClipPlayerProps {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * KickClipPlayer - Embedded player for Kick.com clips
- * 
- * Uses Kick's official embed player at player.kick.com
- * Format: https://player.kick.com/{channel}/clips/{clipId}
+ * KickClipPlayer - HLS player for Kick.com clips using clip URLs.
  */
 export const KickClipPlayer = memo(function KickClipPlayer({
+  clipUrl,
   thumbnailUrl,
   title,
   channelSlug,
@@ -56,30 +55,97 @@ export const KickClipPlayer = memo(function KickClipPlayer({
   const [isLoading, setIsLoading] = useState(true);
   const [showEmbed, setShowEmbed] = useState(false);
   const [embedError, setEmbedError] = useState(false);
-
-  // Generate Kick embed URL using their player
-  // Format: https://player.kick.com/{channel}/clips/{clipId}
-  const embedUrl = `https://player.kick.com/${channelSlug}/clips/${clipId}`;
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   
   // Generate external link to Kick
   const externalUrl = `https://kick.com/${channelSlug}?clip=${clipId}`;
 
-  // Handle play button click - show the embed
+  // Handle play button click - show the player
   const handlePlay = () => {
+    if (!clipUrl) {
+      setEmbedError(true);
+      return;
+    }
+    setEmbedError(false);
     setShowEmbed(true);
     setIsLoading(true);
   };
+  useEffect(() => {
+    if (!showEmbed || !clipUrl) {
+      return;
+    }
 
-  // Handle iframe load
-  const handleIframeLoad = () => {
-    setIsLoading(false);
-  };
+    const video = videoRef.current;
+    if (!video) {
+      setEmbedError(true);
+      setIsLoading(false);
+      return;
+    }
 
-  // Handle iframe error
-  const handleIframeError = () => {
-    setEmbedError(true);
-    setIsLoading(false);
-  };
+    let hls: Hls | null = null;
+    let cancelled = false;
+
+    const handleLoaded = () => {
+      if (!cancelled) {
+        setIsLoading(false);
+      }
+    };
+
+    const handleFatalError = () => {
+      if (!cancelled) {
+        setEmbedError(true);
+        setIsLoading(false);
+      }
+    };
+
+    if (Hls.isSupported()) {
+      hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        backBufferLength: 30,
+      });
+      hls.loadSource(clipUrl);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        video
+          .play()
+          .catch(() => {
+            // Autoplay might be blocked; user already interacted.
+          });
+      });
+      hls.on(Hls.Events.ERROR, (_, data) => {
+        if (data?.fatal) {
+          handleFatalError();
+        }
+      });
+      video.addEventListener('loadedmetadata', handleLoaded);
+      video.addEventListener('error', handleFatalError);
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = clipUrl;
+      video.addEventListener('loadedmetadata', handleLoaded);
+      video.addEventListener('error', handleFatalError);
+      video
+        .play()
+        .catch(() => {
+          // Ignore autoplay restrictions
+        });
+    } else {
+      handleFatalError();
+    }
+
+    return () => {
+      cancelled = true;
+      video.removeEventListener('loadedmetadata', handleLoaded);
+      video.removeEventListener('error', handleFatalError);
+      if (hls) {
+        hls.destroy();
+      } else {
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+      }
+    };
+  }, [clipUrl, showEmbed]);
 
   // If embed errored, show fallback with link
   if (embedError) {
@@ -101,7 +167,7 @@ export const KickClipPlayer = memo(function KickClipPlayer({
           {/* Error overlay */}
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 p-4">
             <p className="text-white text-center text-sm mb-4">
-              Unable to embed clip. Click to watch on Kick.
+              Unable to load clip playback. Click to watch on Kick.
             </p>
             
             {/* Watch on Kick button */}
@@ -195,16 +261,13 @@ export const KickClipPlayer = memo(function KickClipPlayer({
         </div>
       )}
 
-      {/* Kick embed iframe */}
-      <iframe
-        src={embedUrl}
-        title={title}
-        className="w-full h-full"
-        allowFullScreen
-        allow="autoplay; encrypted-media; picture-in-picture"
-        onLoad={handleIframeLoad}
-        onError={handleIframeError}
-        style={{ border: 'none' }}
+      <video
+        ref={videoRef}
+        controls
+        playsInline
+        poster={thumbnailUrl}
+        className="w-full h-full bg-black"
+        preload="metadata"
       />
 
       {/* External link button (always visible in corner) */}
