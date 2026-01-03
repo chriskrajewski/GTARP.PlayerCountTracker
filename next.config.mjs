@@ -86,6 +86,73 @@ const nextConfig = {
   poweredByHeader: false,
   async headers() {
     return [
+      // PWA and icon caching headers - Critical for iOS PWA icon display
+      {
+        source: '/apple-touch-icon.png',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable'
+          },
+          {
+            key: 'Content-Type',
+            value: 'image/png'
+          }
+        ]
+      },
+      {
+        source: '/apple-touch-icon-precomposed.png',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable'
+          },
+          {
+            key: 'Content-Type',
+            value: 'image/png'
+          }
+        ]
+      },
+      {
+        source: '/icons/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable'
+          },
+          {
+            key: 'Content-Type',
+            value: 'image/png'
+          }
+        ]
+      },
+      {
+        source: '/manifest.json',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/manifest+json'
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=3600'
+          }
+        ]
+      },
+      {
+        source: '/sw.js',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/javascript'
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=0, must-revalidate'
+          }
+        ]
+      },
+      // Default security headers for all routes
       {
         source: '/:path*',
         headers: [

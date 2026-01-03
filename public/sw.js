@@ -18,7 +18,15 @@ const STATIC_ASSETS = [
   '/placeholder-logo.svg',
   '/placeholder.jpg',
   '/placeholder.svg',
-  '/pepeRP.webp'
+  '/pepeRP.webp',
+  // iOS PWA icons - Critical for home screen display
+  '/apple-touch-icon.png',
+  '/apple-touch-icon-precomposed.png',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/icon-152.png',
+  '/icons/icon-144.png',
+  '/manifest.json'
 ];
 
 /**
