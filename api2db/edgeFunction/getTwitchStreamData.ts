@@ -389,7 +389,8 @@ async function logToSupabase(streams: StreamLogData[]): Promise<number> {
 async function recordStreamerHistory(
   serverId: string,
   streamerUsername: string,
-  platform: 'twitch' | 'kick'
+  platform: 'twitch' | 'kick',
+  profileImageUrl?: string
 ): Promise<boolean> {
   const now = new Date().toISOString();
   
@@ -400,7 +401,8 @@ async function recordStreamerHistory(
         serverId: serverId,
         streamer_username: streamerUsername,
         platform: platform,
-        last_seen: now
+        last_seen: now,
+        ...(profileImageUrl && { profile_image_url: profileImageUrl })
       }, {
         onConflict: 'serverId,streamer_username,platform',
         ignoreDuplicates: false
@@ -415,6 +417,41 @@ async function recordStreamerHistory(
   } catch (error) {
     console.error(`[History] Exception recording ${platform} streamer history:`, error);
     return false;
+  }
+}
+
+/**
+ * Fetch Twitch profile image for a user
+ * Uses Twitch API to get user profile information
+ */
+async function fetchTwitchProfileImage(
+  clientId: string,
+  token: string,
+  username: string
+): Promise<string | null> {
+  try {
+    const response = await fetch(
+      `https://api.twitch.tv/helix/users?login=${encodeURIComponent(username)}`,
+      {
+        headers: {
+          "Client-ID": clientId,
+          "Authorization": `Bearer ${token}`,
+        },
+        signal: createTimeoutSignal(10000),
+      }
+    );
+
+    if (!response.ok) {
+      console.warn(`[Twitch ETL] Failed to fetch profile for ${username}: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    const user = data.data?.[0];
+    return user?.profile_image_url || null;
+  } catch (error) {
+    console.warn(`[Twitch ETL] Error fetching profile image for ${username}:`, error);
+    return null;
   }
 }
 
@@ -752,9 +789,25 @@ serve(async (req) => {
               const matchedStreams = filterTwitchStreamsByConfig(allTwitchStreams, config);
 
               if (matchedStreams.length > 0) {
-                // Record streamer history for each matched streamer
+                // Fetch profile images for matched streamers
+                console.log(`[Stream ETL] Fetching profile images for ${matchedStreams.length} streamers on server ${serverId}...`);
+                const profileImages = new Map<string, string>();
+                
                 for (const stream of matchedStreams) {
-                  await recordStreamerHistory(serverId, stream.user_name, 'twitch');
+                  try {
+                    const profileUrl = await fetchTwitchProfileImage(TWITCH_CLIENT_ID, token, stream.user_name);
+                    if (profileUrl) {
+                      profileImages.set(stream.user_name.toLowerCase(), profileUrl);
+                    }
+                  } catch (error) {
+                    console.warn(`[Stream ETL] Failed to fetch profile for ${stream.user_name}:`, error);
+                  }
+                }
+
+                // Record streamer history for each matched streamer with profile image
+                for (const stream of matchedStreams) {
+                  const profileUrl = profileImages.get(stream.user_name.toLowerCase());
+                  await recordStreamerHistory(serverId, stream.user_name, 'twitch', profileUrl);
                 }
 
                 // Convert to log format
@@ -764,7 +817,7 @@ serve(async (req) => {
                 const logged = await logToSupabase(logData);
                 twitchLogged += logged;
 
-                console.log(`[Stream ETL] Twitch Server ${serverId}: ${matchedStreams.length} matched, ${logged} logged`);
+                console.log(`[Stream ETL] Twitch Server ${serverId}: ${matchedStreams.length} matched, ${logged} logged, ${profileImages.size} profile images stored`);
               }
             } catch (error) {
               console.error(`[Stream ETL] Error processing Twitch server ${serverId}:`, error);

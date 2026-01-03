@@ -16,6 +16,7 @@ export interface ClipResponse {
   view_count: number;
   duration: number;
   created_at: string;
+  profile_image_url?: string;
 }
 
 /**
@@ -130,14 +131,43 @@ export async function GET(
       created_at: clip.twitch_created_at,
     }));
 
-    // Cache the response
-    await cache.set('clips', cacheKey, responseClips);
+    // Fetch profile images from streamer_server_history table
+    const uniqueStreamers = [...new Set(responseClips.map(c => c.streamer_username))];
+    const { data: streamerHistory, error: historyError } = await supabase
+      .from('streamer_server_history')
+      .select('streamer_username, profile_image_url')
+      .eq('serverId', serverId)
+      .in('streamer_username', uniqueStreamers)
+      .eq('platform', 'twitch');
 
-    console.log(`[Clips API] ${serverId} - Fetched ${responseClips.length} clips (${streamerFilter ? 'filtered' : 'all'})`);
+    if (historyError) {
+      console.warn(`[Clips API] Failed to fetch streamer history for ${serverId}:`, historyError);
+    }
+
+    // Build profile image map from database
+    const profileImages = new Map<string, string>();
+    if (streamerHistory) {
+      for (const record of streamerHistory) {
+        if (record.profile_image_url) {
+          profileImages.set(record.streamer_username, record.profile_image_url);
+        }
+      }
+    }
+
+    // Add profile images to response clips
+    const clipsWithProfiles = responseClips.map(clip => ({
+      ...clip,
+      profile_image_url: profileImages.get(clip.streamer_username),
+    }));
+
+    // Cache the response
+    await cache.set('clips', cacheKey, clipsWithProfiles);
+
+    console.log(`[Clips API] ${serverId} - Fetched ${clipsWithProfiles.length} clips (${streamerFilter ? 'filtered' : 'all'}) with ${profileImages.size} profile images`);
 
     return NextResponse.json({
       success: true,
-      data: responseClips,
+      data: clipsWithProfiles,
     });
   } catch (error) {
     console.error('[Clips API] Error:', error);
