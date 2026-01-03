@@ -166,5 +166,5 @@ Keep responses concise, factual, and directly related to the application's data.
 // Rate limiting settings
 export const RATE_LIMIT = {
   windowMs: 60 * 1000, // 1 minute in milliseconds
-  maxRequests: 5, // 5 requests per minute
+  maxRequests: 60, // 60 requests per minute (1 per second average)
 }; 
