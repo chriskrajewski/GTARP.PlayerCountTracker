@@ -135,7 +135,7 @@ export function FeedbackForm({ trigger, className }: FeedbackFormProps) {
     title: "",
     description: "",
     type: "feedback",
-    email: "",
+    email: "john@roleplay.gg",
     serverName: ""
   });
   const [open, setOpen] = useState(false);
@@ -225,7 +225,7 @@ export function FeedbackForm({ trigger, className }: FeedbackFormProps) {
           title: "",
           description: "",
           type: "feedback",
-          email: "",
+          email: "john@roleplay.gg",
           serverName: ""
         });
         setIsSuccess(false);
@@ -249,7 +249,7 @@ export function FeedbackForm({ trigger, className }: FeedbackFormProps) {
         title: "",
         description: "",
         type: "feedback",
-        email: "",
+        email: "john@roleplay.gg",
         serverName: ""
       });
       setIsSuccess(false);
@@ -342,7 +342,7 @@ export function FeedbackForm({ trigger, className }: FeedbackFormProps) {
           type="email"
           value={formData.email}
           onChange={handleInputChange}
-          placeholder="Your email for follow-up questions"
+          placeholder="john@roleplay.gg"
           className="mt-1.5 bg-[#18181b]/50 border-[#26262c] text-white placeholder:text-gray-500 focus:border-cyan-500/50 focus:ring-cyan-500/20 transition-all"
         />
       </AnimatedInput>
