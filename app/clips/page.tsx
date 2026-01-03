@@ -39,6 +39,8 @@ import {
   Server,
   Sparkles,
 } from 'lucide-react';
+import { ClipsTimelineWaveform } from '@/components/clips-timeline-waveform';
+import { useFeatureFlag, FEATURE_FLAGS } from '@/lib/feature-flags';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // INTERFACES
@@ -500,6 +502,7 @@ function ClipsLoadingSkeleton() {
 function AllClipsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isTimelineEnabled = useFeatureFlag(FEATURE_FLAGS.CLIPS_TIMELINE);
 
   const [clips, setClips] = useState<ClipData[]>([]);
   const [servers, setServers] = useState<ServerInfo[]>([]);
@@ -648,6 +651,17 @@ function AllClipsContent() {
     [updateUrlFilters, selectedServer, selectedStreamer, searchQuery, orderBy]
   );
 
+  // Handle waveform time range selection
+  const handleWaveformSelect = useCallback(
+    (startDate: Date, endDate: Date) => {
+      const newRange: DateRange = { from: startDate, to: endDate };
+      setDateRange(newRange);
+      setOrderBy('views-desc'); // Switch to views sorting when clicking waveform
+      updateUrlFilters(selectedServer, selectedStreamer, searchQuery, newRange, 'views-desc');
+    },
+    [updateUrlFilters, selectedServer, selectedStreamer, searchQuery]
+  );
+
   const handleClearFilters = useCallback(() => {
     setSelectedServer('all');
     setSelectedStreamer('all');
@@ -753,6 +767,18 @@ function AllClipsContent() {
       animate="visible"
       variants={staggerContainer}
     >
+      {/* Timeline Waveform Visualization */}
+      {isTimelineEnabled && clips.length > 0 && (
+        <motion.div variants={fadeInUp}>
+          <ClipsTimelineWaveform
+            clips={clips}
+            onTimeRangeSelect={handleWaveformSelect}
+            selectedRange={dateRange}
+            className="mb-2"
+          />
+        </motion.div>
+      )}
+
       {/* Controls */}
       <motion.div variants={fadeInUp}>
         <Card variant="elevated" className="overflow-hidden">

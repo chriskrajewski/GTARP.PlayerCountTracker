@@ -41,6 +41,7 @@ export const FEATURE_FLAGS = {
   MULTI_STREAM: 'multi_stream',
   GIT_COMMITS: 'git_commits',
   CLIPS_PAGE: 'clips_page',
+  CLIPS_TIMELINE: 'clips_timeline',
   // Server card features
   SERVER_CARD_STREAMS: 'server_card_streams',
   SERVER_CARD_CHANGES: 'server_card_changes',
@@ -97,6 +98,7 @@ export function FeatureFlagProvider({ children }: FeatureFlagProviderProps) {
         [FEATURE_FLAGS.MULTI_STREAM]: true,
         [FEATURE_FLAGS.GIT_COMMITS]: true,
         [FEATURE_FLAGS.CLIPS_PAGE]: true,
+        [FEATURE_FLAGS.CLIPS_TIMELINE]: true,
         [FEATURE_FLAGS.SERVER_CARD_STREAMS]: true,
         [FEATURE_FLAGS.SERVER_CARD_CHANGES]: true,
         [FEATURE_FLAGS.SERVER_CARD_RESTART]: true,
