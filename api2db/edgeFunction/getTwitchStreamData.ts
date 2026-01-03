@@ -143,13 +143,13 @@ async function getGTAGameId(clientId: string, token: string): Promise<string | n
 
 /**
  * Fetch all GTA V streams from Twitch (limited pagination to reduce API load)
- * Matches main site implementation: app/api/streams/[serverId]/route.ts
+ * Matches main site implementation: app/api/live/twitch/route.ts
  */
 async function fetchGTAVStreams(
   clientId: string,
   token: string,
   gameId: string,
-  maxPages: number = 5
+  maxPages: number = 20
 ): Promise<TwitchApiStream[]> {
   const streams: TwitchApiStream[] = [];
   let cursor: string | null = null;
@@ -237,7 +237,10 @@ async function getStreamSearchConfigMap(platform: 'twitch' | 'kick'): Promise<Ma
 
 /**
  * Filter Twitch streams by server configuration
- * Matches main site implementation: app/api/streams/[serverId]/route.ts
+ * Matches main site implementation: app/api/live/twitch/route.ts
+ * Uses AND logic between search types (all specified types must match)
+ * Uses OR logic within each search type (any keyword in that type can match)
+ * Supports # prefix for exclude keywords (e.g., #nopixel excludes streams with "nopixel" in title)
  */
 function filterTwitchStreamsByConfig(
   streams: TwitchApiStream[],
@@ -247,23 +250,42 @@ function filterTwitchStreamsByConfig(
     return [];
   }
 
-  const titleKeywords: string[] = [];
-  const categoryKeywords: string[] = [];
-  const tagKeywords: string[] = [];
+  const titleInclude: string[] = [];
+  const titleExclude: string[] = [];
+  const categoryInclude: string[] = [];
+  const categoryExclude: string[] = [];
+  const tagInclude: string[] = [];
+  const tagExclude: string[] = [];
 
   for (const rule of config) {
     const keyword = (rule.search_keyword || "").trim().toLowerCase();
     if (!keyword) continue;
 
+    // Check if this is an exclude keyword (starts with #)
+    const isExclude = keyword.startsWith("#") && keyword.length > 1;
+    const cleanKeyword = isExclude ? keyword.slice(1) : keyword;
+
     switch (rule.search_type) {
       case "title":
-        titleKeywords.push(keyword);
+        if (isExclude) {
+          titleExclude.push(cleanKeyword);
+        } else {
+          titleInclude.push(cleanKeyword);
+        }
         break;
       case "category":
-        categoryKeywords.push(keyword);
+        if (isExclude) {
+          categoryExclude.push(cleanKeyword);
+        } else {
+          categoryInclude.push(cleanKeyword);
+        }
         break;
       case "tag":
-        tagKeywords.push(keyword);
+        if (isExclude) {
+          tagExclude.push(cleanKeyword);
+        } else {
+          tagInclude.push(cleanKeyword);
+        }
         break;
     }
   }
@@ -276,21 +298,35 @@ function filterTwitchStreamsByConfig(
     const gameLower = (stream.game_name || "").toLowerCase();
     const tagsLower = (stream.tags || []).map((t) => (t || "").toLowerCase());
 
-    let isMatch = false;
-
-    if (titleKeywords.length > 0 && titleKeywords.some((k) => titleLower.includes(k))) {
-      isMatch = true;
+    // Title matching: include must match (if any), exclude must not match
+    let titleMatch = true;
+    if (titleInclude.length > 0) {
+      titleMatch = titleInclude.some((k) => titleLower.includes(k));
+    }
+    if (titleMatch && titleExclude.length > 0) {
+      titleMatch = !titleExclude.some((k) => titleLower.includes(k));
     }
 
-    if (!isMatch && categoryKeywords.length > 0 && categoryKeywords.some((k) => gameLower === k)) {
-      isMatch = true;
+    // Category matching (exact match)
+    let categoryMatch = true;
+    if (categoryInclude.length > 0) {
+      categoryMatch = categoryInclude.some((k) => gameLower === k);
+    }
+    if (categoryMatch && categoryExclude.length > 0) {
+      categoryMatch = !categoryExclude.some((k) => gameLower === k);
     }
 
-    if (!isMatch && tagKeywords.length > 0 && tagKeywords.some((k) => tagsLower.includes(k))) {
-      isMatch = true;
+    // Tag matching (exact match)
+    let tagMatch = true;
+    if (tagInclude.length > 0) {
+      tagMatch = tagInclude.some((k) => tagsLower.includes(k));
+    }
+    if (tagMatch && tagExclude.length > 0) {
+      tagMatch = !tagExclude.some((k) => tagsLower.includes(k));
     }
 
-    if (!isMatch) continue;
+    // ALL specified search types must match (AND logic between types)
+    if (!titleMatch || !categoryMatch || !tagMatch) continue;
 
     // Dedupe by streamer name
     const key = (stream.user_name || "").toLowerCase();
@@ -344,6 +380,79 @@ async function logToSupabase(streams: StreamLogData[]): Promise<number> {
   }
 
   return logged;
+}
+
+/**
+ * Record streamer-server relationship in history table
+ * Called when a streamer is detected live on a server
+ */
+async function recordStreamerHistory(
+  serverId: string,
+  streamerUsername: string,
+  platform: 'twitch' | 'kick',
+  profileImageUrl?: string
+): Promise<boolean> {
+  const now = new Date().toISOString();
+  
+  try {
+    const { error } = await supabase
+      .from('streamer_server_history')
+      .upsert({
+        serverId: serverId,
+        streamer_username: streamerUsername,
+        platform: platform,
+        last_seen: now,
+        ...(profileImageUrl && { profile_image_url: profileImageUrl })
+      }, {
+        onConflict: 'serverId,streamer_username,platform',
+        ignoreDuplicates: false
+      });
+    
+    if (error) {
+      console.error(`[History] Error recording ${platform} streamer ${streamerUsername} for ${serverId}:`, error.message);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error(`[History] Exception recording ${platform} streamer history:`, error);
+    return false;
+  }
+}
+
+/**
+ * Fetch Twitch profile image for a user
+ * Uses Twitch API to get user profile information
+ */
+async function fetchTwitchProfileImage(
+  clientId: string,
+  token: string,
+  username: string
+): Promise<string | null> {
+  try {
+    const response = await fetch(
+      `https://api.twitch.tv/helix/users?login=${encodeURIComponent(username)}`,
+      {
+        headers: {
+          "Client-ID": clientId,
+          "Authorization": `Bearer ${token}`,
+        },
+        signal: createTimeoutSignal(10000),
+      }
+    );
+
+    if (!response.ok) {
+      console.warn(`[Twitch ETL] Failed to fetch profile for ${username}: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    const user = data.data?.[0];
+    return user?.profile_image_url || null;
+  } catch (error) {
+    console.warn(`[Twitch ETL] Error fetching profile image for ${username}:`, error);
+    return null;
+  }
 }
 
 /**
@@ -491,7 +600,8 @@ async function getKickTopStreams(limit: number = 100): Promise<KickStreamData[]>
 
 /**
  * Partition keywords into include and exclude lists
- * Matches main site implementation: app/api/streams/[serverId]/route.ts
+ * Matches main site implementation: app/api/live/twitch/route.ts
+ * Supports # prefix for exclude keywords (e.g., #nopixel excludes streams with "nopixel" in title)
  */
 function partitionKeywords(keywords: string[]): { include: string[]; exclude: string[] } {
   const include: string[] = [];
@@ -499,7 +609,7 @@ function partitionKeywords(keywords: string[]): { include: string[]; exclude: st
   for (const raw of keywords) {
     const k = (raw || "").trim().toLowerCase();
     if (!k) continue;
-    if (k.startsWith("!") && k.length > 1) exclude.push(k.slice(1));
+    if (k.startsWith("#") && k.length > 1) exclude.push(k.slice(1));
     else include.push(k);
   }
   return { include, exclude };
@@ -507,7 +617,10 @@ function partitionKeywords(keywords: string[]): { include: string[]; exclude: st
 
 /**
  * Fetch Kick streams for a server based on configuration
- * Matches main site implementation: app/api/streams/[serverId]/route.ts
+ * Matches main site implementation: app/api/live/kick/route.ts
+ * Uses AND logic between search types (all specified types must match)
+ * Uses OR logic within each search type (any keyword in that type can match)
+ * Supports # prefix for exclude keywords (e.g., #nopixel excludes streams with "nopixel" in title)
  */
 async function fetchKickStreams(
   serverId: string,
@@ -517,18 +630,43 @@ async function fetchKickStreams(
     return [];
   }
 
-  const categoryRules = config.filter((c) => c.search_type === "category");
-  const titleRules = config.filter((c) => c.search_type === "title");
+  const titleInclude: string[] = [];
+  const titleExclude: string[] = [];
+  const categoryInclude: string[] = [];
+  const categoryExclude: string[] = [];
 
-  // Build candidate pool from categories or top streams
+  for (const rule of config) {
+    const keyword = (rule.search_keyword || "").trim().toLowerCase();
+    if (!keyword) continue;
+
+    // Check if this is an exclude keyword (starts with #)
+    const isExclude = keyword.startsWith("#") && keyword.length > 1;
+    const cleanKeyword = isExclude ? keyword.slice(1) : keyword;
+
+    switch (rule.search_type) {
+      case "title":
+        if (isExclude) {
+          titleExclude.push(cleanKeyword);
+        } else {
+          titleInclude.push(cleanKeyword);
+        }
+        break;
+      case "category":
+        if (isExclude) {
+          categoryExclude.push(cleanKeyword);
+        } else {
+          categoryInclude.push(cleanKeyword);
+        }
+        break;
+    }
+  }
+
+  // Build candidate pool from categories
   let poolStreams: KickStreamData[] = [];
-  if (categoryRules.length) {
+  if (categoryInclude.length > 0) {
     const poolSeen = new Set<string>();
-    for (const rule of categoryRules) {
-      const keyword = (rule.search_keyword || "").trim().toLowerCase();
-      if (!keyword) continue;
-
-      const candidates = await getKickStreamsByCategoryQuery(keyword, 100);
+    for (const categoryKeyword of categoryInclude) {
+      const candidates = await getKickStreamsByCategoryQuery(categoryKeyword, 100);
       for (const s of candidates) {
         const key = (s.channel_slug || s.user_name || "").toLowerCase();
         if (!key || poolSeen.has(key)) continue;
@@ -537,24 +675,38 @@ async function fetchKickStreams(
       }
     }
   } else {
+    // If no category include keywords, fetch top streams
     poolStreams = await getKickTopStreams(100);
   }
 
-  const { include, exclude } = partitionKeywords(titleRules.map((r) => r.search_keyword));
-
-  // If no include keywords, can't filter reliably
-  if (include.length === 0) {
-    return [];
-  }
-
-  // Filter by title keywords
+  // Filter by title keywords (if any title rules exist)
   const seen = new Set<string>();
   const matched: KickStreamData[] = [];
 
   for (const s of poolStreams) {
     const title = (s.title || "").toLowerCase();
-    if (!include.some((k) => title.includes(k))) continue;
-    if (exclude.length && exclude.some((k) => title.includes(k))) continue;
+    const category = (s.category_name || "").toLowerCase();
+
+    // Title matching: include must match (if any), exclude must not match
+    let titleMatch = true;
+    if (titleInclude.length > 0) {
+      titleMatch = titleInclude.some((k) => title.includes(k));
+    }
+    if (titleMatch && titleExclude.length > 0) {
+      titleMatch = !titleExclude.some((k) => title.includes(k));
+    }
+
+    // Category matching (exact match)
+    let categoryMatch = true;
+    if (categoryInclude.length > 0) {
+      categoryMatch = categoryInclude.some((k) => category === k);
+    }
+    if (categoryMatch && categoryExclude.length > 0) {
+      categoryMatch = !categoryExclude.some((k) => category === k);
+    }
+
+    // ALL specified search types must match (AND logic between types)
+    if (!titleMatch || !categoryMatch) continue;
 
     const key = (s.channel_slug || s.user_name || "").toLowerCase();
     if (!key || seen.has(key)) continue;
@@ -637,6 +789,27 @@ serve(async (req) => {
               const matchedStreams = filterTwitchStreamsByConfig(allTwitchStreams, config);
 
               if (matchedStreams.length > 0) {
+                // Fetch profile images for matched streamers
+                console.log(`[Stream ETL] Fetching profile images for ${matchedStreams.length} streamers on server ${serverId}...`);
+                const profileImages = new Map<string, string>();
+                
+                for (const stream of matchedStreams) {
+                  try {
+                    const profileUrl = await fetchTwitchProfileImage(TWITCH_CLIENT_ID, token, stream.user_name);
+                    if (profileUrl) {
+                      profileImages.set(stream.user_name.toLowerCase(), profileUrl);
+                    }
+                  } catch (error) {
+                    console.warn(`[Stream ETL] Failed to fetch profile for ${stream.user_name}:`, error);
+                  }
+                }
+
+                // Record streamer history for each matched streamer with profile image
+                for (const stream of matchedStreams) {
+                  const profileUrl = profileImages.get(stream.user_name.toLowerCase());
+                  await recordStreamerHistory(serverId, stream.user_name, 'twitch', profileUrl);
+                }
+
                 // Convert to log format
                 const logData = convertStreamsToLogData(matchedStreams, serverId);
 
@@ -644,7 +817,7 @@ serve(async (req) => {
                 const logged = await logToSupabase(logData);
                 twitchLogged += logged;
 
-                console.log(`[Stream ETL] Twitch Server ${serverId}: ${matchedStreams.length} matched, ${logged} logged`);
+                console.log(`[Stream ETL] Twitch Server ${serverId}: ${matchedStreams.length} matched, ${logged} logged, ${profileImages.size} profile images stored`);
               }
             } catch (error) {
               console.error(`[Stream ETL] Error processing Twitch server ${serverId}:`, error);
@@ -681,6 +854,11 @@ serve(async (req) => {
               const matchedKickStreams = await fetchKickStreams(serverId, config);
 
               if (matchedKickStreams.length > 0) {
+                // Record streamer history for each matched streamer
+                for (const stream of matchedKickStreams) {
+                  await recordStreamerHistory(serverId, stream.user_name || stream.channel_slug, 'kick');
+                }
+
                 // Convert to log format
                 const logData = convertKickStreamsToLogData(matchedKickStreams, serverId);
 

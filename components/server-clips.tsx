@@ -1,0 +1,1066 @@
+'use client';
+
+import { useEffect, useState, useCallback, useMemo, memo } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { motion, AnimatePresence, AnimatedNumber, AnimatedSkeleton, MotionItem, StaggeredList } from '@/components/ui/motion';
+import { fadeInUp, springs, staggerContainer } from '@/lib/motion';
+import { 
+  AlertCircle, 
+  Play, 
+  X, 
+  Search,
+  Film,
+  Eye,
+  Clock,
+  Calendar,
+  User,
+  SlidersHorizontal,
+  TrendingUp,
+  Twitch,
+  ExternalLink,
+  Filter,
+  ArrowUpDown
+} from 'lucide-react';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTERFACES
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface ClipData {
+  clip_id: string;
+  streamer_username: string;
+  title: string;
+  thumbnail_url: string;
+  embed_url: string;
+  view_count: number;
+  duration: number;
+  created_at: string;
+  profile_image_url?: string;
+}
+
+interface ClipsApiResponse {
+  success: boolean;
+  data: ClipData[];
+  error?: string;
+}
+
+interface ServerClipsProps {
+  serverId: string;
+  serverName: string;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ANIMATED BACKGROUND COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+const CardGradientBackground = memo(function CardGradientBackground() {
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
+      <motion.div
+        className="absolute -top-1/2 -right-1/2 w-full h-full rounded-full blur-3xl opacity-30"
+        style={{ 
+          background: 'radial-gradient(circle, rgba(168, 85, 247, 0.15) 0%, transparent 70%)' 
+        }}
+        animate={{ rotate: 360 }}
+        transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+      />
+      <div 
+        className="absolute inset-0 opacity-[0.02]"
+        style={{
+          backgroundImage: `
+            linear-gradient(rgba(168, 85, 247, 0.5) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(168, 85, 247, 0.5) 1px, transparent 1px)
+          `,
+          backgroundSize: '30px 30px',
+        }}
+      />
+    </div>
+  )
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STAT ITEM COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+const StatItem = memo(function StatItem({ 
+  label, 
+  value, 
+  icon: Icon, 
+  color = "cyan",
+  suffix,
+  delay = 0
+}: { 
+  label: string
+  value: number | string
+  icon?: React.ComponentType<{ className?: string }>
+  color?: "cyan" | "purple" | "green" | "orange"
+  suffix?: string
+  delay?: number
+}) {
+  const colorClasses = {
+    cyan: "text-cyan-400",
+    purple: "text-purple-400",
+    green: "text-emerald-400",
+    orange: "text-orange-400",
+  }
+  
+  return (
+    <motion.div 
+      className="flex flex-col relative group"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: delay * 0.05, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <div className="absolute -inset-2 bg-cyan-500/5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-sm" />
+      <span className="text-xs text-gray-400 flex items-center gap-1.5 relative">
+        {Icon && <Icon className={`h-3 w-3 ${colorClasses[color]}/70`} />}
+        {label}
+      </span>
+      <div className="flex items-baseline gap-1.5 min-h-[28px] relative">
+        {typeof value === 'number' ? (
+          <AnimatedNumber value={value} className={`text-xl font-bold ${colorClasses[color]}`} />
+        ) : (
+          <span className={`text-xl font-bold ${colorClasses[color]}`}>{value}</span>
+        )}
+        {suffix && <span className="text-sm text-gray-500">{suffix}</span>}
+      </div>
+    </motion.div>
+  )
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CLIP CARD SKELETON
+// ═══════════════════════════════════════════════════════════════════════════
+
+function ClipCardSkeleton() {
+  return (
+    <Card variant="elevated" animated={false} className="overflow-hidden">
+      <CardGradientBackground />
+      <CardContent className="p-0 relative z-10">
+        <AnimatedSkeleton className="w-full aspect-video rounded-none" />
+        <div className="p-4 space-y-3">
+          <AnimatedSkeleton className="h-4 w-full" />
+          <AnimatedSkeleton className="h-3 w-2/3" />
+          <div className="flex gap-3">
+            <AnimatedSkeleton className="h-3 w-1/4" />
+            <AnimatedSkeleton className="h-3 w-1/4" />
+            <AnimatedSkeleton className="h-3 w-1/4" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CLIP CARD COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+const ClipCard = memo(function ClipCard({
+  clip,
+  onSelect,
+  index = 0,
+}: {
+  clip: ClipData;
+  onSelect: (clip: ClipData) => void;
+  index?: number;
+}) {
+  const [imageError, setImageError] = useState(false);
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays}d ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const formatDuration = (seconds: number) => {
+    if (seconds < 60) return `${seconds}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{
+        delay: index * 0.05,
+        ...springs.smooth
+      }}
+    >
+      <Card
+        variant="elevated"
+        className="overflow-hidden cursor-pointer"
+        onClick={() => onSelect(clip)}
+      >
+        <CardGradientBackground />
+        <CardContent className="p-0 relative z-10">
+          {/* Thumbnail */}
+          <div className="relative aspect-video overflow-hidden bg-gray-900">
+            <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/40 to-transparent opacity-60 group-hover:opacity-30 transition-opacity z-10" />
+            {imageError ? (
+              <div className="w-full h-full bg-gradient-to-br from-purple-900/30 to-gray-900 flex items-center justify-center">
+                <div className="text-center">
+                  <Film className="h-8 w-8 text-purple-400/50 mx-auto mb-2" />
+                  <div className="text-xs text-gray-500">{clip.streamer_username}</div>
+                </div>
+              </div>
+            ) : (
+              <motion.img
+                src={clip.thumbnail_url}
+                alt={clip.title}
+                className="w-full h-full object-cover"
+                onError={() => setImageError(true)}
+                loading="lazy"
+                decoding="async"
+                crossOrigin="anonymous"
+                whileHover={{ scale: 1.05 }}
+                transition={{ duration: 0.3 }}
+              />
+            )}
+            
+            {/* Play overlay */}
+            <motion.div 
+              className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center z-20"
+              whileHover={{ opacity: 1 }}
+            >
+              <motion.div
+                className="w-14 h-14 rounded-full bg-purple-500/90 flex items-center justify-center backdrop-blur-sm"
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Play className="h-6 w-6 text-white fill-white ml-1" />
+              </motion.div>
+            </motion.div>
+            
+            {/* Duration badge */}
+            <div 
+              className="absolute bottom-2 right-2 px-2 py-1 rounded text-xs font-medium z-20"
+              style={{
+                background: 'rgba(0, 0, 0, 0.8)',
+                backdropFilter: 'blur(4px)',
+              }}
+            >
+              <span className="text-white">{formatDuration(clip.duration)}</span>
+            </div>
+            
+            {/* Live indicator for Twitch */}
+            <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded z-20"
+              style={{
+                background: 'rgba(145, 70, 255, 0.9)',
+                backdropFilter: 'blur(4px)',
+              }}
+            >
+              <Twitch className="h-3 w-3 text-white" />
+              <span className="text-xs font-medium text-white">Clip</span>
+            </div>
+          </div>
+          
+          {/* Info section */}
+          <div className="p-4 space-y-3">
+            <h3 className="font-semibold text-sm line-clamp-2 text-white group-hover:text-purple-300 transition-colors leading-snug">
+              {clip.title}
+            </h3>
+            
+            <div className="flex items-center gap-2">
+              {clip.profile_image_url ? (
+                <img
+                  src={clip.profile_image_url}
+                  alt={clip.streamer_username}
+                  className="w-6 h-6 rounded-full object-cover border border-purple-400/50"
+                  crossOrigin="anonymous"
+                  onError={(e) => {
+                    // Fallback to default avatar on error
+                    e.currentTarget.style.display = 'none';
+                    const fallback = e.currentTarget.nextElementSibling;
+                    if (fallback) fallback.style.display = 'flex';
+                  }}
+                />
+              ) : null}
+              <div 
+                className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center"
+                style={clip.profile_image_url ? { display: 'none' } : {}}
+              >
+                <User className="h-3 w-3 text-white" />
+              </div>
+              <span className="text-sm text-gray-300 font-medium truncate">{clip.streamer_username}</span>
+            </div>
+            
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <div className="flex items-center gap-1">
+                <Eye className="h-3.5 w-3.5 text-cyan-400/70" />
+                <span className="text-gray-400">{clip.view_count.toLocaleString()}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Calendar className="h-3.5 w-3.5 text-purple-400/70" />
+                <span className="text-gray-400">{formatDate(clip.created_at)}</span>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CLIP MODAL COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+function ClipModal({
+  clip,
+  isOpen,
+  onClose,
+}: {
+  clip: ClipData | null;
+  isOpen: boolean;
+  onClose: () => void;
+}) {
+  if (!clip) return null;
+
+  const hostname =
+    typeof window !== 'undefined'
+      ? window.location.hostname
+      : 'localhost';
+
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent 
+        className="max-w-4xl border overflow-hidden p-0"
+        style={{ 
+          backgroundColor: 'rgba(14, 14, 16, 0.98)',
+          borderColor: 'rgba(168, 85, 247, 0.2)',
+          backdropFilter: 'blur(20px)',
+        }}
+      >
+        <DialogHeader className="p-6 pb-0">
+          <DialogTitle className="line-clamp-2 text-white text-lg pr-8">{clip.title}</DialogTitle>
+        </DialogHeader>
+        
+        <div className="p-6 pt-4 space-y-4">
+          {/* Video embed */}
+          <div className="w-full aspect-video rounded-lg overflow-hidden border"
+            style={{ borderColor: 'rgba(168, 85, 247, 0.2)' }}
+          >
+            <iframe
+              src={`https://clips.twitch.tv/embed?clip=${clip.clip_id}&parent=${hostname}`}
+              height="100%"
+              width="100%"
+              allowFullScreen
+              className="bg-black"
+            />
+          </div>
+          
+          {/* Stats grid */}
+          <div 
+            className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-lg"
+            style={{ 
+              background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+              borderColor: 'rgba(168, 85, 247, 0.15)',
+              border: '1px solid rgba(168, 85, 247, 0.15)'
+            }}
+          >
+            <div className="space-y-1">
+              <p className="text-xs text-gray-400 flex items-center gap-1">
+                <User className="h-3 w-3 text-purple-400/70" />
+                Streamer
+              </p>
+              <p className="font-semibold text-white">{clip.streamer_username}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-gray-400 flex items-center gap-1">
+                <Eye className="h-3 w-3 text-cyan-400/70" />
+                Views
+              </p>
+              <p className="font-semibold text-cyan-400">{clip.view_count.toLocaleString()}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-gray-400 flex items-center gap-1">
+                <Clock className="h-3 w-3 text-purple-400/70" />
+                Duration
+              </p>
+              <p className="font-semibold text-white">{clip.duration}s</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-gray-400 flex items-center gap-1">
+                <Calendar className="h-3 w-3 text-purple-400/70" />
+                Created
+              </p>
+              <p className="font-semibold text-white text-sm">{formatDate(clip.created_at)}</p>
+            </div>
+          </div>
+          
+          {/* External link */}
+          <a
+            href={`https://clips.twitch.tv/${clip.clip_id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 border"
+            style={{
+              background: 'linear-gradient(135deg, rgba(145, 70, 255, 0.2) 0%, rgba(20, 184, 166, 0.1) 100%)',
+              borderColor: 'rgba(145, 70, 255, 0.3)',
+            }}
+          >
+            <Twitch className="h-4 w-4 text-purple-400" />
+            <span className="text-white">Watch on Twitch</span>
+            <ExternalLink className="h-3.5 w-3.5 text-gray-400" />
+          </a>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FILTER BUTTON COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+const FilterButton = memo(function FilterButton({
+  children,
+  active,
+  onClick,
+}: {
+  children: React.ReactNode;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <motion.button
+      onClick={onClick}
+      className="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 border backdrop-blur-sm"
+      style={{
+        background: active
+          ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(20, 184, 166, 0.1) 100%)'
+          : 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+        borderColor: active ? 'rgba(168, 85, 247, 0.4)' : 'rgba(38, 38, 44, 1)',
+        boxShadow: active ? '0 0 15px rgba(168, 85, 247, 0.15)' : 'none',
+        color: active ? '#c4b5fd' : '#FFFFFF',
+      }}
+      whileHover={{ scale: 1.02, y: -1 }}
+      whileTap={{ scale: 0.98 }}
+    >
+      {children}
+    </motion.button>
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN SERVER CLIPS COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+export function ServerClips({
+  serverId,
+  serverName,
+}: ServerClipsProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const [clips, setClips] = useState<ClipData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedClip, setSelectedClip] = useState<ClipData | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Get initial filters from URL query params
+  const initialStreamer = searchParams.get('streamer') || 'all';
+  const initialSearchQuery = searchParams.get('search') || '';
+  const initialStartDate = searchParams.get('startDate') || '';
+  const initialEndDate = searchParams.get('endDate') || '';
+  const initialOrderBy = searchParams.get('orderBy') || 'date-newest';
+
+  const [selectedStreamer, setSelectedStreamer] = useState(initialStreamer);
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
+  const [startDate, setStartDate] = useState(initialStartDate);
+  const [endDate, setEndDate] = useState(initialEndDate);
+  const [orderBy, setOrderBy] = useState(initialOrderBy);
+
+  // Fetch clips
+  useEffect(() => {
+    const fetchClips = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const url = new URL(
+          `/api/clips/${serverId}`,
+          typeof window !== 'undefined' ? window.location.origin : ''
+        );
+
+        if (selectedStreamer && selectedStreamer !== 'all') {
+          url.searchParams.set('streamer', selectedStreamer);
+        }
+
+        const response = await fetch(url.toString());
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch clips');
+        }
+
+        const data: ClipsApiResponse = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to fetch clips');
+        }
+
+        setClips(data.data || []);
+      } catch (err) {
+        console.error('[Clips] Error fetching clips:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch clips');
+        setClips([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchClips();
+  }, [serverId, selectedStreamer]);
+
+  // Get unique streamers
+  const streamers = useMemo(() => {
+    const uniqueStreamers = new Set(clips.map((c) => c.streamer_username));
+    return Array.from(uniqueStreamers).sort();
+  }, [clips]);
+
+  // Calculate stats
+  const stats = useMemo(() => {
+    if (clips.length === 0) return { totalViews: 0, avgDuration: 0, topStreamer: '-' };
+    
+    const totalViews = clips.reduce((sum, c) => sum + c.view_count, 0);
+    const avgDuration = Math.round(clips.reduce((sum, c) => sum + c.duration, 0) / clips.length);
+    
+    const streamerViews = clips.reduce((acc, c) => {
+      acc[c.streamer_username] = (acc[c.streamer_username] || 0) + c.view_count;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    const topStreamer = Object.entries(streamerViews)
+      .sort(([, a], [, b]) => b - a)[0]?.[0] || '-';
+    
+    return { totalViews, avgDuration, topStreamer };
+  }, [clips]);
+
+  // URL filter update
+  const updateUrlFilters = useCallback(
+    (streamer: string, search: string, sDate: string, eDate: string, order: string) => {
+      const params = new URLSearchParams();
+      if (streamer !== 'all') params.set('streamer', streamer);
+      if (search) params.set('search', search);
+      if (sDate) params.set('startDate', sDate);
+      if (eDate) params.set('endDate', eDate);
+      if (order !== 'date-newest') params.set('orderBy', order);
+      router.push(`?${params.toString()}`, { scroll: false });
+    },
+    [router]
+  );
+
+  // Handlers
+  const handleStreamerChange = useCallback(
+    (value: string) => {
+      setSelectedStreamer(value);
+      updateUrlFilters(value, searchQuery, startDate, endDate, orderBy);
+    },
+    [updateUrlFilters, searchQuery, startDate, endDate, orderBy]
+  );
+
+  const handleSearchChange = useCallback(
+    (query: string) => {
+      setSearchQuery(query);
+      updateUrlFilters(selectedStreamer, query, startDate, endDate, orderBy);
+    },
+    [updateUrlFilters, selectedStreamer, startDate, endDate, orderBy]
+  );
+
+  const handleOrderChange = useCallback(
+    (value: string) => {
+      setOrderBy(value);
+      updateUrlFilters(selectedStreamer, searchQuery, startDate, endDate, value);
+    },
+    [updateUrlFilters, selectedStreamer, searchQuery, startDate, endDate]
+  );
+
+  const handleClearFilters = useCallback(() => {
+    setSelectedStreamer('all');
+    setSearchQuery('');
+    setStartDate('');
+    setEndDate('');
+    setOrderBy('date-newest');
+    router.push('?', { scroll: false });
+  }, [router]);
+
+  const handleSelectClip = useCallback((clip: ClipData) => {
+    setSelectedClip(clip);
+    setIsModalOpen(true);
+  }, []);
+
+  const handleCloseModal = useCallback(() => {
+    setIsModalOpen(false);
+    setTimeout(() => setSelectedClip(null), 300);
+  }, []);
+
+  // Filter and sort clips
+  const filteredClips = useMemo(() => {
+    let filtered = clips;
+
+    // Filter by streamer
+    if (selectedStreamer !== 'all' && selectedStreamer) {
+      filtered = filtered.filter(
+        (c) => c.streamer_username.toLowerCase() === selectedStreamer.toLowerCase()
+      );
+    }
+
+    // Filter by search
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (c) =>
+          c.title.toLowerCase().includes(query) ||
+          c.streamer_username.toLowerCase().includes(query)
+      );
+    }
+
+    // Helper: Get UTC day start timestamp for proper timezone-agnostic date comparison
+    const getUTCDayTime = (dateStr: string): number => {
+      const date = new Date(dateStr);
+      const utcYear = date.getUTCFullYear();
+      const utcMonth = date.getUTCMonth();
+      const utcDate = date.getUTCDate();
+      return new Date(Date.UTC(utcYear, utcMonth, utcDate)).getTime();
+    };
+
+    // Filter by date - using UTC for timezone-agnostic comparison
+    if (startDate || endDate) {
+      filtered = filtered.filter((c) => {
+        const clipDayTime = getUTCDayTime(c.created_at);
+        
+        if (startDate) {
+          const startDayTime = getUTCDayTime(startDate + 'T00:00:00Z');
+          if (clipDayTime < startDayTime) return false;
+        }
+        
+        if (endDate) {
+          const endDayTime = getUTCDayTime(endDate + 'T00:00:00Z');
+          if (clipDayTime > endDayTime) return false;
+        }
+        
+        return true;
+      });
+    }
+
+    // Sort - with multi-level sorting for consistent results
+    const sorted = [...filtered].sort((a, b) => {
+      // Helper function for multi-level sort
+      const applySortCriteria = (clipA: ClipData, clipB: ClipData, sortType: string): number => {
+        switch (sortType) {
+          case 'date-newest':
+            // Compare by UTC day, newest first
+            const dayBTime = getUTCDayTime(clipB.created_at);
+            const dayATime = getUTCDayTime(clipA.created_at);
+            return dayBTime - dayATime;
+          case 'date-oldest':
+            // Compare by UTC day, oldest first
+            const dayATime2 = getUTCDayTime(clipA.created_at);
+            const dayBTime2 = getUTCDayTime(clipB.created_at);
+            return dayATime2 - dayBTime2;
+          case 'views-desc': 
+            return clipB.view_count - clipA.view_count;
+          case 'views-asc': 
+            return clipA.view_count - clipB.view_count;
+          case 'duration-longest': 
+            return clipB.duration - clipA.duration;
+          case 'duration-shortest': 
+            return clipA.duration - clipB.duration;
+          default: 
+            return 0;
+        }
+      };
+
+      // For date sorts, apply two-level sorting: Date (primary) THEN Views High-Low (secondary)
+      if (orderBy === 'date-newest' || orderBy === 'date-oldest') {
+        // Primary: sort by date
+        let result = applySortCriteria(a, b, orderBy);
+        
+        // Secondary: if same day, sort by views (high to low)
+        if (result === 0) {
+          result = applySortCriteria(a, b, 'views-desc');
+        }
+        
+        return result;
+      }
+      
+      // For non-date sorts, just apply the single sort criteria
+      return applySortCriteria(a, b, orderBy);
+    });
+
+    return sorted;
+  }, [clips, selectedStreamer, searchQuery, startDate, endDate, orderBy]);
+
+  const hasActiveFilters = selectedStreamer !== 'all' || searchQuery || startDate || endDate;
+
+  return (
+    <motion.div 
+      className="space-y-6"
+      initial="hidden"
+      animate="visible"
+      variants={staggerContainer}
+    >
+      {/* Controls */}
+      <motion.div variants={fadeInUp}>
+        <Card variant="elevated" className="overflow-hidden">
+          <CardGradientBackground />
+          <CardHeader className="pb-4 relative z-10">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Filter className="h-5 w-5 text-purple-400" />
+                <span className="bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
+                  Filters & Search
+                </span>
+              </CardTitle>
+              
+              <motion.button
+                onClick={() => setShowFilters(!showFilters)}
+                className="sm:hidden inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+                  borderColor: 'rgba(168, 85, 247, 0.2)',
+                }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <SlidersHorizontal className="h-4 w-4 text-purple-400" />
+                <span className="text-white">{showFilters ? 'Hide' : 'Show'} Filters</span>
+              </motion.button>
+            </div>
+          </CardHeader>
+          
+          <CardContent className={`relative z-10 space-y-4 ${!showFilters && 'hidden sm:block'}`}>
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+              <input
+                type="text"
+                placeholder="Search by title or streamer name..."
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                className="w-full pl-10 pr-10 py-3 rounded-lg text-white placeholder-gray-500 transition-all duration-300 border"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+                  borderColor: 'rgba(168, 85, 247, 0.15)',
+                }}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => handleSearchChange('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Filter Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Streamer Select */}
+              <div className="space-y-2">
+                <label className="text-xs text-gray-400 flex items-center gap-1">
+                  <User className="h-3 w-3 text-purple-400/70" />
+                  Streamer
+                </label>
+                <Select value={selectedStreamer} onValueChange={handleStreamerChange}>
+                  <SelectTrigger 
+                    className="w-full border text-white"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+                      borderColor: 'rgba(168, 85, 247, 0.15)',
+                    }}
+                  >
+                    <SelectValue placeholder="All Streamers" />
+                  </SelectTrigger>
+                  <SelectContent 
+                    style={{
+                      background: 'rgba(18, 18, 21, 0.98)',
+                      borderColor: 'rgba(168, 85, 247, 0.2)',
+                    }}
+                  >
+                    <SelectItem value="all" className="text-white">
+                      All Streamers ({streamers.length})
+                    </SelectItem>
+                    {streamers.map((streamer) => (
+                      <SelectItem key={streamer} value={streamer} className="text-white">
+                        {streamer}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Sort By */}
+              <div className="space-y-2">
+                <label className="text-xs text-gray-400 flex items-center gap-1">
+                  <ArrowUpDown className="h-3 w-3 text-cyan-400/70" />
+                  Sort By
+                </label>
+                <Select value={orderBy} onValueChange={handleOrderChange}>
+                  <SelectTrigger 
+                    className="w-full border text-white"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+                      borderColor: 'rgba(168, 85, 247, 0.15)',
+                    }}
+                  >
+                    <SelectValue placeholder="Sort clips" />
+                  </SelectTrigger>
+                  <SelectContent
+                    style={{
+                      background: 'rgba(18, 18, 21, 0.98)',
+                      borderColor: 'rgba(168, 85, 247, 0.2)',
+                    }}
+                  >
+                    <SelectItem value="views-desc" className="text-white">Views (High → Low)</SelectItem>
+                    <SelectItem value="views-asc" className="text-white">Views (Low → High)</SelectItem>
+                    <SelectItem value="date-newest" className="text-white">Date (Newest)</SelectItem>
+                    <SelectItem value="date-oldest" className="text-white">Date (Oldest)</SelectItem>
+                    <SelectItem value="duration-longest" className="text-white">Duration (Longest)</SelectItem>
+                    <SelectItem value="duration-shortest" className="text-white">Duration (Shortest)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Date Range - Start */}
+              <div className="space-y-2">
+                <label className="text-xs text-gray-400 flex items-center gap-1">
+                  <Calendar className="h-3 w-3 text-purple-400/70" />
+                  From Date
+                </label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    updateUrlFilters(selectedStreamer, searchQuery, e.target.value, endDate, orderBy);
+                  }}
+                  className="w-full px-4 py-2 rounded-lg text-white border"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+                    borderColor: 'rgba(168, 85, 247, 0.15)',
+                    colorScheme: 'dark',
+                  }}
+                />
+              </div>
+
+              {/* Date Range - End */}
+              <div className="space-y-2">
+                <label className="text-xs text-gray-400 flex items-center gap-1">
+                  <Calendar className="h-3 w-3 text-purple-400/70" />
+                  To Date
+                </label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    updateUrlFilters(selectedStreamer, searchQuery, startDate, e.target.value, orderBy);
+                  }}
+                  className="w-full px-4 py-2 rounded-lg text-white border"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+                    borderColor: 'rgba(168, 85, 247, 0.15)',
+                    colorScheme: 'dark',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Active filters indicator */}
+            <AnimatePresence>
+              {hasActiveFilters && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="flex items-center justify-between p-3 rounded-lg"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(20, 184, 166, 0.05) 100%)',
+                    borderColor: 'rgba(168, 85, 247, 0.2)',
+                    border: '1px solid rgba(168, 85, 247, 0.2)',
+                  }}
+                >
+                  <p className="text-sm text-gray-300">
+                    Showing <span className="text-purple-400 font-semibold">{filteredClips.length}</span> of{' '}
+                    <span className="text-cyan-400 font-semibold">{clips.length}</span> clips
+                  </p>
+                  <motion.button
+                    onClick={handleClearFilters}
+                    className="px-3 py-1.5 text-xs rounded-lg font-medium border transition-colors"
+                    style={{
+                      background: 'rgba(24, 24, 27, 0.9)',
+                      borderColor: 'rgba(168, 85, 247, 0.3)',
+                      color: '#c4b5fd',
+                    }}
+                    whileHover={{ scale: 1.02, borderColor: 'rgba(168, 85, 247, 0.5)' }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    Clear Filters
+                  </motion.button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Content */}
+      <AnimatePresence mode="wait">
+        {error ? (
+          <motion.div
+            key="error"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            <Card variant="elevated" className="overflow-hidden">
+              <CardGradientBackground />
+              <CardContent className="p-6 relative z-10">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                    <AlertCircle className="h-5 w-5 text-red-400" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-red-400">Unable to load clips</p>
+                    <p className="text-sm text-red-300/70">{error}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ) : loading ? (
+          <motion.div
+            key="loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+            {Array.from({ length: 6 }).map((_, i) => (
+              <ClipCardSkeleton key={i} />
+            ))}
+          </motion.div>
+        ) : clips.length === 0 ? (
+          <motion.div
+            key="empty"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            <Card variant="elevated" className="overflow-hidden">
+              <CardGradientBackground />
+              <CardContent className="py-16 relative z-10 text-center">
+                <motion.div
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: 0.1, ...springs.bouncy }}
+                  className="w-16 h-16 rounded-full bg-purple-500/20 flex items-center justify-center mx-auto mb-4"
+                >
+                  <Film className="h-8 w-8 text-purple-400" />
+                </motion.div>
+                <h3 className="text-lg font-semibold text-white mb-2">No clips found</h3>
+                <p className="text-gray-400">
+                  No clips have been collected yet for {serverName}. Check back later!
+                </p>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ) : filteredClips.length === 0 ? (
+          <motion.div
+            key="no-results"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            <Card variant="elevated" className="overflow-hidden">
+              <CardGradientBackground />
+              <CardContent className="py-16 relative z-10 text-center">
+                <motion.div
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: 0.1, ...springs.bouncy }}
+                  className="w-16 h-16 rounded-full bg-cyan-500/20 flex items-center justify-center mx-auto mb-4"
+                >
+                  <Search className="h-8 w-8 text-cyan-400" />
+                </motion.div>
+                <h3 className="text-lg font-semibold text-white mb-2">No clips match your filters</h3>
+                <p className="text-gray-400 mb-4">Try adjusting your search or filter criteria.</p>
+                <motion.button
+                  onClick={handleClearFilters}
+                  className="px-4 py-2 rounded-lg text-sm font-medium border transition-all"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(20, 184, 166, 0.1) 100%)',
+                    borderColor: 'rgba(168, 85, 247, 0.3)',
+                    color: '#c4b5fd',
+                  }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Clear All Filters
+                </motion.button>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="clips"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+            {filteredClips.map((clip, index) => (
+              <ClipCard
+                key={clip.clip_id}
+                clip={clip}
+                onSelect={handleSelectClip}
+                index={index}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal */}
+      <ClipModal
+        clip={selectedClip}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+      />
+    </motion.div>
+  );
+}

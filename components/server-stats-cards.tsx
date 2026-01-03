@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { type PlayerCountData, StreamCountData, ViewerCountData, ServerCapacityData, getServerStats, getStreamerStats, getViewerStats, calculateTimeAtMaxCapacity } from "@/lib/data"
-import { Users, Twitch, TrendingUp, Wifi, WifiOff, Radio, Gauge, AlertCircle, Sparkles, Activity } from 'lucide-react'
+import { Users, Twitch, TrendingUp, Wifi, WifiOff, Radio, Gauge, AlertCircle, Sparkles, Activity, Film } from 'lucide-react'
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { motion, AnimatePresence } from "motion/react"
@@ -170,6 +170,7 @@ export default function ServerStatsCards({
 }: ServerStatsCardsProps) {
   // Feature flags
   const showStreamsButton = useFeatureFlag(FEATURE_FLAGS.SERVER_CARD_STREAMS);
+  const showClipsButton = useFeatureFlag(FEATURE_FLAGS.SERVER_CARD_CLIPS);
   const showChangesButton = useFeatureFlag(FEATURE_FLAGS.SERVER_CARD_CHANGES);
   const showRestartCountdown = useFeatureFlag(FEATURE_FLAGS.SERVER_CARD_RESTART);
   const showCapacityIndicator = useFeatureFlag(FEATURE_FLAGS.SERVER_CARD_CAPACITY);
@@ -450,6 +451,26 @@ export default function ServerStatsCards({
                 >
                   {currentStreams}
                 </motion.span>
+              </motion.button>
+            </Link>
+          )}
+          
+          {showClipsButton && (
+            <Link href={`/clips/${serverId}`} className="flex-1">
+              <motion.button
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-300 border backdrop-blur-sm"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+                  borderColor: 'rgba(0, 217, 255, 0.15)',
+                }}
+                whileHover={{ 
+                  borderColor: 'rgba(0, 217, 255, 0.4)',
+                  boxShadow: '0 0 15px rgba(0, 217, 255, 0.1)'
+                }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Film className="h-3.5 w-3.5 text-purple-400" />
+                <span className="text-white">Clips</span>
               </motion.button>
             </Link>
           )}
