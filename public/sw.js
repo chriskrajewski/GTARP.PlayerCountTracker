@@ -78,6 +78,25 @@ self.addEventListener('activate', (event) => {
 });
 
 /**
+ * External domains that should bypass service worker caching
+ * These are CDNs for Twitch/Kick images that may have CORS/CSP issues
+ */
+const EXTERNAL_IMAGE_DOMAINS = [
+  'static-cdn.jtvnw.net',
+  'clips-media-assets2.twitch.tv',
+  'clips-media-assets.twitch.tv',
+  'images.kick.com',
+  'cdn.7tv.app',
+];
+
+/**
+ * Check if URL is from an external image CDN
+ */
+function isExternalImageCDN(hostname) {
+  return EXTERNAL_IMAGE_DOMAINS.some(domain => hostname.includes(domain));
+}
+
+/**
  * Fetch event - implement caching strategies
  */
 self.addEventListener('fetch', (event) => {
@@ -91,6 +110,11 @@ self.addEventListener('fetch', (event) => {
 
   // Skip chrome extensions and other non-http(s) requests
   if (!url.protocol.startsWith('http')) {
+    return;
+  }
+
+  // Skip external image CDNs - let browser handle these directly to avoid CSP issues
+  if (isExternalImageCDN(url.hostname)) {
     return;
   }
 
@@ -111,8 +135,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets - cache first, fallback to network
-  if (isStaticAsset(url.pathname)) {
+  // Static assets - cache first, fallback to network (only for same-origin)
+  if (isStaticAsset(url.pathname) && url.origin === self.location.origin) {
     event.respondWith(cacheFirstStrategy(request));
     return;
   }
