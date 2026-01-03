@@ -1,13 +1,8 @@
 import { Suspense } from 'react';
-import { notFound } from 'next/navigation';
 import { createServerClient } from '@/lib/supabase-server';
 import { ServerClips } from '@/components/server-clips';
+import { CommonLayout } from '@/components/common-layout';
 import { Skeleton } from '@/components/ui/skeleton';
-
-export const metadata = {
-  title: 'Server Clips',
-  description: 'Browse clips from streamers on your favorite servers',
-};
 
 function ClipsLoadingSkeleton() {
   return (
@@ -34,22 +29,20 @@ export default async function ClipsPage({
     .single();
 
   if (!server) {
-    notFound();
+    return <div>Server not found</div>;
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">
-          {server.server_name} - Clips
-        </h1>
-        <p className="text-gray-400">
+    <CommonLayout showBackButton pageTitle={`Clips: ${server.server_name}`}>
+      <div>
+        <p className="text-gray-400 mb-6">
           Browse clips from streamers who have played on {server.server_name}
         </p>
+
+        <Suspense fallback={<ClipsLoadingSkeleton />}>
+          <ServerClips serverId={serverId} serverName={server.server_name} />
+        </Suspense>
       </div>
-      <Suspense fallback={<ClipsLoadingSkeleton />}>
-        <ServerClips serverId={serverId} serverName={server.server_name} />
-      </Suspense>
-    </div>
+    </CommonLayout>
   );
 }
