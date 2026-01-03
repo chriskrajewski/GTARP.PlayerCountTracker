@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -18,7 +17,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, Play } from 'lucide-react';
+import { AlertCircle, Play, X } from 'lucide-react';
 
 /**
  * Clip response interface
@@ -53,13 +52,15 @@ interface ServerClipsProps {
  */
 function ClipCardSkeleton() {
   return (
-    <div className="space-y-2">
-      <Skeleton className="w-full aspect-video rounded-lg" />
-      <Skeleton className="h-4 w-full" />
-      <Skeleton className="h-3 w-2/3" />
-      <div className="flex gap-2">
-        <Skeleton className="h-3 w-1/3" />
-        <Skeleton className="h-3 w-1/3" />
+    <div className="space-y-2 rounded-sm overflow-hidden" style={{ backgroundColor: '#0e0e10', border: '1px solid #26262c', borderRadius: '4px' }}>
+      <Skeleton className="w-full aspect-video rounded-none" />
+      <div className="p-3 space-y-2">
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-3 w-2/3" />
+        <div className="flex gap-2">
+          <Skeleton className="h-3 w-1/3" />
+          <Skeleton className="h-3 w-1/3" />
+        </div>
       </div>
     </div>
   );
@@ -75,27 +76,46 @@ function ClipCard({
   clip: ClipData;
   onSelect: (clip: ClipData) => void;
 }) {
+  const [imageError, setImageError] = useState(false);
+
   return (
     <Card
-      className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow duration-200"
+      className="overflow-hidden cursor-pointer group relative transition-all duration-200 hover:-translate-y-1"
+      style={{
+        backgroundColor: '#0e0e10',
+        borderColor: '#26262c',
+        borderWidth: '1px',
+        borderStyle: 'solid',
+        borderRadius: '4px',
+      }}
       onClick={() => onSelect(clip)}
     >
       <CardContent className="p-0">
         <div className="relative aspect-video overflow-hidden bg-gray-900">
-          <img
-            src={clip.thumbnail_url}
-            alt={clip.title}
-            className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-            onError={(e) => {
-              e.currentTarget.src = '/placeholder-clip.png';
-            }}
-          />
-          <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+          <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/40 to-transparent opacity-60 group-hover:opacity-30 transition-opacity z-10" />
+          {imageError ? (
+            <div className="w-full h-full bg-gray-800 flex items-center justify-center">
+              <div className="text-center text-gray-500">
+                <div className="text-2xl mb-2">🎬</div>
+                <div className="text-xs">{clip.streamer_username}</div>
+              </div>
+            </div>
+          ) : (
+            <img
+              src={clip.thumbnail_url}
+              alt={clip.title}
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              onError={() => setImageError(true)}
+              loading="lazy"
+              decoding="async"
+            />
+          )}
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center z-20">
             <Play className="h-12 w-12 text-white fill-white" />
           </div>
         </div>
         <div className="p-3 space-y-2">
-          <h3 className="font-semibold text-sm line-clamp-2 hover:text-cyan-400 transition-colors">
+          <h3 className="font-semibold text-sm line-clamp-2 text-white hover:text-purple-400 transition-colors">
             {clip.title}
           </h3>
           <p className="text-xs text-gray-400">{clip.streamer_username}</p>
@@ -130,9 +150,9 @@ function ClipModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-w-4xl border border-gray-700" style={{ backgroundColor: '#0f0f12' }}>
         <DialogHeader>
-          <DialogTitle className="line-clamp-2">{clip.title}</DialogTitle>
+          <DialogTitle className="line-clamp-2 text-white">{clip.title}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="w-full">
@@ -141,25 +161,25 @@ function ClipModal({
               height="360"
               width="100%"
               allowFullScreen
-              className="rounded-lg"
+              className="rounded-sm"
             />
           </div>
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-2 gap-4 text-sm p-4 rounded-sm" style={{ backgroundColor: '#18181b' }}>
             <div>
-              <p className="text-gray-400">Streamer</p>
-              <p className="font-semibold">{clip.streamer_username}</p>
+              <p className="text-gray-400 text-xs">Streamer</p>
+              <p className="font-semibold text-white">{clip.streamer_username}</p>
             </div>
             <div>
-              <p className="text-gray-400">Views</p>
-              <p className="font-semibold">{clip.view_count.toLocaleString()}</p>
+              <p className="text-gray-400 text-xs">Views</p>
+              <p className="font-semibold text-white">{clip.view_count.toLocaleString()}</p>
             </div>
             <div>
-              <p className="text-gray-400">Duration</p>
-              <p className="font-semibold">{clip.duration}s</p>
+              <p className="text-gray-400 text-xs">Duration</p>
+              <p className="font-semibold text-white">{clip.duration}s</p>
             </div>
             <div>
-              <p className="text-gray-400">Created</p>
-              <p className="font-semibold text-xs">
+              <p className="text-gray-400 text-xs">Created</p>
+              <p className="font-semibold text-white text-xs">
                 {new Date(clip.created_at).toLocaleDateString()}
               </p>
             </div>
@@ -186,9 +206,18 @@ export function ServerClips({
   const [selectedClip, setSelectedClip] = useState<ClipData | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Get initial streamer filter from URL query param
+  // Get initial filters from URL query params
   const initialStreamer = searchParams.get('streamer') || 'all';
+  const initialSearchQuery = searchParams.get('search') || '';
+  const initialStartDate = searchParams.get('startDate') || '';
+  const initialEndDate = searchParams.get('endDate') || '';
+  const initialOrderBy = searchParams.get('orderBy') || 'views-desc';
+
   const [selectedStreamer, setSelectedStreamer] = useState(initialStreamer);
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
+  const [startDate, setStartDate] = useState(initialStartDate);
+  const [endDate, setEndDate] = useState(initialEndDate);
+  const [orderBy, setOrderBy] = useState(initialOrderBy);
 
   // Fetch clips on mount or when serverId changes
   useEffect(() => {
@@ -240,18 +269,84 @@ export function ServerClips({
     return Array.from(uniqueStreamers).sort();
   }, [clips]);
 
-  // Handle streamer selection and update URL
-  const handleStreamerChange = useCallback(
-    (value: string) => {
-      setSelectedStreamer(value);
+  // Update URL with current filters
+  const updateUrlFilters = useCallback(
+    (streamer: string, search: string, sDate: string, eDate: string, order: string) => {
       const params = new URLSearchParams();
-      if (value !== 'all') {
-        params.set('streamer', value);
+      if (streamer !== 'all') {
+        params.set('streamer', streamer);
+      }
+      if (search) {
+        params.set('search', search);
+      }
+      if (sDate) {
+        params.set('startDate', sDate);
+      }
+      if (eDate) {
+        params.set('endDate', eDate);
+      }
+      if (order && order !== 'views-desc') {
+        params.set('orderBy', order);
       }
       router.push(`?${params.toString()}`);
     },
     [router]
   );
+
+  // Handle streamer selection
+  const handleStreamerChange = useCallback(
+    (value: string) => {
+      setSelectedStreamer(value);
+      updateUrlFilters(value, searchQuery, startDate, endDate, orderBy);
+    },
+    [updateUrlFilters, searchQuery, startDate, endDate, orderBy]
+  );
+
+  // Handle search input change
+  const handleSearchChange = useCallback(
+    (query: string) => {
+      setSearchQuery(query);
+      updateUrlFilters(selectedStreamer, query, startDate, endDate, orderBy);
+    },
+    [updateUrlFilters, selectedStreamer, startDate, endDate, orderBy]
+  );
+
+  // Handle start date change
+  const handleStartDateChange = useCallback(
+    (date: string) => {
+      setStartDate(date);
+      updateUrlFilters(selectedStreamer, searchQuery, date, endDate, orderBy);
+    },
+    [updateUrlFilters, selectedStreamer, searchQuery, endDate, orderBy]
+  );
+
+  // Handle end date change
+  const handleEndDateChange = useCallback(
+    (date: string) => {
+      setEndDate(date);
+      updateUrlFilters(selectedStreamer, searchQuery, startDate, date, orderBy);
+    },
+    [updateUrlFilters, selectedStreamer, searchQuery, startDate, orderBy]
+  );
+
+  // Handle order by change
+  const handleOrderByChange = useCallback(
+    (value: string) => {
+      setOrderBy(value);
+      updateUrlFilters(selectedStreamer, searchQuery, startDate, endDate, value);
+    },
+    [updateUrlFilters, selectedStreamer, searchQuery, startDate, endDate]
+  );
+
+  // Clear all filters
+  const handleClearFilters = useCallback(() => {
+    setSelectedStreamer('all');
+    setSearchQuery('');
+    setStartDate('');
+    setEndDate('');
+    setOrderBy('views-desc');
+    router.push('?');
+  }, [router]);
 
   // Handle clip selection
   const handleSelectClip = useCallback((clip: ClipData) => {
@@ -265,44 +360,242 @@ export function ServerClips({
     setTimeout(() => setSelectedClip(null), 300); // Wait for animation
   }, []);
 
-  // Filter clips based on selected streamer
+  // Filter clips based on all criteria
   const filteredClips = useMemo(() => {
-    if (selectedStreamer === 'all' || !selectedStreamer) {
-      return clips;
+    let filtered = clips;
+
+    // Filter by streamer
+    if (selectedStreamer !== 'all' && selectedStreamer) {
+      filtered = filtered.filter(
+        (c) => c.streamer_username.toLowerCase() === selectedStreamer.toLowerCase()
+      );
     }
-    return clips.filter(
-      (c) => c.streamer_username.toLowerCase() === selectedStreamer.toLowerCase()
-    );
-  }, [clips, selectedStreamer]);
+
+    // Filter by search query (title and streamer username)
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (c) =>
+          c.title.toLowerCase().includes(query) ||
+          c.streamer_username.toLowerCase().includes(query)
+      );
+    }
+
+    // Filter by date range
+    if (startDate || endDate) {
+      filtered = filtered.filter((c) => {
+        const clipDate = new Date(c.created_at);
+        
+        // Check start date
+        if (startDate) {
+          const start = new Date(startDate);
+          start.setHours(0, 0, 0, 0);
+          if (clipDate < start) {
+            return false;
+          }
+        }
+
+        // Check end date
+        if (endDate) {
+          const end = new Date(endDate);
+          end.setHours(23, 59, 59, 999);
+          if (clipDate > end) {
+            return false;
+          }
+        }
+
+        return true;
+      });
+    }
+
+    // Apply sorting
+    const sorted = [...filtered];
+    switch (orderBy) {
+      case 'views-asc':
+        sorted.sort((a, b) => a.view_count - b.view_count);
+        break;
+      case 'views-desc':
+        sorted.sort((a, b) => b.view_count - a.view_count);
+        break;
+      case 'date-newest':
+        sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        break;
+      case 'date-oldest':
+        sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        break;
+      case 'duration-shortest':
+        sorted.sort((a, b) => a.duration - b.duration);
+        break;
+      case 'duration-longest':
+        sorted.sort((a, b) => b.duration - a.duration);
+        break;
+      case 'title-asc':
+        sorted.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+      case 'title-desc':
+        sorted.sort((a, b) => b.title.localeCompare(a.title));
+        break;
+      default:
+        // Default to views descending
+        sorted.sort((a, b) => b.view_count - a.view_count);
+    }
+
+    return sorted;
+  }, [clips, selectedStreamer, searchQuery, startDate, endDate, orderBy]);
 
   return (
     <div className="space-y-6">
       {/* Controls */}
-      <div className="flex items-center gap-4">
-        <div className="flex-1">
-          <label htmlFor="streamer-select" className="text-sm text-gray-400 block mb-2">
-            Filter by Streamer
-          </label>
-          <Select value={selectedStreamer} onValueChange={handleStreamerChange}>
-            <SelectTrigger id="streamer-select" className="w-full max-w-xs">
-              <SelectValue placeholder="All Streamers" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">
-                All Streamers {streamers.length > 0 && `(${streamers.length})`}
-              </SelectItem>
-              {streamers.map((streamer) => (
-                <SelectItem key={streamer} value={streamer}>
-                  {streamer}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      <div className="space-y-4">
+        {/* Search and Date Filters */}
+        <div className="flex flex-col gap-4">
+          {/* Search Bar */}
+          <div className="flex-1">
+            <label htmlFor="search-input" className="text-sm text-gray-400 block mb-2">
+              Search Clips
+            </label>
+            <div className="relative">
+              <input
+                id="search-input"
+                type="text"
+                placeholder="Search by title or streamer name..."
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                className="w-full px-4 py-2 rounded-sm bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => handleSearchChange('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300 transition-colors"
+                  aria-label="Clear search"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Streamer Filter and Date Range */}
+          <div className="flex flex-col lg:flex-row gap-4">
+            {/* Streamer Dropdown */}
+            <div className="flex-1 min-w-xs">
+              <label htmlFor="streamer-select" className="text-sm text-gray-400 block mb-2">
+                Filter by Streamer
+              </label>
+              <Select value={selectedStreamer} onValueChange={handleStreamerChange}>
+                <SelectTrigger id="streamer-select" className="w-full bg-gray-800 border-gray-700 text-white">
+                  <SelectValue placeholder="All Streamers" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-700">
+                  <SelectItem value="all" className="text-white">
+                    All Streamers {streamers.length > 0 && `(${streamers.length})`}
+                  </SelectItem>
+                  {streamers.map((streamer) => (
+                    <SelectItem key={streamer} value={streamer} className="text-white">
+                      {streamer}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Start Date Filter */}
+            <div className="flex-1 min-w-xs">
+              <label htmlFor="start-date" className="text-sm text-gray-400 block mb-2">
+                From Date
+              </label>
+              <input
+                id="start-date"
+                type="date"
+                value={startDate}
+                onChange={(e) => handleStartDateChange(e.target.value)}
+                className="w-full px-4 py-2 rounded-sm bg-gray-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+              />
+            </div>
+
+            {/* End Date Filter */}
+            <div className="flex-1 min-w-xs">
+              <label htmlFor="end-date" className="text-sm text-gray-400 block mb-2">
+                To Date
+              </label>
+              <input
+                id="end-date"
+                type="date"
+                value={endDate}
+                onChange={(e) => handleEndDateChange(e.target.value)}
+                className="w-full px-4 py-2 rounded-sm bg-gray-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+              />
+            </div>
+
+            {/* Order By Dropdown */}
+            <div className="flex-1 min-w-xs">
+              <label htmlFor="order-by-select" className="text-sm text-gray-400 block mb-2">
+                Sort By
+              </label>
+              <Select value={orderBy} onValueChange={handleOrderByChange}>
+                <SelectTrigger id="order-by-select" className="w-full bg-gray-800 border-gray-700 text-white">
+                  <SelectValue placeholder="Sort clips" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-700">
+                  <SelectItem value="views-desc" className="text-white">
+                    Views (High to Low)
+                  </SelectItem>
+                  <SelectItem value="views-asc" className="text-white">
+                    Views (Low to High)
+                  </SelectItem>
+                  <SelectItem value="date-newest" className="text-white">
+                    Date (Newest First)
+                  </SelectItem>
+                  <SelectItem value="date-oldest" className="text-white">
+                    Date (Oldest First)
+                  </SelectItem>
+                  <SelectItem value="duration-longest" className="text-white">
+                    Duration (Longest First)
+                  </SelectItem>
+                  <SelectItem value="duration-shortest" className="text-white">
+                    Duration (Shortest First)
+                  </SelectItem>
+                  <SelectItem value="title-asc" className="text-white">
+                    Title (A-Z)
+                  </SelectItem>
+                  <SelectItem value="title-desc" className="text-white">
+                    Title (Z-A)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Filter Status and Clear Button */}
+          {(selectedStreamer !== 'all' || searchQuery || startDate || endDate) && (
+            <div className="flex items-center justify-between p-3 rounded-sm" style={{ backgroundColor: '#18181b', border: '1px solid #26262c' }}>
+              <p className="text-sm text-gray-400">
+                {filteredClips.length > 0
+                  ? `Showing ${filteredClips.length} of ${clips.length} clip${clips.length !== 1 ? 's' : ''}`
+                  : 'No clips match your filters'}
+              </p>
+              <button
+                onClick={handleClearFilters}
+                className="px-3 py-1 text-xs rounded-sm transition-colors"
+                style={{
+                  backgroundColor: '#26262c',
+                  color: '#FFFFFF',
+                  border: '1px solid #404043',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#3a3a41')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#26262c')}
+              >
+                Clear Filters
+              </button>
+            </div>
+          )}
         </div>
-        {clips.length > 0 && (
+
+        {/* Clips Count */}
+        {clips.length > 0 && !searchQuery && selectedStreamer === 'all' && !startDate && !endDate && (
           <div className="text-right">
             <p className="text-sm text-gray-400">Total Clips</p>
-            <p className="text-2xl font-bold">{filteredClips.length}</p>
+            <p className="text-2xl font-bold text-white">{clips.length}</p>
           </div>
         )}
       </div>
@@ -310,7 +603,7 @@ export function ServerClips({
       {/* Content */}
       {error ? (
         // Error state
-        <div className="flex items-center gap-3 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+        <div className="flex items-center gap-3 p-4 rounded-sm border border-red-500/30" style={{ backgroundColor: 'rgba(185, 28, 28, 0.1)' }}>
           <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0" />
           <div>
             <p className="font-semibold text-red-400">Unable to load clips</p>
@@ -326,9 +619,9 @@ export function ServerClips({
         </div>
       ) : clips.length === 0 ? (
         // Empty state
-        <div className="text-center py-12">
+        <div className="text-center py-12 rounded-sm border border-gray-700 p-6" style={{ backgroundColor: '#18181b' }}>
           <div className="space-y-2">
-            <h3 className="text-lg font-semibold">No clips found</h3>
+            <h3 className="text-lg font-semibold text-white">No clips found</h3>
             <p className="text-gray-400">
               No clips have been collected yet for {serverName}. Check back later!
             </p>
@@ -336,19 +629,26 @@ export function ServerClips({
         </div>
       ) : filteredClips.length === 0 ? (
         // Empty filtered state
-        <div className="text-center py-12">
+        <div className="text-center py-12 rounded-sm border border-gray-700 p-6" style={{ backgroundColor: '#18181b' }}>
           <div className="space-y-2">
-            <h3 className="text-lg font-semibold">No clips from this streamer</h3>
+            <h3 className="text-lg font-semibold text-white">No clips from this streamer</h3>
             <p className="text-gray-400">
               Select a different streamer to view their clips.
             </p>
-            <Button
-              variant="outline"
+            <button
               onClick={() => handleStreamerChange('all')}
-              className="mt-4"
+              className="mt-4 px-4 py-2 rounded-sm text-sm font-medium transition-colors"
+              style={{
+                backgroundColor: '#26262c',
+                color: '#FFFFFF',
+                border: '1px solid #404043',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#3a3a41')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#26262c')}
             >
               View All Clips
-            </Button>
+            </button>
           </div>
         </div>
       ) : (
