@@ -45,6 +45,7 @@ export const FEATURE_FLAGS = {
   SERVER_CARD_CHANGES: 'server_card_changes',
   SERVER_CARD_RESTART: 'server_card_restart',
   SERVER_CARD_CAPACITY: 'server_card_capacity',
+  SERVER_CARD_CLIPS: 'server_card_clips',
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -98,6 +99,7 @@ export function FeatureFlagProvider({ children }: FeatureFlagProviderProps) {
         [FEATURE_FLAGS.SERVER_CARD_CHANGES]: true,
         [FEATURE_FLAGS.SERVER_CARD_RESTART]: true,
         [FEATURE_FLAGS.SERVER_CARD_CAPACITY]: true,
+        [FEATURE_FLAGS.SERVER_CARD_CLIPS]: true,
       });
     } finally {
       setLoading(false);

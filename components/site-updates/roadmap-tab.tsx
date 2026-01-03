@@ -162,35 +162,37 @@ export function RoadmapTab({ isOpen }: RoadmapTabProps) {
         </div>
       ) : (
         <div className="space-y-6">
-          {(Object.keys(groupedItems) as Array<keyof typeof groupedItems>).map(status => {
-            const statusItems = groupedItems[status];
-            if (statusItems.length === 0) return null;
+          {(Object.keys(groupedItems) as Array<keyof typeof groupedItems>)
+            .sort((a, b) => STATUS_ORDER[a] - STATUS_ORDER[b])
+            .map(status => {
+              const statusItems = groupedItems[status];
+              if (statusItems.length === 0) return null;
 
-            return (
-              <div key={status}>
-                <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-                  {STATUS_LABELS[status]}
-                  <span className="text-xs font-normal text-[#ADADB8] bg-[#26262c]/50 px-2 py-0.5 rounded-full">
-                    {statusItems.length}
-                  </span>
-                </h3>
-                <div className="space-y-3">
-                  {statusItems.map(item => (
-                    <RoadmapItemCard
-                      key={item.id}
-                      id={item.id}
-                      title={item.title}
-                      description={item.description}
-                      status={item.status as "planned" | "in_progress" | "completed" | "cancelled"}
-                      priority={item.priority}
-                      category={item.category || undefined}
-                      voteCount={item.vote_count || 0}
-                    />
-                  ))}
+              return (
+                <div key={status}>
+                  <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                    {STATUS_LABELS[status]}
+                    <span className="text-xs font-normal text-[#ADADB8] bg-[#26262c]/50 px-2 py-0.5 rounded-full">
+                      {statusItems.length}
+                    </span>
+                  </h3>
+                  <div className="space-y-3">
+                    {statusItems.map(item => (
+                      <RoadmapItemCard
+                        key={item.id}
+                        id={item.id}
+                        title={item.title}
+                        description={item.description}
+                        status={item.status as "planned" | "in_progress" | "completed" | "cancelled"}
+                        priority={item.priority}
+                        category={item.category || undefined}
+                        voteCount={item.vote_count || 0}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
         </div>
       )}
     </div>

@@ -347,6 +347,42 @@ async function logToSupabase(streams: StreamLogData[]): Promise<number> {
 }
 
 /**
+ * Record streamer-server relationship in history table
+ * Called when a streamer is detected live on a server
+ */
+async function recordStreamerHistory(
+  serverId: string,
+  streamerUsername: string,
+  platform: 'twitch' | 'kick'
+): Promise<boolean> {
+  const now = new Date().toISOString();
+  
+  try {
+    const { error } = await supabase
+      .from('streamer_server_history')
+      .upsert({
+        serverId: serverId,
+        streamer_username: streamerUsername,
+        platform: platform,
+        last_seen: now
+      }, {
+        onConflict: 'serverId,streamer_username,platform',
+        ignoreDuplicates: false
+      });
+    
+    if (error) {
+      console.error(`[History] Error recording ${platform} streamer ${streamerUsername} for ${serverId}:`, error.message);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error(`[History] Exception recording ${platform} streamer history:`, error);
+    return false;
+  }
+}
+
+/**
  * Check if Kick API is configured
  */
 function isKickApiConfigured(): boolean {
@@ -637,6 +673,11 @@ serve(async (req) => {
               const matchedStreams = filterTwitchStreamsByConfig(allTwitchStreams, config);
 
               if (matchedStreams.length > 0) {
+                // Record streamer history for each matched streamer
+                for (const stream of matchedStreams) {
+                  await recordStreamerHistory(serverId, stream.user_name, 'twitch');
+                }
+
                 // Convert to log format
                 const logData = convertStreamsToLogData(matchedStreams, serverId);
 
@@ -681,6 +722,11 @@ serve(async (req) => {
               const matchedKickStreams = await fetchKickStreams(serverId, config);
 
               if (matchedKickStreams.length > 0) {
+                // Record streamer history for each matched streamer
+                for (const stream of matchedKickStreams) {
+                  await recordStreamerHistory(serverId, stream.user_name || stream.channel_slug, 'kick');
+                }
+
                 // Convert to log format
                 const logData = convertKickStreamsToLogData(matchedKickStreams, serverId);
 
