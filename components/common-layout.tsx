@@ -668,6 +668,34 @@ export function CommonLayout({
         <SiteUpdatesPanel isOpen={showSiteUpdatesPanel} />
       </SlideoutPanel>
 
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* FOOTER - Made with love attribution                                  */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      <motion.footer
+        className="relative z-10 py-4 text-center"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.5, duration: 0.5 }}
+      >
+        <p className="text-xs text-[#ADADB8]/60 flex items-center justify-center gap-1">
+          Made with{' '}
+          <motion.span
+            className="text-[#ff4545]"
+            animate={{ 
+              scale: [1, 1.2, 1],
+            }}
+            transition={{ 
+              duration: 1.5, 
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+          >
+            <Heart className="h-3 w-3 inline fill-current" />
+          </motion.span>
+          {' '}by alantiix
+        </p>
+      </motion.footer>
+
       {/* PWA Bottom Dock - Native app-like navigation for installed PWA */}
       <AnimatePresence>
         {showPWADock && (
