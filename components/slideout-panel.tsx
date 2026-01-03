@@ -92,8 +92,11 @@ export function SlideoutPanel({
       <SheetContent 
         side={side}
         hideDefaultClose={true}
-        className="p-0 flex flex-col border-0 shadow-none bg-transparent overflow-visible"
-        style={{ width: isMobile ? '100vw' : '55vw', maxWidth: isMobile ? '100vw' : '950px' }}
+        className={`p-0 flex flex-col border-0 shadow-none bg-transparent overflow-visible ${isMobile ? 'ios-safe-area' : ''}`}
+        style={{ 
+          width: isMobile ? '100vw' : '55vw', 
+          maxWidth: isMobile ? '100vw' : '950px'
+        }}
       >
         {/* Main panel container with glass effect */}
         <motion.div
@@ -135,7 +138,7 @@ export function SlideoutPanel({
           {/* HEADER - The showstopper */}
           {/* ═══════════════════════════════════════════════════════════════ */}
           <motion.div
-            className={`relative z-10 ${isMobile ? 'px-4 pt-6 pb-4' : 'px-8 pt-8 pb-6'}`}
+            className={`relative z-10 ${isMobile ? 'px-4 pb-4 ios-safe-header' : 'px-8 pt-8 pb-6'}`}
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1, duration: 0.5 }}

@@ -13,6 +13,7 @@ import { BotIDProvider } from "@/components/botid-provider"
 import { VisitorTrackingProvider } from "@/components/visitor-tracking-provider"
 import { PWAProvider } from "@/components/pwa-provider"
 import { FeatureFlagProvider } from "@/lib/feature-flags"
+import { LiveDataStatusProvider } from "@/components/live-data-status-provider"
 import mixpanel from "mixpanel-browser";
 
 // Create an instance of the Mixpanel object, your token is already added to this snippet
@@ -132,14 +133,20 @@ export default function RootLayout({
       )}
       
         {/* PWA Support - Additional meta tags */}
-        <meta name="application-name" content="GTARP Tracker" />
+        <meta name="application-name" content="RPStats.com" />
         <meta name="msapplication-TileColor" content="#06070b" />
         <meta name="msapplication-config" content="/browserconfig.xml" />
         
-        {/* iOS PWA Icons - Explicit link tags required for iOS */}
+        {/* iOS PWA Icons - Critical for iOS home screen icon display */}
+        {/* iOS requires apple-touch-icon to be exactly 180x180 and served from root */}
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
         <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-precomposed.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png" />
+        <link rel="apple-touch-icon" sizes="144x144" href="/icons/icon-144.png" />
+        
+        {/* Web App Manifest - Required for PWA */}
+        <link rel="manifest" href="/manifest.json" />
         
         {/* Force dark mode */}
         <meta name="color-scheme" content="dark" />
@@ -211,18 +218,20 @@ export default function RootLayout({
         padding: 0
       }}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} forcedTheme="dark" disableTransitionOnChange>
-          <PWAProvider>
-            <FeatureFlagProvider>
-              <Suspense>
-                <BotIDProvider />
-                <GoogleAnalytics />
-                <VisitorTrackingProvider />
-                {children}
-                <Analytics />
-                <SpeedInsights />
-              </Suspense>
-            </FeatureFlagProvider>
-          </PWAProvider>
+          <LiveDataStatusProvider>
+            <PWAProvider>
+              <FeatureFlagProvider>
+                <Suspense>
+                  <BotIDProvider />
+                  <GoogleAnalytics />
+                  <VisitorTrackingProvider />
+                  {children}
+                  <Analytics />
+                  <SpeedInsights />
+                </Suspense>
+              </FeatureFlagProvider>
+            </PWAProvider>
+          </LiveDataStatusProvider>
         </ThemeProvider>
       </body>
     </html>

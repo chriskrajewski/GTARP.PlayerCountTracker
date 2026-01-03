@@ -171,7 +171,7 @@ export default function ServerChangelogPage({ params }: PageProps) {
   const [loadingChanges, setLoadingChanges] = useState(false)
   const [changesError, setChangesError] = useState<string | null>(null)
   const [addPopoverOpen, setAddPopoverOpen] = useState(false)
-  const [timeHorizon, setTimeHorizon] = useState<HorizonFilter>("7d")
+  const [timeHorizon, setTimeHorizon] = useState<HorizonFilter>("all")
   const [shareStatus, setShareStatus] = useState<ShareStatus>(null)
 
   const shareResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
