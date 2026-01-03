@@ -29,7 +29,7 @@ export default async function ClipsPage({
 
   const { data: server } = await supabase
     .from('server_xref')
-    .select('id, serverName')
+    .select('id, server_name')
     .eq('id', serverId)
     .single();
 
@@ -41,14 +41,14 @@ export default async function ClipsPage({
     <div className="container mx-auto py-8 px-4">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">
-          {server.serverName} - Clips
+          {server.server_name} - Clips
         </h1>
         <p className="text-gray-400">
-          Browse clips from streamers who have played on {server.serverName}
+          Browse clips from streamers who have played on {server.server_name}
         </p>
       </div>
       <Suspense fallback={<ClipsLoadingSkeleton />}>
-        <ServerClips serverId={serverId} serverName={server.serverName} />
+        <ServerClips serverId={serverId} serverName={server.server_name} />
       </Suspense>
     </div>
   );
