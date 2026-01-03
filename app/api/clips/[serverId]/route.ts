@@ -134,32 +134,33 @@ export async function GET(
     }));
 
     // Fetch profile images from streamer_server_history table
-    const uniqueStreamers = [...new Set(responseClips.map(c => c.streamer_username))];
+    // Note: twitch_clips stores usernames in lowercase, but streamer_server_history 
+    // stores them with original Twitch casing, so we need case-insensitive matching
     const { data: streamerHistory, error: historyError } = await supabase
       .from('streamer_server_history')
       .select('streamer_username, profile_image_url')
       .eq('serverId', serverId)
-      .in('streamer_username', uniqueStreamers)
       .eq('platform', 'twitch');
 
     if (historyError) {
       console.warn(`[Clips API] Failed to fetch streamer history for ${serverId}:`, historyError);
     }
 
-    // Build profile image map from database
+    // Build profile image map from database using lowercase keys for case-insensitive lookup
     const profileImages = new Map<string, string>();
     if (streamerHistory) {
       for (const record of streamerHistory) {
         if (record.profile_image_url) {
-          profileImages.set(record.streamer_username, record.profile_image_url);
+          // Store with lowercase key for case-insensitive matching
+          profileImages.set(record.streamer_username.toLowerCase(), record.profile_image_url);
         }
       }
     }
 
-    // Add profile images to response clips
+    // Add profile images to response clips (clip usernames are already lowercase)
     const clipsWithProfiles = responseClips.map(clip => ({
       ...clip,
-      profile_image_url: profileImages.get(clip.streamer_username),
+      profile_image_url: profileImages.get(clip.streamer_username.toLowerCase()),
     }));
 
     // Cache the response
