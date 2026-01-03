@@ -504,7 +504,7 @@ function ClipModal({
 // PAGE HEADER COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 
-function PageHeader() {
+export function PageHeader() {
   return (
     <motion.div 
       className="mb-6"
@@ -550,7 +550,7 @@ function PageHeader() {
 // LOADING SKELETON
 // ═══════════════════════════════════════════════════════════════════════════
 
-function ClipsLoadingSkeleton() {
+export function ClipsLoadingSkeleton() {
   return (
     <motion.div 
       className="space-y-6"
@@ -590,7 +590,12 @@ function ClipsLoadingSkeleton() {
 // MAIN PAGE CONTENT COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 
-function AllClipsContent() {
+interface AllClipsContentProps {
+  defaultServerId?: string;
+  pagePath?: string;
+}
+
+export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllClipsContentProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isTimelineEnabled = useFeatureFlag(FEATURE_FLAGS.CLIPS_TIMELINE);
@@ -602,9 +607,10 @@ function AllClipsContent() {
   const [selectedClip, setSelectedClip] = useState<ClipData | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const resolvedDefaultServer = defaultServerId || 'all';
 
   // Get initial filters from URL query params
-  const initialServer = searchParams.get('server') || 'all';
+  const initialServer = searchParams.get('server') || resolvedDefaultServer;
   const initialStreamer = searchParams.get('streamer') || 'all';
   const initialPlatform = searchParams.get('platform') || 'all';
   const initialSearchQuery = searchParams.get('search') || '';
@@ -770,14 +776,14 @@ function AllClipsContent() {
   );
 
   const handleClearFilters = useCallback(() => {
-    setSelectedServer('all');
+    setSelectedServer(resolvedDefaultServer);
     setSelectedStreamer('all');
     setSelectedPlatform('all');
     setSearchQuery('');
     setDateRange(undefined);
     setOrderBy('views-desc');
-    router.push('/clips', { scroll: false });
-  }, [router]);
+    router.push(pagePath, { scroll: false });
+  }, [router, pagePath, resolvedDefaultServer]);
 
   const handleSelectClip = useCallback((clip: ClipData) => {
     setSelectedClip(clip);

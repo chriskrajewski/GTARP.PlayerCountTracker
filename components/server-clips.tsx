@@ -39,8 +39,6 @@ import {
   Sparkles
 } from 'lucide-react';
 import { KickClipPlayer } from '@/components/kick-clip-player';
-import { ClipsTimelineWaveform } from '@/components/clips-timeline-waveform';
-import { useFeatureFlag, FEATURE_FLAGS } from '@/lib/feature-flags';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // INTERFACES
@@ -613,7 +611,6 @@ export function ServerClips({
 }: ServerClipsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isTimelineEnabled = useFeatureFlag(FEATURE_FLAGS.CLIPS_TIMELINE);
 
   const [clips, setClips] = useState<ClipData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -778,17 +775,6 @@ export function ServerClips({
     [updateUrlFilters, selectedStreamer, selectedPlatform, searchQuery, orderBy]
   );
 
-  // Handle waveform time range selection
-  const handleWaveformSelect = useCallback(
-    (startDate: Date, endDate: Date) => {
-      const newRange: DateRange = { from: startDate, to: endDate };
-      setDateRange(newRange);
-      setOrderBy('views-desc'); // Switch to views sorting when clicking waveform
-      updateUrlFilters(selectedStreamer, selectedPlatform, searchQuery, newRange, 'views-desc');
-    },
-    [updateUrlFilters, selectedStreamer, selectedPlatform, searchQuery]
-  );
-
   const handleClearFilters = useCallback(() => {
     setSelectedStreamer('all');
     setSelectedPlatform('all');
@@ -916,76 +902,6 @@ export function ServerClips({
     >
       {/* Page Header */}
       <PageHeader serverName={serverName} />
-
-      {/* Stats Grid */}
-      {!loading && clips.length > 0 && (
-        <motion.div 
-          className="grid grid-cols-2 md:grid-cols-4 gap-4"
-          variants={fadeInUp}
-        >
-          <Card variant="elevated" className="overflow-hidden">
-            <CardGradientBackground />
-            <CardContent className="p-4 relative z-10">
-              <StatItem 
-                label="Total Clips"
-                value={clips.length}
-                icon={Film}
-                color="purple"
-                delay={0}
-              />
-            </CardContent>
-          </Card>
-          <Card variant="elevated" className="overflow-hidden">
-            <CardGradientBackground />
-            <CardContent className="p-4 relative z-10">
-              <StatItem 
-                label="Total Views"
-                value={stats.totalViews}
-                icon={Eye}
-                color="cyan"
-                delay={1}
-              />
-            </CardContent>
-          </Card>
-          <Card variant="elevated" className="overflow-hidden">
-            <CardGradientBackground />
-            <CardContent className="p-4 relative z-10">
-              <StatItem 
-                label="Avg Duration"
-                value={stats.avgDuration}
-                icon={Clock}
-                color="orange"
-                suffix="s"
-                delay={2}
-              />
-            </CardContent>
-          </Card>
-          <Card variant="elevated" className="overflow-hidden">
-            <CardGradientBackground />
-            <CardContent className="p-4 relative z-10">
-              <StatItem 
-                label="Top Streamer"
-                value={stats.topStreamer}
-                icon={User}
-                color="green"
-                delay={3}
-              />
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
-
-      {/* Timeline Waveform Visualization */}
-      {isTimelineEnabled && clips.length > 0 && (
-        <motion.div variants={fadeInUp}>
-          <ClipsTimelineWaveform
-            clips={clips}
-            onTimeRangeSelect={handleWaveformSelect}
-            selectedRange={dateRange}
-            className="mb-2"
-          />
-        </motion.div>
-      )}
 
       {/* Controls */}
       <motion.div variants={fadeInUp}>
