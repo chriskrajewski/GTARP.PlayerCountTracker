@@ -23,6 +23,7 @@ import { SiteUpdatesPanel } from '@/components/site-updates/site-updates-panel';
 import { PWABottomDock } from '@/components/pwa-bottom-dock';
 import { usePWAStandalone } from '@/hooks/use-pwa-standalone';
 import { cn } from '@/lib/utils';
+import { useLiveDataStatus } from '@/components/live-data-status-provider';
 
 // Create an instance of the Mixpanel object, your token is already added to this snippet
       mixpanel.init('13440c630224bb2155944bc8de971af7', {
@@ -117,14 +118,6 @@ const GradientOrbs = memo(function GradientOrbs() {
   )
 })
 
-interface LiveDataStatus {
-  isStreaming: boolean;
-  lastFetch: Date | null;
-  loading: boolean;
-  activeServerCount: number;
-  pollingInterval: number;
-}
-
 interface CommonLayoutProps {
   children: React.ReactNode;
   showBackButton?: boolean;
@@ -132,9 +125,9 @@ interface CommonLayoutProps {
   // Optional props for CSV export functionality
   servers?: any[];
   selectedServers?: string[];
-  // Live data status props
+  // Live data status props (optional - will use context if not provided)
   timeRange?: string;
-  liveDataStatus?: LiveDataStatus;
+  liveDataStatus?: any;
 }
 
 // Header button component with consistent styling
@@ -184,12 +177,16 @@ export function CommonLayout({
   servers = [],
   selectedServers = [],
   timeRange = "8h",
-  liveDataStatus
+  liveDataStatus: propLiveDataStatus
 }: CommonLayoutProps) {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showResourceDialog, setShowResourceDialog] = useState(false);
   const [showSiteUpdatesPanel, setShowSiteUpdatesPanel] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // Get live data status from context (fallback if not provided via props)
+  const { liveDataStatus: contextLiveDataStatus } = useLiveDataStatus();
+  const liveDataStatus = propLiveDataStatus || contextLiveDataStatus;
   
   // PWA standalone mode detection
   const { isPWA, isLoading: isPWALoading } = usePWAStandalone();

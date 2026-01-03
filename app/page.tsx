@@ -19,25 +19,10 @@ declare global {
   }
 }
 
-interface LiveDataStatus {
-  isStreaming: boolean;
-  lastFetch: Date | null;
-  loading: boolean;
-  activeServerCount: number;
-  pollingInterval: number;
-}
-
 export default function Home() {
   const [serversData, setServersData] = useState<any[]>([]);
   const [selectedServersData, setSelectedServersData] = useState<string[]>([]);
   const [timeRange, setTimeRange] = useState<string>("8h");
-  const [liveDataStatus, setLiveDataStatus] = useState<LiveDataStatus>({
-    isStreaming: false,
-    lastFetch: null,
-    loading: false,
-    activeServerCount: 0,
-    pollingInterval: 30000
-  });
 
   // Listen for the dashboard data loaded event
   useEffect(() => {
@@ -47,9 +32,6 @@ export default function Home() {
         setSelectedServersData(event.detail.selectedServers || []);
         if (event.detail.timeRange) {
           setTimeRange(event.detail.timeRange);
-        }
-        if (event.detail.liveDataStatus) {
-          setLiveDataStatus(event.detail.liveDataStatus);
         }
       }
     };
@@ -66,7 +48,6 @@ export default function Home() {
       servers={serversData}
       selectedServers={selectedServersData}
       timeRange={timeRange}
-      liveDataStatus={liveDataStatus}
     >
       <div>
         <Suspense fallback={<DashboardSkeleton />}>

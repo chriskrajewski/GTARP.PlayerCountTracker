@@ -13,6 +13,7 @@ import { BotIDProvider } from "@/components/botid-provider"
 import { VisitorTrackingProvider } from "@/components/visitor-tracking-provider"
 import { PWAProvider } from "@/components/pwa-provider"
 import { FeatureFlagProvider } from "@/lib/feature-flags"
+import { LiveDataStatusProvider } from "@/components/live-data-status-provider"
 import mixpanel from "mixpanel-browser";
 
 // Create an instance of the Mixpanel object, your token is already added to this snippet
@@ -211,18 +212,20 @@ export default function RootLayout({
         padding: 0
       }}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} forcedTheme="dark" disableTransitionOnChange>
-          <PWAProvider>
-            <FeatureFlagProvider>
-              <Suspense>
-                <BotIDProvider />
-                <GoogleAnalytics />
-                <VisitorTrackingProvider />
-                {children}
-                <Analytics />
-                <SpeedInsights />
-              </Suspense>
-            </FeatureFlagProvider>
-          </PWAProvider>
+          <LiveDataStatusProvider>
+            <PWAProvider>
+              <FeatureFlagProvider>
+                <Suspense>
+                  <BotIDProvider />
+                  <GoogleAnalytics />
+                  <VisitorTrackingProvider />
+                  {children}
+                  <Analytics />
+                  <SpeedInsights />
+                </Suspense>
+              </FeatureFlagProvider>
+            </PWAProvider>
+          </LiveDataStatusProvider>
         </ThemeProvider>
       </body>
     </html>
