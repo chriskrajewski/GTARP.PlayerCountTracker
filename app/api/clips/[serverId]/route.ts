@@ -5,15 +5,6 @@ import { getAPICache } from '@/lib/api-cache';
 import type { NextRequest } from 'next/server';
 
 /**
- * Twitch clip response from API
- */
-interface TwitchClipResponse {
-  id: string;
-  title: string;
-  thumbnail_url: string;
-}
-
-/**
  * Clip response format
  */
 export interface ClipResponse {
@@ -26,41 +17,6 @@ export interface ClipResponse {
   duration: number;
   created_at: string;
   profile_image_url?: string;
-}
-
-/**
- * Fetch fresh thumbnail URL from Twitch API for a specific clip
- * Avoids expired CDN URLs stored in database
- */
-async function fetchFreshThumbnailUrl(clipId: string): Promise<string | null> {
-  try {
-    const clientId = process.env.TWITCH_CLIENT_ID;
-    const accessToken = process.env.TWITCH_ACCESS_TOKEN;
-
-    if (!clientId || !accessToken) {
-      return null;
-    }
-
-    const response = await fetch(`https://api.twitch.tv/helix/clips?id=${encodeURIComponent(clipId)}`, {
-      headers: {
-        'Client-ID': clientId,
-        'Authorization': `Bearer ${accessToken}`,
-      },
-      signal: AbortSignal.timeout(5000),
-    });
-
-    if (!response.ok) {
-      console.warn(`[Clips API] Failed to fetch fresh thumbnail for clip ${clipId}: ${response.status}`);
-      return null;
-    }
-
-    const data = await response.json();
-    const clip = (data.data as TwitchClipResponse[])?.[0];
-    return clip?.thumbnail_url || null;
-  } catch (error) {
-    console.warn(`[Clips API] Error fetching fresh thumbnail for ${clipId}:`, error);
-    return null;
-  }
 }
 
 /**
@@ -164,54 +120,21 @@ export async function GET(
     }
 
     // Transform database format to response format
+    // Use the original thumbnail_url from Twitch API stored in database
+    // These URLs are served from Twitch's CDN (clips-media-assets2.twitch.tv or static-cdn.jtvnw.net)
     const responseClips: ClipResponse[] = (clips || []).map((clip: any) => ({
       clip_id: clip.clip_id,
       streamer_username: clip.streamer_username,
       title: clip.clip_title,
-      thumbnail_url: clip.thumbnail_url, // Store for fallback
+      thumbnail_url: clip.thumbnail_url,
       embed_url: clip.embed_url,
       view_count: clip.view_count,
       duration: Math.round(clip.duration_seconds),
       created_at: clip.twitch_created_at,
     }));
 
-    // Fetch fresh thumbnail URLs from Twitch API (stored URLs expire over time)
-    // Do this in parallel with 5 second timeout per clip to keep response fast
-    const clipIds = responseClips.map(c => c.clip_id);
-    const freshThumbnails = new Map<string, string>();
-    
-    if (clipIds.length > 0) {
-      const thumbnailPromises = clipIds.map(async (clipId) => {
-        try {
-          const freshUrl = await fetchFreshThumbnailUrl(clipId);
-          if (freshUrl) {
-            freshThumbnails.set(clipId, freshUrl);
-          }
-        } catch (error) {
-          // Silently fail - will fall back to stored URL
-          console.warn(`[Clips API] Failed to fetch fresh thumbnail for ${clipId}`);
-        }
-      });
-
-      try {
-        // Wait for all thumbnail fetches with a global timeout
-        await Promise.race([
-          Promise.all(thumbnailPromises),
-          new Promise<void>((resolve) => setTimeout(resolve, 10000)), // 10 second global timeout
-        ]);
-      } catch (error) {
-        console.warn('[Clips API] Thumbnail fetch timeout, using stored URLs as fallback');
-      }
-    }
-
-    // Use fresh thumbnails where available, fall back to stored URLs
-    const clipsWithThumbnails = responseClips.map(clip => ({
-      ...clip,
-      thumbnail_url: freshThumbnails.get(clip.clip_id) || clip.thumbnail_url,
-    }));
-
     // Fetch profile images from streamer_server_history table
-    const uniqueStreamers = [...new Set(clipsWithThumbnails.map(c => c.streamer_username))];
+    const uniqueStreamers = [...new Set(responseClips.map(c => c.streamer_username))];
     const { data: streamerHistory, error: historyError } = await supabase
       .from('streamer_server_history')
       .select('streamer_username, profile_image_url')
@@ -234,7 +157,7 @@ export async function GET(
     }
 
     // Add profile images to response clips
-    const clipsWithProfiles = clipsWithThumbnails.map(clip => ({
+    const clipsWithProfiles = responseClips.map(clip => ({
       ...clip,
       profile_image_url: profileImages.get(clip.streamer_username),
     }));
@@ -242,7 +165,7 @@ export async function GET(
     // Cache the response
     await cache.set('clips', cacheKey, clipsWithProfiles);
 
-    console.log(`[Clips API] ${serverId} - Fetched ${clipsWithProfiles.length} clips (${streamerFilter ? 'filtered' : 'all'}) with ${profileImages.size} profile images and ${freshThumbnails.size} fresh thumbnails`);
+    console.log(`[Clips API] ${serverId} - Fetched ${clipsWithProfiles.length} clips (${streamerFilter ? 'filtered' : 'all'}) with ${profileImages.size} profile images`);
 
     return NextResponse.json({
       success: true,
