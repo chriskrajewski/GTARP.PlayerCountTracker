@@ -22,14 +22,15 @@ function ClipsLoadingSkeleton() {
 export default async function ClipsPage({
   params,
 }: {
-  params: { serverId: string };
+  params: Promise<{ serverId: string }>;
 }) {
+  const { serverId } = await params;
   const supabase = createServerClient();
 
   const { data: server } = await supabase
     .from('server_xref')
     .select('id, serverName')
-    .eq('id', params.serverId)
+    .eq('id', serverId)
     .single();
 
   if (!server) {
@@ -47,7 +48,7 @@ export default async function ClipsPage({
         </p>
       </div>
       <Suspense fallback={<ClipsLoadingSkeleton />}>
-        <ServerClips serverId={params.serverId} serverName={server.serverName} />
+        <ServerClips serverId={serverId} serverName={server.serverName} />
       </Suspense>
     </div>
   );

@@ -34,7 +34,7 @@ export interface ClipResponse {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { serverId: string } }
+  { params }: { params: Promise<{ serverId: string }> }
 ) {
   try {
     // Apply rate limiting
@@ -43,7 +43,7 @@ export async function GET(
       return rateLimitResponse;
     }
 
-    const serverId = params.serverId;
+    const { serverId } = await params;
     if (!serverId) {
       return NextResponse.json(
         { success: false, error: 'Server ID is required' },
