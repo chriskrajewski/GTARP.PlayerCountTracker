@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStreamSearchConfigMap, type StreamSearchConfig, type SearchType } from '@/lib/stream-config';
 import { getAPICache } from '@/lib/api-cache';
+import { getTwitchGameIds } from '@/lib/twitch-game-ids';
 
 /**
  * Live Twitch Stream Data API
@@ -73,52 +74,6 @@ async function getTwitchToken(): Promise<string | null> {
     console.error('Error getting Twitch token:', error);
     return null;
   }
-}
-
-/**
- * Get game IDs from Twitch by name
- */
-async function getGameIds(clientId: string, token: string, gameNames: string[]): Promise<Map<string, string>> {
-  const gameMap = new Map<string, string>();
-  
-  try {
-    for (const gameName of gameNames) {
-      const response = await fetch(
-        `https://api.twitch.tv/helix/games?name=${encodeURIComponent(gameName)}`,
-        {
-          headers: {
-            'Client-ID': clientId,
-            'Authorization': `Bearer ${token}`
-          },
-          signal: AbortSignal.timeout(10000)
-        }
-      );
-
-      if (!response.ok) {
-        console.warn(`Failed to get game ID for "${gameName}": ${response.status}`);
-        continue;
-      }
-
-      const data = await response.json();
-      const gameId = data.data?.[0]?.id;
-      if (gameId) {
-        gameMap.set(gameName, gameId);
-        console.log(`[LiveTwitch] Got game ID for "${gameName}": ${gameId}`);
-      }
-    }
-  } catch (error) {
-    console.error('Error getting game IDs:', error);
-  }
-
-  return gameMap;
-}
-
-/**
- * Get GTA V game ID from Twitch (legacy, kept for compatibility)
- */
-async function getGTAGameId(clientId: string, token: string): Promise<string | null> {
-  const gameMap = await getGameIds(clientId, token, ['Grand Theft Auto V']);
-  return gameMap.get('Grand Theft Auto V') || null;
 }
 
 /**
@@ -322,7 +277,7 @@ export async function GET(request: NextRequest) {
     
     console.log(`[LiveTwitch] Fetching streams from games: ${gamesToFetch.join(', ')}`);
     
-    const gameIdMap = await getGameIds(clientId, token, gamesToFetch);
+    const gameIdMap = await getTwitchGameIds(clientId, token, gamesToFetch, { bustCache });
     // Dedupe game IDs (in case multiple category names resolve to the same game)
     const gameIds = [...new Set(Array.from(gameIdMap.values()))];
 

@@ -8,6 +8,7 @@ import {
   type KickStreamData
 } from '@/lib/kick-api';
 import { getAPICache } from '@/lib/api-cache';
+import { getTwitchGameIds } from '@/lib/twitch-game-ids';
 
 /**
  * Streams API - Fetches live streams from BOTH Twitch and Kick for a server
@@ -76,10 +77,8 @@ interface TwitchStreamsCachePayload {
 }
 
 const TWITCH_TOKEN_REFRESH_BUFFER_MS = 60 * 1000; // refresh 1 minute before expiration
-const GAME_ID_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 let cachedTwitchToken: { token: string; expiresAt: number } | null = null;
-const cachedGameIds = new Map<string, { id: string; expiresAt: number }>();
 
 function arraysEqual<T>(a: T[], b: T[]): boolean {
   if (a.length !== b.length) return false;
@@ -124,78 +123,6 @@ async function getTwitchToken(): Promise<string> {
     expiresAt: Date.now() + expiresInMs
   };
   return data.access_token;
-}
-
-async function getGTAGameId(clientId: string, token: string): Promise<string> {
-  const response = await fetch(
-    `https://api.twitch.tv/helix/games?name=${encodeURIComponent('Grand Theft Auto V')}`,
-    {
-      headers: {
-        'Client-ID': clientId,
-        'Authorization': `Bearer ${token}`
-      },
-      signal: AbortSignal.timeout(10000)
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error('Failed to get GTA V game ID from Twitch');
-  }
-
-  const data = await response.json();
-  const gameId = data.data?.[0]?.id;
-  
-  if (!gameId) {
-    throw new Error('GTA V game not found on Twitch');
-  }
-  
-  return gameId;
-}
-
-async function getGameIds(clientId: string, token: string, gameNames: string[]): Promise<Map<string, string>> {
-  const gameMap = new Map<string, string>();
-  
-  for (const gameName of gameNames) {
-    const cacheKey = gameName.toLowerCase();
-    const cached = cachedGameIds.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) {
-      gameMap.set(gameName, cached.id);
-      continue;
-    }
-
-    try {
-      const response = await fetch(
-        `https://api.twitch.tv/helix/games?name=${encodeURIComponent(gameName)}`,
-        {
-          headers: {
-            'Client-ID': clientId,
-            'Authorization': `Bearer ${token}`
-          },
-          signal: AbortSignal.timeout(10000)
-        }
-      );
-
-      if (!response.ok) {
-        console.warn(`[Streams API] Failed to get game ID for "${gameName}": ${response.status}`);
-        continue;
-      }
-
-      const data = await response.json();
-      const gameId = data.data?.[0]?.id;
-      if (gameId) {
-        gameMap.set(gameName, gameId);
-        cachedGameIds.set(cacheKey, {
-          id: gameId,
-          expiresAt: Date.now() + GAME_ID_CACHE_TTL_MS
-        });
-        console.log(`[Streams API] Got game ID for "${gameName}": ${gameId}`);
-      }
-    } catch (error) {
-      console.error(`[Streams API] Error getting game ID for "${gameName}":`, error);
-    }
-  }
-
-  return gameMap;
 }
 
 async function fetchStreamsFromGames(
@@ -248,15 +175,6 @@ async function fetchStreamsFromGames(
   }
 
   return streams;
-}
-
-async function fetchGTAVStreams(
-  clientId: string,
-  token: string,
-  gameId: string,
-  maxPages: number = 5
-): Promise<TwitchApiStream[]> {
-  return fetchStreamsFromGames(clientId, token, [gameId], maxPages);
 }
 
 async function fetchUserProfiles(
@@ -591,7 +509,7 @@ export async function GET(
           
           console.log(`[Streams API] ${serverId} - Fetching Twitch streams from games: ${gamesToFetch.join(', ')}`);
           
-          const gameIdMap = await getGameIds(clientId, accessToken, gamesToFetch);
+          const gameIdMap = await getTwitchGameIds(clientId, accessToken, gamesToFetch, { bustCache });
           // Dedupe game IDs (in case multiple category names resolve to the same game)
           const gameIds = [...new Set(Array.from(gameIdMap.values()))];
           
