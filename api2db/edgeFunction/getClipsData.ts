@@ -146,22 +146,33 @@ async function getTwitchUserIdByName(
 
 /**
  * Fetch clips for a broadcaster with pagination
+ * Matches frontend pagination: 20 pages max (up to 2000 clips per streamer)
+ * Fetches clips from the last 7 days, sorted by newest first
  */
 async function fetchClipsForStreamer(
   broadcasterId: string,
   streamerUsername: string,
   clientId: string,
   token: string,
-  maxPages: number = 5
+  maxPages: number = 20
 ): Promise<TwitchClip[]> {
   const clips: TwitchClip[] = [];
   let cursor: string | null = null;
   let pageCount = 0;
 
+  // Calculate time range: last 7 days
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const started_at = sevenDaysAgo.toISOString();
+  const ended_at = now.toISOString();
+
   while (pageCount < maxPages) {
     const params = new URLSearchParams({
       broadcaster_id: broadcasterId,
       first: "100",
+      started_at,
+      ended_at,
+      sort: "time",
     });
     if (cursor) params.set("after", cursor);
 
@@ -237,53 +248,6 @@ async function getStreamSearchConfigMap(): Promise<Map<string, StreamSearchConfi
   return map;
 }
 
-/**
- * Filter clips by stream search config keywords
- */
-function filterClipsByConfig(
-  clips: TwitchClip[],
-  config: StreamSearchConfig[]
-): TwitchClip[] {
-  if (config.length === 0 || clips.length === 0) {
-    return [];
-  }
-
-  const titleKeywords: string[] = [];
-  const categoryKeywords: string[] = [];
-
-  for (const rule of config) {
-    const keyword = (rule.search_keyword || "").trim().toLowerCase();
-    if (!keyword) continue;
-
-    switch (rule.search_type) {
-      case "title":
-        titleKeywords.push(keyword);
-        break;
-      case "category":
-        categoryKeywords.push(keyword);
-        break;
-    }
-  }
-
-  const matched: TwitchClip[] = [];
-
-  for (const clip of clips) {
-    const titleLower = (clip.title || "").toLowerCase();
-
-    let isMatch = false;
-
-    // Match by title keywords
-    if (titleKeywords.length > 0 && titleKeywords.some((k) => titleLower.includes(k))) {
-      isMatch = true;
-    }
-
-    if (isMatch) {
-      matched.push(clip);
-    }
-  }
-
-  return matched;
-}
 
 /**
  * Get all streamers for a server from history table
@@ -438,21 +402,15 @@ serve(async (req) => {
               continue;
             }
 
-            // Filter by config keywords
-            const matchedClips = filterClipsByConfig(clips, config);
-
-            if (matchedClips.length === 0) {
-              console.log(`[Clips ETL] No matching clips for ${streamerUsername} (${clips.length} total)`);
-              continue;
-            }
-
-            console.log(`[Clips ETL] ${streamerUsername}: matched ${matchedClips.length}/${clips.length} clips`);
+            // No title filtering needed - streamer_server_history already validates server relationship
+            console.log(`[Clips ETL] ${streamerUsername}: found ${clips.length} clips (last 7 days)`);
 
             // Convert to database format
-            for (const clip of matchedClips) {
+            for (const clip of clips) {
+              // We already know the streamer username from the loop - no need to extract it
               clipsToInsert.push({
                 clip_id: clip.id,
-                streamer_username: clip.creator_login,
+                streamer_username: streamerUsername.toLowerCase(),
                 clip_title: clip.title,
                 view_count: clip.view_count,
                 duration_seconds: clip.duration,
