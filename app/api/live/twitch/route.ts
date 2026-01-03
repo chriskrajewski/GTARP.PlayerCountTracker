@@ -130,7 +130,7 @@ async function fetchLiveStreamsFromGames(
   gameIds: string[]
 ): Promise<TwitchStream[]> {
   const streams: TwitchStream[] = [];
-  const maxPages = 20; // Increased to capture more streams (up to 2000 per game)
+  const maxPages = 75; // Increased to capture more streams (up to 2000 per game)
   
   for (const gameId of gameIds) {
     let cursor: string | null = null;
@@ -299,28 +299,26 @@ export async function GET(request: NextRequest) {
     const rawConfig = await getStreamSearchConfigMap(serverIds, 'twitch');
     const configByServer = normalizeConfigMap(rawConfig);
 
-    // Collect all unique category keywords from all servers
-    const allCategoryKeywords = new Set<string>();
-    for (const cfg of configByServer.values()) {
-      for (const rule of cfg) {
-        if (rule.search_type === 'category') {
-          allCategoryKeywords.add(rule.search_keyword);
+    // Collect all unique category keywords from all servers (preserve original casing for Twitch API lookups)
+    const categoryKeywordMap = new Map<string, string>(); // lower-case => original keyword
+    for (const cfg of rawConfig.values()) {
+      for (const row of cfg) {
+        if (row.search_type !== 'category') continue;
+        const originalKeyword = (row.search_keyword || '').trim();
+        if (!originalKeyword) continue;
+        const lowerKeyword = originalKeyword.toLowerCase();
+        if (!categoryKeywordMap.has(lowerKeyword)) {
+          categoryKeywordMap.set(lowerKeyword, originalKeyword);
         }
       }
     }
 
-    // Get game IDs for all categories mentioned in config
-    // Always include GTA V as a default, but dedupe with config categories
-    const allCategoryKeywordsLower = new Set(Array.from(allCategoryKeywords).map(k => k.toLowerCase()));
-    const gamesToFetch: string[] = [];
-    
-    // Add GTA V if not already in config (case-insensitive check)
-    if (!allCategoryKeywordsLower.has('grand theft auto v')) {
-      gamesToFetch.push('Grand Theft Auto V');
+    // Always include GTA V as a default (case-insensitive dedupe)
+    if (!categoryKeywordMap.has('grand theft auto v')) {
+      categoryKeywordMap.set('grand theft auto v', 'Grand Theft Auto V');
     }
-    
-    // Add all category keywords from config
-    gamesToFetch.push(...Array.from(allCategoryKeywords));
+
+    const gamesToFetch = Array.from(categoryKeywordMap.values());
     
     console.log(`[LiveTwitch] Fetching streams from games: ${gamesToFetch.join(', ')}`);
     

@@ -3,14 +3,15 @@
 import React, { memo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { 
-  Home, 
-  Video, 
-  History, 
-  MessageSquare, 
+import {
+  Home,
+  Video,
+  History,
+  MessageSquare,
   Heart,
   Download,
-  ClipboardList
+  ClipboardList,
+  Film
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
@@ -186,6 +187,13 @@ export const PWABottomDock = memo(function PWABottomDock({
       accentColor: '#14B8A6'
     },
     {
+      id: 'clips',
+      label: 'Clips',
+      icon: Film,
+      href: '/clips',
+      accentColor: '#53fc18'
+    },
+    {
       id: 'changes',
       label: 'Changes',
       icon: History,
@@ -284,4 +292,3 @@ export const PWABottomDock = memo(function PWABottomDock({
     </nav>
   );
 });
-

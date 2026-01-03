@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo, memo, Suspense } from 'react';
+import { useEffect, useState, useCallback, useMemo, memo, Suspense, useTransition, useDeferredValue } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { CommonLayout } from '@/components/common-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -39,7 +39,12 @@ import {
   Server,
   Sparkles,
   Tv2,
+  Loader2,
+  ChevronDown,
 } from 'lucide-react';
+import { Drawer, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle, DrawerClose } from '@/components/ui/drawer';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CUSTOM KICK ICON
@@ -57,6 +62,7 @@ const KickIcon = ({ className }: { className?: string }) => (
 import { ClipsTimelineWaveform } from '@/components/clips-timeline-waveform';
 import { KickClipPlayer } from '@/components/kick-clip-player';
 import { useFeatureFlag, FEATURE_FLAGS } from '@/lib/feature-flags';
+import { usePWAStandalone, useIsMobileDevice } from '@/hooks/use-pwa-standalone';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // INTERFACES
@@ -91,6 +97,29 @@ interface AllClipsApiResponse {
   servers: ServerInfo[];
   error?: string;
 }
+
+type QuickRangeKey = 'all' | '7d' | '30d';
+
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+const normalizeDate = (date: Date) => {
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized;
+};
+
+const buildRangeFromDays = (days: number): DateRange => {
+  const end = normalizeDate(new Date());
+  const start = new Date(end);
+  start.setDate(start.getDate() - (days - 1));
+  return { from: start, to: end };
+};
+
+const QUICK_RANGE_PRESETS: { key: QuickRangeKey; label: string }[] = [
+  { key: 'all', label: 'All time' },
+  { key: '7d', label: 'Last 7d' },
+  { key: '30d', label: 'Last 30d' },
+];
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ANIMATED BACKGROUND COMPONENTS
@@ -330,12 +359,15 @@ function ClipModal({
   clip,
   isOpen,
   onClose,
+  isCompact,
 }: {
   clip: ClipData | null;
   isOpen: boolean;
   onClose: () => void;
+  isCompact?: boolean;
 }) {
   if (!clip) return null;
+  const compactLayout = Boolean(isCompact);
 
   const hostname =
     typeof window !== 'undefined'
@@ -376,14 +408,18 @@ function ClipModal({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
-        className="max-w-4xl border overflow-hidden p-0"
+        className={cn(
+          "max-w-4xl border overflow-hidden p-0",
+          compactLayout && "w-[calc(100vw-1.5rem)] max-w-none !top-4 !-translate-x-1/2 !left-1/2 rounded-3xl overflow-y-auto max-h-[90vh] pb-6"
+        )}
         style={{ 
           backgroundColor: 'rgba(14, 14, 16, 0.98)',
           borderColor: isKick ? 'rgba(83, 252, 24, 0.2)' : 'rgba(168, 85, 247, 0.2)',
           backdropFilter: 'blur(20px)',
+          paddingBottom: compactLayout ? 'calc(1rem + env(safe-area-inset-bottom, 0px))' : undefined,
         }}
       >
-        <DialogHeader className="p-6 pb-0">
+        <DialogHeader className={cn("p-6 pb-0", compactLayout && "px-4 pt-4")}>
           <div className="flex items-center gap-2">
             {isKick ? (
               <div className="px-2 py-1 rounded text-xs font-medium flex items-center gap-1"
@@ -402,7 +438,7 @@ function ClipModal({
           <DialogTitle className="line-clamp-2 text-white text-lg pr-8">{clip.title}</DialogTitle>
         </DialogHeader>
         
-        <div className="p-6 pt-4 space-y-4">
+        <div className={cn("p-6 pt-4 space-y-4", compactLayout && "px-4")}>
           {/* Video embed or HLS player */}
           <div className="w-full aspect-video rounded-lg overflow-hidden border"
             style={{ borderColor: isKick ? 'rgba(83, 252, 24, 0.2)' : 'rgba(168, 85, 247, 0.2)' }}
@@ -429,7 +465,7 @@ function ClipModal({
           
           {/* Stats grid */}
           <div 
-            className="grid grid-cols-2 md:grid-cols-5 gap-4 p-4 rounded-lg"
+            className="grid grid-cols-2 sm:grid-cols-5 gap-4 p-4 rounded-lg"
             style={{ 
               background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
               borderColor: isKick ? 'rgba(83, 252, 24, 0.15)' : 'rgba(168, 85, 247, 0.15)',
@@ -478,7 +514,7 @@ function ClipModal({
             href={externalUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 border"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 border"
             style={{
               background: isKick 
                 ? 'linear-gradient(135deg, rgba(83, 252, 24, 0.2) 0%, rgba(20, 184, 166, 0.1) 100%)'
@@ -550,10 +586,14 @@ export function PageHeader() {
 // LOADING SKELETON
 // ═══════════════════════════════════════════════════════════════════════════
 
-export function ClipsLoadingSkeleton() {
+interface ClipsLoadingSkeletonProps {
+  isCompact?: boolean;
+}
+
+export function ClipsLoadingSkeleton({ isCompact = false }: ClipsLoadingSkeletonProps = {}) {
   return (
     <motion.div 
-      className="space-y-6"
+      className={cn("space-y-6", isCompact && "pb-24")}
       initial="hidden"
       animate="visible"
       variants={staggerContainer}
@@ -599,6 +639,10 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
   const router = useRouter();
   const searchParams = useSearchParams();
   const isTimelineEnabled = useFeatureFlag(FEATURE_FLAGS.CLIPS_TIMELINE);
+  const { isPWA } = usePWAStandalone();
+  const isMobileDevice = useIsMobileDevice();
+  const isCompactLayout = isPWA || isMobileDevice;
+  const [isPending, startTransition] = useTransition();
 
   const [clips, setClips] = useState<ClipData[]>([]);
   const [servers, setServers] = useState<ServerInfo[]>([]);
@@ -607,7 +651,13 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
   const [selectedClip, setSelectedClip] = useState<ClipData | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const resolvedDefaultServer = defaultServerId || 'all';
+  useEffect(() => {
+    if (!isCompactLayout && mobileFiltersOpen) {
+      setMobileFiltersOpen(false);
+    }
+  }, [isCompactLayout, mobileFiltersOpen]);
 
   // Get initial filters from URL query params
   const initialServer = searchParams.get('server') || resolvedDefaultServer;
@@ -635,6 +685,23 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(getInitialDateRange);
   const [orderBy, setOrderBy] = useState(initialOrderBy);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const getClipExternalUrl = useCallback((clip: ClipData): string => {
+    if (clip.platform === 'kick') {
+      const channelSlug = clip.channel_slug || clip.streamer_username;
+      return `https://kick.com/${channelSlug}?clip=${clip.clip_id}`;
+    }
+    return `https://clips.twitch.tv/${clip.clip_id}`;
+  }, []);
+  const openClipExternally = useCallback((clip: ClipData) => {
+    const targetUrl = getClipExternalUrl(clip);
+    if (typeof window === 'undefined') return;
+    if (isPWA) {
+      window.location.href = targetUrl;
+    } else {
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+    }
+  }, [getClipExternalUrl, isPWA]);
 
   // Fetch clips
   useEffect(() => {
@@ -717,27 +784,33 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
   // Handlers
   const handleServerChange = useCallback(
     (value: string) => {
-      setSelectedServer(value);
-      setSelectedStreamer('all'); // Reset streamer when server changes
-      updateUrlFilters(value, 'all', selectedPlatform, searchQuery, dateRange, orderBy);
+      startTransition(() => {
+        setSelectedServer(value);
+        setSelectedStreamer('all');
+        updateUrlFilters(value, 'all', selectedPlatform, searchQuery, dateRange, orderBy);
+      });
     },
-    [updateUrlFilters, selectedPlatform, searchQuery, dateRange, orderBy]
+    [startTransition, updateUrlFilters, selectedPlatform, searchQuery, dateRange, orderBy]
   );
 
   const handleStreamerChange = useCallback(
     (value: string) => {
-      setSelectedStreamer(value);
-      updateUrlFilters(selectedServer, value, selectedPlatform, searchQuery, dateRange, orderBy);
+      startTransition(() => {
+        setSelectedStreamer(value);
+        updateUrlFilters(selectedServer, value, selectedPlatform, searchQuery, dateRange, orderBy);
+      });
     },
-    [updateUrlFilters, selectedServer, selectedPlatform, searchQuery, dateRange, orderBy]
+    [startTransition, updateUrlFilters, selectedServer, selectedPlatform, searchQuery, dateRange, orderBy]
   );
 
   const handlePlatformChange = useCallback(
     (value: string) => {
-      setSelectedPlatform(value);
-      updateUrlFilters(selectedServer, selectedStreamer, value, searchQuery, dateRange, orderBy);
+      startTransition(() => {
+        setSelectedPlatform(value);
+        updateUrlFilters(selectedServer, selectedStreamer, value, searchQuery, dateRange, orderBy);
+      });
     },
-    [updateUrlFilters, selectedServer, selectedStreamer, searchQuery, dateRange, orderBy]
+    [startTransition, updateUrlFilters, selectedServer, selectedStreamer, searchQuery, dateRange, orderBy]
   );
 
   const handleSearchChange = useCallback(
@@ -750,45 +823,88 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
 
   const handleOrderChange = useCallback(
     (value: string) => {
-      setOrderBy(value);
-      updateUrlFilters(selectedServer, selectedStreamer, selectedPlatform, searchQuery, dateRange, value);
+      startTransition(() => {
+        setOrderBy(value);
+        updateUrlFilters(selectedServer, selectedStreamer, selectedPlatform, searchQuery, dateRange, value);
+      });
     },
-    [updateUrlFilters, selectedServer, selectedStreamer, selectedPlatform, searchQuery, dateRange]
+    [startTransition, updateUrlFilters, selectedServer, selectedStreamer, selectedPlatform, searchQuery, dateRange]
   );
 
   const handleDateRangeChange = useCallback(
     (range: DateRange | undefined) => {
-      setDateRange(range);
-      updateUrlFilters(selectedServer, selectedStreamer, selectedPlatform, searchQuery, range, orderBy);
+      startTransition(() => {
+        setDateRange(range);
+        updateUrlFilters(selectedServer, selectedStreamer, selectedPlatform, searchQuery, range, orderBy);
+      });
     },
-    [updateUrlFilters, selectedServer, selectedStreamer, selectedPlatform, searchQuery, orderBy]
+    [startTransition, updateUrlFilters, selectedServer, selectedStreamer, selectedPlatform, searchQuery, orderBy]
   );
 
   // Handle waveform time range selection
   const handleWaveformSelect = useCallback(
     (startDate: Date, endDate: Date) => {
       const newRange: DateRange = { from: startDate, to: endDate };
-      setDateRange(newRange);
-      setOrderBy('views-desc'); // Switch to views sorting when clicking waveform
-      updateUrlFilters(selectedServer, selectedStreamer, selectedPlatform, searchQuery, newRange, 'views-desc');
+      startTransition(() => {
+        setDateRange(newRange);
+        setOrderBy('views-desc');
+        updateUrlFilters(selectedServer, selectedStreamer, selectedPlatform, searchQuery, newRange, 'views-desc');
+      });
     },
-    [updateUrlFilters, selectedServer, selectedStreamer, selectedPlatform, searchQuery]
+    [startTransition, updateUrlFilters, selectedServer, selectedStreamer, selectedPlatform, searchQuery]
   );
 
+  const handleQuickRangeSelect = useCallback(
+    (preset: QuickRangeKey) => {
+      startTransition(() => {
+        if (preset === 'all') {
+          setDateRange(undefined);
+          updateUrlFilters(selectedServer, selectedStreamer, selectedPlatform, searchQuery, undefined, orderBy);
+          return;
+        }
+        const days = preset === '7d' ? 7 : 30;
+        const newRange = buildRangeFromDays(days);
+        setDateRange(newRange);
+        updateUrlFilters(selectedServer, selectedStreamer, selectedPlatform, searchQuery, newRange, orderBy);
+      });
+    },
+    [startTransition, updateUrlFilters, selectedServer, selectedStreamer, selectedPlatform, searchQuery, orderBy]
+  );
+
+  const activeQuickRange = useMemo<QuickRangeKey | 'custom'>(() => {
+    if (!dateRange?.from && !dateRange?.to) return 'all';
+    if (dateRange?.from && dateRange?.to) {
+      const normalizedStart = normalizeDate(dateRange.from);
+      const normalizedEnd = normalizeDate(dateRange.to);
+      const today = normalizeDate(new Date());
+      const diffDays = Math.round((normalizedEnd.getTime() - normalizedStart.getTime()) / DAY_IN_MS);
+      const endsToday = normalizedEnd.getTime() === today.getTime();
+      if (endsToday && diffDays === 6) return '7d';
+      if (endsToday && diffDays === 29) return '30d';
+    }
+    return 'custom';
+  }, [dateRange]);
+
   const handleClearFilters = useCallback(() => {
-    setSelectedServer(resolvedDefaultServer);
-    setSelectedStreamer('all');
-    setSelectedPlatform('all');
-    setSearchQuery('');
-    setDateRange(undefined);
-    setOrderBy('views-desc');
-    router.push(pagePath, { scroll: false });
-  }, [router, pagePath, resolvedDefaultServer]);
+    startTransition(() => {
+      setSelectedServer(resolvedDefaultServer);
+      setSelectedStreamer('all');
+      setSelectedPlatform('all');
+      setSearchQuery('');
+      setDateRange(undefined);
+      setOrderBy('views-desc');
+      router.push(pagePath, { scroll: false });
+    });
+  }, [startTransition, router, pagePath, resolvedDefaultServer]);
 
   const handleSelectClip = useCallback((clip: ClipData) => {
+    if (isCompactLayout) {
+      openClipExternally(clip);
+      return;
+    }
     setSelectedClip(clip);
     setIsModalOpen(true);
-  }, []);
+  }, [isCompactLayout, openClipExternally]);
 
   const handleCloseModal = useCallback(() => {
     setIsModalOpen(false);
@@ -807,13 +923,13 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
     }
 
     // Filter by search
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
+    const normalizedSearch = deferredSearchQuery.trim().toLowerCase();
+    if (normalizedSearch) {
       filtered = filtered.filter(
         (c) =>
-          c.title.toLowerCase().includes(query) ||
-          c.streamer_username.toLowerCase().includes(query) ||
-          (c.server_name?.toLowerCase().includes(query))
+          c.title.toLowerCase().includes(normalizedSearch) ||
+          c.streamer_username.toLowerCase().includes(normalizedSearch) ||
+          (c.server_name?.toLowerCase().includes(normalizedSearch))
       );
     }
 
@@ -866,12 +982,377 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
     });
 
     return sorted;
-  }, [clips, selectedStreamer, searchQuery, dateRange, orderBy]);
+  }, [clips, selectedStreamer, deferredSearchQuery, dateRange, orderBy]);
 
   const hasActiveFilters = selectedServer !== 'all' || selectedStreamer !== 'all' || selectedPlatform !== 'all' || searchQuery || dateRange?.from || dateRange?.to;
+  const shouldShowTimeline = isTimelineEnabled && clips.length > 0 && !isCompactLayout;
+  const selectedServerLabel = useMemo(() => {
+    if (selectedServer === 'all') return 'All Servers';
+    return servers.find((server) => server.server_id === selectedServer)?.server_name || selectedServer;
+  }, [selectedServer, servers]);
+  const selectedPlatformLabel = selectedPlatform === 'all' ? 'All Platforms' : selectedPlatform === 'twitch' ? 'Twitch' : 'Kick';
+  const selectedStreamerLabel = selectedStreamer === 'all' ? 'All Streamers' : selectedStreamer;
+  const dateRangeLabel = useMemo(() => {
+    if (!dateRange?.from && !dateRange?.to) return 'All Time';
+    const format = (date?: Date) =>
+      date
+        ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        : null;
+    const fromLabel = format(dateRange?.from);
+    const toLabel = format(dateRange?.to);
+    if (fromLabel && toLabel) return `${fromLabel} – ${toLabel}`;
+    return fromLabel || toLabel || 'All Time';
+  }, [dateRange]);
+
+  const SearchField = ({ className = '', showPending = false }: { className?: string; showPending?: boolean }) => (
+    <div className={cn("space-y-1", className)}>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+        <input
+          type="text"
+          placeholder="Search by title, streamer, or server name..."
+          value={searchQuery}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          className="w-full pl-10 pr-10 py-3 rounded-lg text-white placeholder-gray-500 transition-all duration-300 border"
+          style={{
+            background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+            borderColor: 'rgba(168, 85, 247, 0.15)',
+          }}
+        />
+        {searchQuery ? (
+          <button
+            onClick={() => handleSearchChange('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        ) : null}
+      </div>
+      {showPending && (
+        <div className="flex items-center gap-2 text-xs text-gray-500 pl-1">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+          Updating filters...
+        </div>
+      )}
+    </div>
+  );
+
+  const FiltersGrid = () => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* Server Select */}
+      <div className="space-y-2">
+        <label className="text-xs text-gray-400 flex items-center gap-1">
+          <Server className="h-3 w-3 text-cyan-400/70" />
+          Server
+        </label>
+        <Select value={selectedServer} onValueChange={handleServerChange}>
+          <SelectTrigger 
+            className="w-full border text-white"
+            style={{
+              background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+              borderColor: 'rgba(168, 85, 247, 0.15)',
+            }}
+          >
+            <SelectValue placeholder="All Servers" />
+          </SelectTrigger>
+          <SelectContent 
+            style={{
+              background: 'rgba(18, 18, 21, 0.98)',
+              borderColor: 'rgba(168, 85, 247, 0.2)',
+            }}
+          >
+            <SelectItem value="all" className="text-white">
+              All Servers ({servers.length})
+            </SelectItem>
+            {servers.map((server) => (
+              <SelectItem key={server.server_id} value={server.server_id} className="text-white">
+                {server.server_name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Platform Select */}
+      <div className="space-y-2">
+        <label className="text-xs text-gray-400 flex items-center gap-1">
+          <Tv2 className="h-3 w-3 text-purple-400/70" />
+          Platform
+        </label>
+        <Select value={selectedPlatform} onValueChange={handlePlatformChange}>
+          <SelectTrigger 
+            className="w-full border text-white"
+            style={{
+              background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+              borderColor: 'rgba(168, 85, 247, 0.15)',
+            }}
+          >
+            <SelectValue placeholder="All Platforms" />
+          </SelectTrigger>
+          <SelectContent 
+            style={{
+              background: 'rgba(18, 18, 21, 0.98)',
+              borderColor: 'rgba(168, 85, 247, 0.2)',
+            }}
+          >
+            <SelectItem value="all" className="text-white">
+              <div className="flex items-center gap-2">
+                <Tv2 className="h-3 w-3" />
+                All Platforms
+              </div>
+            </SelectItem>
+            <SelectItem value="twitch" className="text-white">
+              <div className="flex items-center gap-2">
+                <Twitch className="h-3 w-3 text-purple-400" />
+                Twitch
+              </div>
+            </SelectItem>
+            <SelectItem value="kick" className="text-white">
+              <div className="flex items-center gap-2">
+                <KickIcon className="h-3 w-3 text-[#53fc18]" />
+                Kick
+              </div>
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Streamer Select */}
+      <div className="space-y-2">
+        <label className="text-xs text-gray-400 flex items-center gap-1">
+          <User className="h-3 w-3 text-purple-400/70" />
+          Streamer
+        </label>
+        <Select value={selectedStreamer} onValueChange={handleStreamerChange}>
+          <SelectTrigger 
+            className="w-full border text-white"
+            style={{
+              background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+              borderColor: 'rgba(168, 85, 247, 0.15)',
+            }}
+          >
+            <SelectValue placeholder="All Streamers" />
+          </SelectTrigger>
+          <SelectContent 
+            style={{
+              background: 'rgba(18, 18, 21, 0.98)',
+              borderColor: 'rgba(168, 85, 247, 0.2)',
+            }}
+          >
+            <SelectItem value="all" className="text-white">
+              All Streamers ({streamers.length})
+            </SelectItem>
+            {streamers.map((streamer) => (
+              <SelectItem key={streamer} value={streamer} className="text-white">
+                {streamer}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Sort By */}
+      <div className="space-y-2">
+        <label className="text-xs text-gray-400 flex items-center gap-1">
+          <ArrowUpDown className="h-3 w-3 text-cyan-400/70" />
+          Sort By
+        </label>
+        <Select value={orderBy} onValueChange={handleOrderChange}>
+          <SelectTrigger 
+            className="w-full border text-white"
+            style={{
+              background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+              borderColor: 'rgba(168, 85, 247, 0.15)',
+            }}
+          >
+            <SelectValue placeholder="Sort clips" />
+          </SelectTrigger>
+          <SelectContent
+            style={{
+              background: 'rgba(18, 18, 21, 0.98)',
+              borderColor: 'rgba(168, 85, 247, 0.2)',
+            }}
+          >
+            <SelectItem value="views-desc" className="text-white">Views (High → Low)</SelectItem>
+            <SelectItem value="views-asc" className="text-white">Views (Low → High)</SelectItem>
+            <SelectItem value="date-newest" className="text-white">Date (Newest)</SelectItem>
+            <SelectItem value="date-oldest" className="text-white">Date (Oldest)</SelectItem>
+            <SelectItem value="duration-longest" className="text-white">Duration (Longest)</SelectItem>
+            <SelectItem value="duration-shortest" className="text-white">Duration (Shortest)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Date Range Picker */}
+      <div className="space-y-2">
+        <label className="text-xs text-gray-400 flex items-center gap-1">
+          <Calendar className="h-3 w-3 text-cyan-400/70" />
+          Date Range
+        </label>
+        <DateRangePicker
+          dateRange={dateRange}
+          onDateRangeChange={handleDateRangeChange}
+          placeholder="All Time"
+        />
+      </div>
+    </div>
+  );
+
+  const MobileSelectField = ({
+    label,
+    value,
+    onChange,
+    options,
+  }: {
+    label: string;
+    value: string;
+    onChange: (val: string) => void;
+    options: { value: string; label: string }[];
+  }) => (
+    <div className="space-y-1">
+      <label className="text-xs text-gray-400">{label}</label>
+      <div className="relative">
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full appearance-none rounded-lg border bg-gradient-to-r from-black/60 to-zinc-900/60 text-white text-sm px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-purple-500/40 border-white/10"
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
+      </div>
+    </div>
+  );
+
+  const MobileFilterControls = () => (
+    <div className="space-y-4">
+      <MobileSelectField
+        label="Server"
+        value={selectedServer}
+        onChange={handleServerChange}
+        options={[
+          { value: 'all', label: `All Servers (${servers.length})` },
+          ...servers.map((server) => ({
+            value: server.server_id,
+            label: server.server_name,
+          })),
+        ]}
+      />
+      <MobileSelectField
+        label="Platform"
+        value={selectedPlatform}
+        onChange={handlePlatformChange}
+        options={[
+          { value: 'all', label: 'All Platforms' },
+          { value: 'twitch', label: 'Twitch' },
+          { value: 'kick', label: 'Kick' },
+        ]}
+      />
+      <MobileSelectField
+        label="Streamer"
+        value={selectedStreamer}
+        onChange={handleStreamerChange}
+        options={[
+          { value: 'all', label: `All Streamers (${streamers.length})` },
+          ...streamers.map((streamer) => ({
+            value: streamer,
+            label: streamer,
+          })),
+        ]}
+      />
+      <MobileSelectField
+        label="Sort By"
+        value={orderBy}
+        onChange={handleOrderChange}
+        options={[
+          { value: 'views-desc', label: 'Views (High → Low)' },
+          { value: 'views-asc', label: 'Views (Low → High)' },
+          { value: 'date-newest', label: 'Date (Newest)' },
+          { value: 'date-oldest', label: 'Date (Oldest)' },
+          { value: 'duration-longest', label: 'Duration (Longest)' },
+          { value: 'duration-shortest', label: 'Duration (Shortest)' },
+        ]}
+      />
+      <div className="space-y-2">
+        <p className="text-xs text-gray-400 flex items-center gap-1">
+          <Calendar className="h-3 w-3 text-cyan-400/70" />
+          Quick Date Range
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          {QUICK_RANGE_PRESETS.map((preset) => (
+            <button
+              key={preset.key}
+              type="button"
+              onClick={() => handleQuickRangeSelect(preset.key)}
+              className={cn(
+                "px-3 py-2 rounded-lg text-xs font-medium border transition-colors",
+                activeQuickRange === preset.key
+                  ? "border-purple-500/60 text-white bg-purple-500/20"
+                  : "border-white/10 text-gray-300 hover:border-white/30"
+              )}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+        {activeQuickRange === 'custom' && (
+          <p className="text-xs text-gray-500">
+            Custom range selected
+          </p>
+        )}
+      </div>
+    </div>
+  );
+
+  const ActiveFiltersBanner = () => (
+    <AnimatePresence>
+      {hasActiveFilters && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          className="flex items-center justify-between p-3 rounded-lg"
+          style={{
+            background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(20, 184, 166, 0.05) 100%)',
+            borderColor: 'rgba(168, 85, 247, 0.2)',
+            border: '1px solid rgba(168, 85, 247, 0.2)',
+          }}
+        >
+          <p className="text-sm text-gray-300">
+            Showing <span className="text-purple-400 font-semibold">{filteredClips.length}</span> of{' '}
+            <span className="text-cyan-400 font-semibold">{clips.length}</span> clips
+          </p>
+          <motion.button
+            onClick={handleClearFilters}
+            className="px-3 py-1.5 text-xs rounded-lg font-medium border transition-colors"
+            style={{
+              background: 'rgba(24, 24, 27, 0.9)',
+              borderColor: 'rgba(168, 85, 247, 0.3)',
+              color: '#c4b5fd',
+            }}
+            whileHover={{ scale: 1.02, borderColor: 'rgba(168, 85, 247, 0.5)' }}
+            whileTap={{ scale: 0.98 }}
+          >
+            Clear Filters
+          </motion.button>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  const FilterControls = ({ showBanner = true }: { showBanner?: boolean }) => (
+    <>
+      <FiltersGrid />
+      {showBanner && <ActiveFiltersBanner />}
+    </>
+  );
 
   if (loading) {
-    return <ClipsLoadingSkeleton />;
+    return <ClipsLoadingSkeleton isCompact={isCompactLayout} />;
   }
 
   return (
@@ -882,7 +1363,7 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
       variants={staggerContainer}
     >
       {/* Timeline Waveform Visualization */}
-      {isTimelineEnabled && clips.length > 0 && (
+      {shouldShowTimeline && (
         <motion.div variants={fadeInUp}>
           <ClipsTimelineWaveform
             clips={clips}
@@ -895,254 +1376,135 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
 
       {/* Controls */}
       <motion.div variants={fadeInUp}>
-        <Card variant="elevated" className="overflow-hidden">
-          <CardGradientBackground />
-          <CardHeader className="pb-4 relative z-10">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Filter className="h-5 w-5 text-purple-400" />
-                <span className="bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-                  Filters & Search
-                </span>
-              </CardTitle>
-              
-              <motion.button
-                onClick={() => setShowFilters(!showFilters)}
-                className="sm:hidden inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border"
-                style={{
-                  background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
-                  borderColor: 'rgba(168, 85, 247, 0.2)',
-                }}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <SlidersHorizontal className="h-4 w-4 text-purple-400" />
-                <span className="text-white">{showFilters ? 'Hide' : 'Show'} Filters</span>
-              </motion.button>
-            </div>
-          </CardHeader>
-          
-          <CardContent className={`relative z-10 space-y-4 ${!showFilters && 'hidden sm:block'}`}>
-            {/* Search Bar */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-              <input
-                type="text"
-                placeholder="Search by title, streamer, or server name..."
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                className="w-full pl-10 pr-10 py-3 rounded-lg text-white placeholder-gray-500 transition-all duration-300 border"
-                style={{
-                  background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
-                  borderColor: 'rgba(168, 85, 247, 0.15)',
-                }}
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => handleSearchChange('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300 transition-colors"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-
-            {/* Filter Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-              {/* Server Select */}
-              <div className="space-y-2">
-                <label className="text-xs text-gray-400 flex items-center gap-1">
-                  <Server className="h-3 w-3 text-cyan-400/70" />
-                  Server
-                </label>
-                <Select value={selectedServer} onValueChange={handleServerChange}>
-                  <SelectTrigger 
-                    className="w-full border text-white"
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
-                      borderColor: 'rgba(168, 85, 247, 0.15)',
-                    }}
-                  >
-                    <SelectValue placeholder="All Servers" />
-                  </SelectTrigger>
-                  <SelectContent 
-                    style={{
-                      background: 'rgba(18, 18, 21, 0.98)',
-                      borderColor: 'rgba(168, 85, 247, 0.2)',
-                    }}
-                  >
-                    <SelectItem value="all" className="text-white">
-                      All Servers ({servers.length})
-                    </SelectItem>
-                    {servers.map((server) => (
-                      <SelectItem key={server.server_id} value={server.server_id} className="text-white">
-                        {server.server_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Platform Select */}
-              <div className="space-y-2">
-                <label className="text-xs text-gray-400 flex items-center gap-1">
-                  <Tv2 className="h-3 w-3 text-purple-400/70" />
-                  Platform
-                </label>
-                <Select value={selectedPlatform} onValueChange={handlePlatformChange}>
-                  <SelectTrigger 
-                    className="w-full border text-white"
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
-                      borderColor: 'rgba(168, 85, 247, 0.15)',
-                    }}
-                  >
-                    <SelectValue placeholder="All Platforms" />
-                  </SelectTrigger>
-                  <SelectContent 
-                    style={{
-                      background: 'rgba(18, 18, 21, 0.98)',
-                      borderColor: 'rgba(168, 85, 247, 0.2)',
-                    }}
-                  >
-                    <SelectItem value="all" className="text-white">
-                      <div className="flex items-center gap-2">
-                        <Tv2 className="h-3 w-3" />
-                        All Platforms
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="twitch" className="text-white">
-                      <div className="flex items-center gap-2">
-                        <Twitch className="h-3 w-3 text-purple-400" />
-                        Twitch
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="kick" className="text-white">
-                      <div className="flex items-center gap-2">
-                        <KickIcon className="h-3 w-3 text-[#53fc18]" />
-                        Kick
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Streamer Select */}
-              <div className="space-y-2">
-                <label className="text-xs text-gray-400 flex items-center gap-1">
-                  <User className="h-3 w-3 text-purple-400/70" />
-                  Streamer
-                </label>
-                <Select value={selectedStreamer} onValueChange={handleStreamerChange}>
-                  <SelectTrigger 
-                    className="w-full border text-white"
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
-                      borderColor: 'rgba(168, 85, 247, 0.15)',
-                    }}
-                  >
-                    <SelectValue placeholder="All Streamers" />
-                  </SelectTrigger>
-                  <SelectContent 
-                    style={{
-                      background: 'rgba(18, 18, 21, 0.98)',
-                      borderColor: 'rgba(168, 85, 247, 0.2)',
-                    }}
-                  >
-                    <SelectItem value="all" className="text-white">
-                      All Streamers ({streamers.length})
-                    </SelectItem>
-                    {streamers.map((streamer) => (
-                      <SelectItem key={streamer} value={streamer} className="text-white">
-                        {streamer}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Sort By */}
-              <div className="space-y-2">
-                <label className="text-xs text-gray-400 flex items-center gap-1">
-                  <ArrowUpDown className="h-3 w-3 text-cyan-400/70" />
-                  Sort By
-                </label>
-                <Select value={orderBy} onValueChange={handleOrderChange}>
-                  <SelectTrigger 
-                    className="w-full border text-white"
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
-                      borderColor: 'rgba(168, 85, 247, 0.15)',
-                    }}
-                  >
-                    <SelectValue placeholder="Sort clips" />
-                  </SelectTrigger>
-                  <SelectContent
-                    style={{
-                      background: 'rgba(18, 18, 21, 0.98)',
-                      borderColor: 'rgba(168, 85, 247, 0.2)',
-                    }}
-                  >
-                    <SelectItem value="views-desc" className="text-white">Views (High → Low)</SelectItem>
-                    <SelectItem value="views-asc" className="text-white">Views (Low → High)</SelectItem>
-                    <SelectItem value="date-newest" className="text-white">Date (Newest)</SelectItem>
-                    <SelectItem value="date-oldest" className="text-white">Date (Oldest)</SelectItem>
-                    <SelectItem value="duration-longest" className="text-white">Duration (Longest)</SelectItem>
-                    <SelectItem value="duration-shortest" className="text-white">Duration (Shortest)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Date Range Picker */}
-              <div className="space-y-2">
-                <label className="text-xs text-gray-400 flex items-center gap-1">
-                  <Calendar className="h-3 w-3 text-cyan-400/70" />
-                  Date Range
-                </label>
-                <DateRangePicker
-                  dateRange={dateRange}
-                  onDateRangeChange={handleDateRangeChange}
-                  placeholder="All Time"
-                />
-              </div>
-            </div>
-
-            {/* Active filters indicator */}
-            <AnimatePresence>
-              {hasActiveFilters && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="flex items-center justify-between p-3 rounded-lg"
+        {isCompactLayout ? (
+          <Drawer
+            shouldScaleBackground={false}
+            open={mobileFiltersOpen}
+            onOpenChange={setMobileFiltersOpen}
+          >
+            <Card variant="elevated" className="overflow-hidden">
+              <CardGradientBackground />
+              <CardContent className="relative z-10 space-y-4">
+                <SearchField />
+                <motion.button
+                  type="button"
+                  onClick={() => setMobileFiltersOpen(true)}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-medium border"
                   style={{
-                    background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(20, 184, 166, 0.05) 100%)',
+                    background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
                     borderColor: 'rgba(168, 85, 247, 0.2)',
-                    border: '1px solid rgba(168, 85, 247, 0.2)',
+                  }}
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                >
+                  <SlidersHorizontal className="h-4 w-4 text-purple-400" />
+                  <span className="text-white">Filters &amp; Sort</span>
+                </motion.button>
+                <div className="grid grid-cols-2 gap-3 text-xs text-gray-400">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500">Server</p>
+                    <p className="text-sm text-white">{selectedServerLabel}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500">Platform</p>
+                    <p className="text-sm text-white">{selectedPlatformLabel}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500">Streamer</p>
+                    <p className="text-sm text-white truncate">{selectedStreamerLabel}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500">Date Range</p>
+                    <p className="text-sm text-white">{dateRangeLabel}</p>
+                  </div>
+                </div>
+                <div className="text-sm text-gray-300">
+                  {hasActiveFilters ? (
+                    <>
+                      Showing <span className="text-purple-400 font-semibold">{filteredClips.length}</span> of{' '}
+                      <span className="text-cyan-400 font-semibold">{clips.length}</span> clips
+                    </>
+                  ) : (
+                    <>All {clips.length} clips are visible</>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+            <DrawerContent className="bg-[#08080b] text-white border-t border-purple-500/30">
+              <DrawerHeader className="text-left relative">
+                <DrawerTitle className="text-lg text-white flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-purple-400" />
+                  Filters &amp; Search
+                </DrawerTitle>
+                <DrawerClose asChild>
+                  <button
+                    type="button"
+                    className="absolute right-4 top-4 rounded-full p-2 text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                    aria-label="Close filters"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </DrawerClose>
+              </DrawerHeader>
+              <div className="px-4 pb-4 space-y-4 max-h-[70vh] overflow-y-auto">
+                <SearchField showPending={isPending} />
+                <MobileFilterControls />
+                <ActiveFiltersBanner />
+              </div>
+              <DrawerFooter className="px-4 pb-6">
+                <Button
+                  variant="outline"
+                  className="border-purple-500/40 text-purple-200 hover:bg-purple-500/10"
+                  onClick={() => {
+                    handleClearFilters();
+                    setMobileFiltersOpen(false);
                   }}
                 >
-                  <p className="text-sm text-gray-300">
-                    Showing <span className="text-purple-400 font-semibold">{filteredClips.length}</span> of{' '}
-                    <span className="text-cyan-400 font-semibold">{clips.length}</span> clips
-                  </p>
-                  <motion.button
-                    onClick={handleClearFilters}
-                    className="px-3 py-1.5 text-xs rounded-lg font-medium border transition-colors"
-                    style={{
-                      background: 'rgba(24, 24, 27, 0.9)',
-                      borderColor: 'rgba(168, 85, 247, 0.3)',
-                      color: '#c4b5fd',
-                    }}
-                    whileHover={{ scale: 1.02, borderColor: 'rgba(168, 85, 247, 0.5)' }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    Clear Filters
-                  </motion.button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </CardContent>
-        </Card>
+                  Clear All Filters
+                </Button>
+                <Button
+                  className="bg-gradient-to-r from-purple-500 to-cyan-500 text-black font-semibold hover:opacity-90"
+                  onClick={() => setMobileFiltersOpen(false)}
+                >
+                  Done
+                </Button>
+              </DrawerFooter>
+            </DrawerContent>
+          </Drawer>
+        ) : (
+          <Card variant="elevated" className="overflow-hidden">
+            <CardGradientBackground />
+            <CardHeader className="pb-4 relative z-10">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Filter className="h-5 w-5 text-purple-400" />
+                  <span className="bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
+                    Filters &amp; Search
+                  </span>
+                </CardTitle>
+                
+                <motion.button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="sm:hidden inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+                    borderColor: 'rgba(168, 85, 247, 0.2)',
+                  }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <SlidersHorizontal className="h-4 w-4 text-purple-400" />
+                  <span className="text-white">{showFilters ? 'Hide' : 'Show'} Filters</span>
+                </motion.button>
+              </div>
+            </CardHeader>
+            
+            <CardContent className={cn("relative z-10 space-y-4", !showFilters && "hidden sm:block")}>
+              <SearchField />
+              <FilterControls />
+            </CardContent>
+          </Card>
+        )}
       </motion.div>
 
       {/* Content */}
@@ -1255,6 +1617,7 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
         clip={selectedClip}
         isOpen={isModalOpen}
         onClose={handleCloseModal}
+        isCompact={isCompactLayout}
       />
     </motion.div>
   );
