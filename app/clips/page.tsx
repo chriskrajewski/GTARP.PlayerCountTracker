@@ -46,13 +46,12 @@ import {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const KickIcon = ({ className }: { className?: string }) => (
-  <svg 
-    viewBox="0 0 24 24" 
-    fill="currentColor" 
+  <svg
+    viewBox="0 0 24 24"
+    fill="currentColor"
     className={className}
-    xmlns="http://www.w3.org/2000/svg"
   >
-    <path d="M6 3h4v5h2V6h2V3h4v3h-2v2h-2v2h2v2h2v2h-2v2h-2v-2h-2v5h-2v-5H8v-2H6v-2h2v-2H6V3z"/>
+    <path d="M1.333 0v24h21.334V0H1.333zm17.12 18.347h-4.32l-3.093-4.907-1.653 1.76v3.147H5.654V5.653h3.733v5.28l4.48-5.28h4.427l-4.907 5.44 4.986 7.254h.08z"/>
   </svg>
 );
 import { ClipsTimelineWaveform } from '@/components/clips-timeline-waveform';

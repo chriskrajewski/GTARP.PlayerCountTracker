@@ -34,7 +34,9 @@ import {
   Twitch,
   ExternalLink,
   Filter,
-  ArrowUpDown
+  ArrowUpDown,
+  Tv2,
+  Sparkles
 } from 'lucide-react';
 import { KickClipPlayer } from '@/components/kick-clip-player';
 
@@ -74,13 +76,12 @@ interface ServerClipsProps {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const KickIcon = ({ className }: { className?: string }) => (
-  <svg 
-    viewBox="0 0 24 24" 
-    fill="currentColor" 
+  <svg
+    viewBox="0 0 24 24"
+    fill="currentColor"
     className={className}
-    xmlns="http://www.w3.org/2000/svg"
   >
-    <path d="M6 3h4v5h2V6h2V3h4v3h-2v2h-2v2h2v2h2v2h-2v2h-2v-2h-2v5h-2v-5H8v-2H6v-2h2v-2H6V3z"/>
+    <path d="M1.333 0v24h21.334V0H1.333zm17.12 18.347h-4.32l-3.093-4.907-1.653 1.76v3.147H5.654V5.653h3.733v5.28l4.48-5.28h4.427l-4.907 5.44 4.986 7.254h.08z"/>
   </svg>
 );
 
@@ -555,6 +556,52 @@ const FilterButton = memo(function FilterButton({
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// PAGE HEADER COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+function PageHeader({ serverName }: { serverName: string }) {
+  return (
+    <motion.div 
+      className="mb-6"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <div className="flex items-center gap-3 mb-2">
+        <motion.div
+          className="w-10 h-10 rounded-lg flex items-center justify-center"
+          style={{
+            background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(83, 252, 24, 0.1) 100%)',
+            border: '1px solid rgba(168, 85, 247, 0.3)',
+          }}
+          whileHover={{ scale: 1.05, rotate: 5 }}
+        >
+          <Film className="h-5 w-5 text-purple-400" />
+        </motion.div>
+        <div>
+          <p className="text-gray-400 text-sm flex items-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
+            {serverName} Clips
+            <span className="flex items-center gap-1 ml-1">
+              <Twitch className="h-3 w-3 text-purple-400" />
+              <span className="text-gray-500">+</span>
+              <KickIcon className="h-3 w-3 text-[#53fc18]" />
+            </span>
+          </p>
+        </div>
+      </div>
+      <p className="text-gray-400 leading-relaxed">
+        Browse and watch clips from{' '}
+        <span className="text-purple-300 font-medium">Twitch</span> and{' '}
+        <span className="text-[#53fc18] font-medium">Kick</span> streamers on{' '}
+        <span className="text-cyan-300 font-medium">{serverName}</span>.
+        Discover highlights, funny moments, and epic roleplay from the community.
+      </p>
+    </motion.div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MAIN SERVER CLIPS COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -574,6 +621,7 @@ export function ServerClips({
 
   // Get initial filters from URL query params
   const initialStreamer = searchParams.get('streamer') || 'all';
+  const initialPlatform = searchParams.get('platform') || 'all';
   const initialSearchQuery = searchParams.get('search') || '';
   const initialStartDate = searchParams.get('startDate') || '';
   const initialEndDate = searchParams.get('endDate') || '';
@@ -591,6 +639,7 @@ export function ServerClips({
   };
 
   const [selectedStreamer, setSelectedStreamer] = useState(initialStreamer);
+  const [selectedPlatform, setSelectedPlatform] = useState(initialPlatform);
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(getInitialDateRange);
   const [orderBy, setOrderBy] = useState(initialOrderBy);
@@ -609,6 +658,10 @@ export function ServerClips({
 
         if (selectedStreamer && selectedStreamer !== 'all') {
           url.searchParams.set('streamer', selectedStreamer);
+        }
+
+        if (selectedPlatform && selectedPlatform !== 'all') {
+          url.searchParams.set('platform', selectedPlatform);
         }
 
         const response = await fetch(url.toString());
@@ -634,7 +687,7 @@ export function ServerClips({
     };
 
     fetchClips();
-  }, [serverId, selectedStreamer]);
+  }, [serverId, selectedStreamer, selectedPlatform]);
 
   // Get unique streamers
   const streamers = useMemo(() => {
@@ -668,9 +721,10 @@ export function ServerClips({
 
   // URL filter update
   const updateUrlFilters = useCallback(
-    (streamer: string, search: string, range: DateRange | undefined, order: string) => {
+    (streamer: string, platform: string, search: string, range: DateRange | undefined, order: string) => {
       const params = new URLSearchParams();
       if (streamer !== 'all') params.set('streamer', streamer);
+      if (platform !== 'all') params.set('platform', platform);
       if (search) params.set('search', search);
       if (range?.from) params.set('startDate', formatDateForUrl(range.from));
       if (range?.to) params.set('endDate', formatDateForUrl(range.to));
@@ -684,37 +738,46 @@ export function ServerClips({
   const handleStreamerChange = useCallback(
     (value: string) => {
       setSelectedStreamer(value);
-      updateUrlFilters(value, searchQuery, dateRange, orderBy);
+      updateUrlFilters(value, selectedPlatform, searchQuery, dateRange, orderBy);
     },
-    [updateUrlFilters, searchQuery, dateRange, orderBy]
+    [updateUrlFilters, selectedPlatform, searchQuery, dateRange, orderBy]
+  );
+
+  const handlePlatformChange = useCallback(
+    (value: string) => {
+      setSelectedPlatform(value);
+      updateUrlFilters(selectedStreamer, value, searchQuery, dateRange, orderBy);
+    },
+    [updateUrlFilters, selectedStreamer, searchQuery, dateRange, orderBy]
   );
 
   const handleSearchChange = useCallback(
     (query: string) => {
       setSearchQuery(query);
-      updateUrlFilters(selectedStreamer, query, dateRange, orderBy);
+      updateUrlFilters(selectedStreamer, selectedPlatform, query, dateRange, orderBy);
     },
-    [updateUrlFilters, selectedStreamer, dateRange, orderBy]
+    [updateUrlFilters, selectedStreamer, selectedPlatform, dateRange, orderBy]
   );
 
   const handleOrderChange = useCallback(
     (value: string) => {
       setOrderBy(value);
-      updateUrlFilters(selectedStreamer, searchQuery, dateRange, value);
+      updateUrlFilters(selectedStreamer, selectedPlatform, searchQuery, dateRange, value);
     },
-    [updateUrlFilters, selectedStreamer, searchQuery, dateRange]
+    [updateUrlFilters, selectedStreamer, selectedPlatform, searchQuery, dateRange]
   );
 
   const handleDateRangeChange = useCallback(
     (range: DateRange | undefined) => {
       setDateRange(range);
-      updateUrlFilters(selectedStreamer, searchQuery, range, orderBy);
+      updateUrlFilters(selectedStreamer, selectedPlatform, searchQuery, range, orderBy);
     },
-    [updateUrlFilters, selectedStreamer, searchQuery, orderBy]
+    [updateUrlFilters, selectedStreamer, selectedPlatform, searchQuery, orderBy]
   );
 
   const handleClearFilters = useCallback(() => {
     setSelectedStreamer('all');
+    setSelectedPlatform('all');
     setSearchQuery('');
     setDateRange(undefined);
     setOrderBy('date-newest');
@@ -828,7 +891,7 @@ export function ServerClips({
     return sorted;
   }, [clips, selectedStreamer, searchQuery, dateRange, orderBy]);
 
-  const hasActiveFilters = selectedStreamer !== 'all' || searchQuery || dateRange?.from || dateRange?.to;
+  const hasActiveFilters = selectedStreamer !== 'all' || selectedPlatform !== 'all' || searchQuery || dateRange?.from || dateRange?.to;
 
   return (
     <motion.div 
@@ -837,6 +900,9 @@ export function ServerClips({
       animate="visible"
       variants={staggerContainer}
     >
+      {/* Page Header */}
+      <PageHeader serverName={serverName} />
+
       {/* Controls */}
       <motion.div variants={fadeInUp}>
         <Card variant="elevated" className="overflow-hidden">
@@ -892,7 +958,51 @@ export function ServerClips({
             </div>
 
             {/* Filter Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Platform Select */}
+              <div className="space-y-2">
+                <label className="text-xs text-gray-400 flex items-center gap-1">
+                  <Tv2 className="h-3 w-3 text-purple-400/70" />
+                  Platform
+                </label>
+                <Select value={selectedPlatform} onValueChange={handlePlatformChange}>
+                  <SelectTrigger 
+                    className="w-full border text-white"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+                      borderColor: 'rgba(168, 85, 247, 0.15)',
+                    }}
+                  >
+                    <SelectValue placeholder="All Platforms" />
+                  </SelectTrigger>
+                  <SelectContent 
+                    style={{
+                      background: 'rgba(18, 18, 21, 0.98)',
+                      borderColor: 'rgba(168, 85, 247, 0.2)',
+                    }}
+                  >
+                    <SelectItem value="all" className="text-white">
+                      <div className="flex items-center gap-2">
+                        <Tv2 className="h-3 w-3" />
+                        All Platforms
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="twitch" className="text-white">
+                      <div className="flex items-center gap-2">
+                        <Twitch className="h-3 w-3 text-purple-400" />
+                        Twitch
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="kick" className="text-white">
+                      <div className="flex items-center gap-2">
+                        <KickIcon className="h-3 w-3 text-[#53fc18]" />
+                        Kick
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Streamer Select */}
               <div className="space-y-2">
                 <label className="text-xs text-gray-400 flex items-center gap-1">
