@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getServerName } from '@/lib/data';
 import { getStreamSearchConfigByPlatform, type StreamSearchConfig } from '@/lib/stream-config';
 import {
@@ -7,6 +7,7 @@ import {
   isKickApiConfigured,
   type KickStreamData
 } from '@/lib/kick-api';
+import { getAPICache } from '@/lib/api-cache';
 
 /**
  * Streams API - Fetches live streams from BOTH Twitch and Kick for a server
@@ -35,6 +36,12 @@ export interface UnifiedStream {
   tags: string[];
   profile_image_url?: string;
   platform: 'twitch' | 'kick';
+}
+
+interface StreamsCachePayload {
+  serverId: string;
+  lastUpdated: string;
+  streams: UnifiedStream[];
 }
 
 interface TwitchUser {
@@ -154,7 +161,7 @@ async function fetchStreamsFromGames(
   clientId: string,
   token: string,
   gameIds: string[],
-  maxPages: number = 20
+  maxPages: number = 75
 ): Promise<TwitchApiStream[]> {
   const streams: TwitchApiStream[] = [];
 
@@ -450,7 +457,7 @@ async function fetchKickStreams(
 // ============================================
 
 export async function GET(
-  request: Request,
+  request: NextRequest,
   context: { params: Promise<{ serverId: string }> }
 ) {
   try {
@@ -462,6 +469,29 @@ export async function GET(
         { error: 'Server ID is required' },
         { status: 400 }
       );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const bustCache = searchParams.get('bustCache') === 'true';
+
+    const cache = getAPICache();
+    const cacheKey = serverId;
+
+    if (!bustCache) {
+      try {
+        const cached = await cache.get<StreamsCachePayload>('server_streams', cacheKey);
+        if (cached?.streams) {
+          console.log(`[Streams API] ${serverId} - Returning cached server streams (${cached.streams.length})`);
+          return NextResponse.json(cached.streams, {
+            headers: {
+              'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+              'X-Cache': 'HIT'
+            }
+          });
+        }
+      } catch (error) {
+        console.warn(`[Streams API] Cache lookup failed for ${serverId}:`, error);
+      }
     }
 
     const serverName = await getServerName(serverId);
@@ -477,7 +507,12 @@ export async function GET(
 
     if (!hasTwitchConfig && !hasKickConfig) {
       console.log(`[Streams API] No config found for server ${serverId} (${serverName})`);
-      return NextResponse.json([]);
+      return NextResponse.json([], {
+        headers: {
+          'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+          'X-Cache': 'SKIP'
+        }
+      });
     }
 
     const allStreams: UnifiedStream[] = [];
@@ -605,7 +640,24 @@ export async function GET(
     const kickCount = allStreams.filter(s => s.platform === 'kick').length;
     console.log(`[Streams API] ${serverId} (${serverName}): Total ${allStreams.length} streams (Twitch: ${twitchCount}, Kick: ${kickCount})`);
 
-    return NextResponse.json(allStreams);
+    const cachePayload: StreamsCachePayload = {
+      serverId,
+      lastUpdated: new Date().toISOString(),
+      streams: allStreams
+    };
+
+    try {
+      await cache.set('server_streams', cacheKey, cachePayload);
+    } catch (error) {
+      console.warn(`[Streams API] Failed to cache data for ${serverId}:`, error);
+    }
+
+    return NextResponse.json(allStreams, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+        'X-Cache': 'MISS'
+      }
+    });
   } catch (error) {
     console.error('[Streams API] Error:', error);
     return NextResponse.json(
