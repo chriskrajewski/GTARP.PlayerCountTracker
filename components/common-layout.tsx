@@ -669,7 +669,11 @@ export function CommonLayout({
       {/* FOOTER - Made with love attribution                                  */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       <motion.footer
-        className="relative z-10 py-4 text-center"
+        className={cn(
+          "relative z-10 py-4 text-center",
+          showPWADock && "pb-20" // Extra padding when PWA dock is visible
+        )}
+        style={showPWADock ? { paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' } : undefined}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.5, duration: 0.5 }}
