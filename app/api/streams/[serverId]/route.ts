@@ -69,11 +69,36 @@ interface TwitchApiStream {
   is_mature: boolean;
 }
 
+interface TwitchStreamsCachePayload {
+  gameIds: string[];
+  lastUpdated: string;
+  streams: TwitchApiStream[];
+}
+
+const TWITCH_TOKEN_REFRESH_BUFFER_MS = 60 * 1000; // refresh 1 minute before expiration
+const GAME_ID_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+let cachedTwitchToken: { token: string; expiresAt: number } | null = null;
+const cachedGameIds = new Map<string, { id: string; expiresAt: number }>();
+
+function arraysEqual<T>(a: T[], b: T[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 // ============================================
 // TWITCH API FUNCTIONS
 // ============================================
 
 async function getTwitchToken(): Promise<string> {
+  const now = Date.now();
+  if (cachedTwitchToken && cachedTwitchToken.expiresAt - TWITCH_TOKEN_REFRESH_BUFFER_MS > now) {
+    return cachedTwitchToken.token;
+  }
+
   const clientId = process.env.TWITCH_CLIENT_ID;
   const clientSecret = process.env.TWITCH_CLIENT_SECRET;
   
@@ -93,6 +118,11 @@ async function getTwitchToken(): Promise<string> {
   }
   
   const data = await response.json();
+  const expiresInMs = Number(data.expires_in || 0) * 1000;
+  cachedTwitchToken = {
+    token: data.access_token,
+    expiresAt: Date.now() + expiresInMs
+  };
   return data.access_token;
 }
 
@@ -126,6 +156,13 @@ async function getGameIds(clientId: string, token: string, gameNames: string[]):
   const gameMap = new Map<string, string>();
   
   for (const gameName of gameNames) {
+    const cacheKey = gameName.toLowerCase();
+    const cached = cachedGameIds.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      gameMap.set(gameName, cached.id);
+      continue;
+    }
+
     try {
       const response = await fetch(
         `https://api.twitch.tv/helix/games?name=${encodeURIComponent(gameName)}`,
@@ -147,6 +184,10 @@ async function getGameIds(clientId: string, token: string, gameNames: string[]):
       const gameId = data.data?.[0]?.id;
       if (gameId) {
         gameMap.set(gameName, gameId);
+        cachedGameIds.set(cacheKey, {
+          id: gameId,
+          expiresAt: Date.now() + GAME_ID_CACHE_TTL_MS
+        });
         console.log(`[Streams API] Got game ID for "${gameName}": ${gameId}`);
       }
     } catch (error) {
@@ -557,7 +598,36 @@ export async function GET(
           if (gameIds.length === 0) {
             console.warn(`[Streams API] ${serverId} - No game IDs found for Twitch`);
           } else {
-            const rawStreams = await fetchStreamsFromGames(clientId, accessToken, gameIds);
+            const sortedGameIds = [...gameIds].sort();
+            const upstreamCacheKey = sortedGameIds.join(',');
+            let rawStreams: TwitchApiStream[] | null = null;
+
+            if (!bustCache) {
+              try {
+                const cachedStreams = await cache.get<TwitchStreamsCachePayload>('twitch_game_streams', upstreamCacheKey);
+                if (cachedStreams && arraysEqual(cachedStreams.gameIds, sortedGameIds)) {
+                  rawStreams = cachedStreams.streams;
+                  console.log(`[Streams API] Twitch upstream cache HIT for ${serverId} (${sortedGameIds.join(', ')})`);
+                }
+              } catch (error) {
+                console.warn('[Streams API] Twitch upstream cache lookup failed:', error);
+              }
+            }
+
+            if (!rawStreams) {
+              rawStreams = await fetchStreamsFromGames(clientId, accessToken, gameIds);
+              try {
+                await cache.set('twitch_game_streams', upstreamCacheKey, {
+                  gameIds: sortedGameIds,
+                  lastUpdated: new Date().toISOString(),
+                  streams: rawStreams
+                });
+              } catch (error) {
+                console.warn('[Streams API] Failed to cache Twitch upstream data:', error);
+              }
+              console.log(`[Streams API] Twitch upstream cache MISS for ${serverId} (${sortedGameIds.join(', ')})`);
+            }
+
             console.log(`[Streams API] ${serverId} - Fetched ${rawStreams.length} total Twitch streams from ${gameIds.length} games`);
             
             const matchedStreams = filterTwitchStreamsByConfig(rawStreams, twitchConfig);
