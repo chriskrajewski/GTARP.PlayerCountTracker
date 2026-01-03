@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect, memo } from 'react';
-import { ArrowLeft, Download, ClipboardList, MessageSquare, Menu, X, Heart, Bot, Video, History, Sparkles } from 'lucide-react';
+import { ArrowLeft, Download, ClipboardList, MessageSquare, Menu, X, Heart, Bot, Video, History, Sparkles, Film } from 'lucide-react';
 import FeedbackForm from '@/components/feedback-form';
 import { CSVExport } from '@/components/csv-export';
 import ServerResourceChanges from '@/components/server-resource-changes';
@@ -203,6 +203,7 @@ export function CommonLayout({
   const isServerChangesEnabled = useFeatureFlag(FEATURE_FLAGS.SERVER_CHANGES);
   const isCsvExportEnabled = useFeatureFlag(FEATURE_FLAGS.CSV_EXPORT);
   const isMultiStreamEnabled = useFeatureFlag(FEATURE_FLAGS.MULTI_STREAM);
+  const isClipsPageEnabled = useFeatureFlag(FEATURE_FLAGS.CLIPS_PAGE);
   
   useEffect(() => {
     const checkMobile = () => setIsMobileView(window.innerWidth < 640);
@@ -437,6 +438,15 @@ export function CommonLayout({
             </motion.div>
           )}
 
+          {isClipsPageEnabled && (
+            <motion.div variants={fadeInUp}>
+              <HeaderButton href="/clips">
+                <Film className="h-3.5 w-3.5" />
+                Clips
+              </HeaderButton>
+            </motion.div>
+          )}
+
           <motion.div variants={fadeInUp}>
             <TooltipProvider>
               <Tooltip>
@@ -562,6 +572,19 @@ export function CommonLayout({
                     >
                       <Video className="h-4 w-4 text-cyan-400" />
                       Multi Stream
+                    </Link>
+                  </MobileMenuItem>
+                )}
+
+                {isClipsPageEnabled && (
+                  <MobileMenuItem>
+                    <Link 
+                      href="/clips" 
+                      className="flex w-full items-center gap-2 px-4 py-2.5 bg-[#18181b]/80 text-white rounded-lg border border-[#26262c] hover:border-purple-500/30 transition-all text-sm font-medium backdrop-blur-sm"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <Film className="h-4 w-4 text-purple-400" />
+                      Clips
                     </Link>
                   </MobileMenuItem>
                 )}
