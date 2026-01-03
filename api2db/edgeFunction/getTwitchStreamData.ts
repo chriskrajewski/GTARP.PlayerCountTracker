@@ -237,7 +237,10 @@ async function getStreamSearchConfigMap(platform: 'twitch' | 'kick'): Promise<Ma
 
 /**
  * Filter Twitch streams by server configuration
- * Matches main site implementation: app/api/streams/[serverId]/route.ts
+ * Matches main site implementation: app/api/live/twitch/route.ts
+ * Uses AND logic between search types (all specified types must match)
+ * Uses OR logic within each search type (any keyword in that type can match)
+ * Supports # prefix for exclude keywords (e.g., #nopixel excludes streams with "nopixel" in title)
  */
 function filterTwitchStreamsByConfig(
   streams: TwitchApiStream[],
@@ -247,23 +250,42 @@ function filterTwitchStreamsByConfig(
     return [];
   }
 
-  const titleKeywords: string[] = [];
-  const categoryKeywords: string[] = [];
-  const tagKeywords: string[] = [];
+  const titleInclude: string[] = [];
+  const titleExclude: string[] = [];
+  const categoryInclude: string[] = [];
+  const categoryExclude: string[] = [];
+  const tagInclude: string[] = [];
+  const tagExclude: string[] = [];
 
   for (const rule of config) {
     const keyword = (rule.search_keyword || "").trim().toLowerCase();
     if (!keyword) continue;
 
+    // Check if this is an exclude keyword (starts with #)
+    const isExclude = keyword.startsWith("#") && keyword.length > 1;
+    const cleanKeyword = isExclude ? keyword.slice(1) : keyword;
+
     switch (rule.search_type) {
       case "title":
-        titleKeywords.push(keyword);
+        if (isExclude) {
+          titleExclude.push(cleanKeyword);
+        } else {
+          titleInclude.push(cleanKeyword);
+        }
         break;
       case "category":
-        categoryKeywords.push(keyword);
+        if (isExclude) {
+          categoryExclude.push(cleanKeyword);
+        } else {
+          categoryInclude.push(cleanKeyword);
+        }
         break;
       case "tag":
-        tagKeywords.push(keyword);
+        if (isExclude) {
+          tagExclude.push(cleanKeyword);
+        } else {
+          tagInclude.push(cleanKeyword);
+        }
         break;
     }
   }
@@ -276,21 +298,35 @@ function filterTwitchStreamsByConfig(
     const gameLower = (stream.game_name || "").toLowerCase();
     const tagsLower = (stream.tags || []).map((t) => (t || "").toLowerCase());
 
-    let isMatch = false;
-
-    if (titleKeywords.length > 0 && titleKeywords.some((k) => titleLower.includes(k))) {
-      isMatch = true;
+    // Title matching: include must match (if any), exclude must not match
+    let titleMatch = true;
+    if (titleInclude.length > 0) {
+      titleMatch = titleInclude.some((k) => titleLower.includes(k));
+    }
+    if (titleMatch && titleExclude.length > 0) {
+      titleMatch = !titleExclude.some((k) => titleLower.includes(k));
     }
 
-    if (!isMatch && categoryKeywords.length > 0 && categoryKeywords.some((k) => gameLower === k)) {
-      isMatch = true;
+    // Category matching (exact match)
+    let categoryMatch = true;
+    if (categoryInclude.length > 0) {
+      categoryMatch = categoryInclude.some((k) => gameLower === k);
+    }
+    if (categoryMatch && categoryExclude.length > 0) {
+      categoryMatch = !categoryExclude.some((k) => gameLower === k);
     }
 
-    if (!isMatch && tagKeywords.length > 0 && tagKeywords.some((k) => tagsLower.includes(k))) {
-      isMatch = true;
+    // Tag matching (exact match)
+    let tagMatch = true;
+    if (tagInclude.length > 0) {
+      tagMatch = tagInclude.some((k) => tagsLower.includes(k));
+    }
+    if (tagMatch && tagExclude.length > 0) {
+      tagMatch = !tagExclude.some((k) => tagsLower.includes(k));
     }
 
-    if (!isMatch) continue;
+    // ALL specified search types must match (AND logic between types)
+    if (!titleMatch || !categoryMatch || !tagMatch) continue;
 
     // Dedupe by streamer name
     const key = (stream.user_name || "").toLowerCase();
@@ -527,7 +563,8 @@ async function getKickTopStreams(limit: number = 100): Promise<KickStreamData[]>
 
 /**
  * Partition keywords into include and exclude lists
- * Matches main site implementation: app/api/streams/[serverId]/route.ts
+ * Matches main site implementation: app/api/live/twitch/route.ts
+ * Supports # prefix for exclude keywords (e.g., #nopixel excludes streams with "nopixel" in title)
  */
 function partitionKeywords(keywords: string[]): { include: string[]; exclude: string[] } {
   const include: string[] = [];
@@ -535,7 +572,7 @@ function partitionKeywords(keywords: string[]): { include: string[]; exclude: st
   for (const raw of keywords) {
     const k = (raw || "").trim().toLowerCase();
     if (!k) continue;
-    if (k.startsWith("!") && k.length > 1) exclude.push(k.slice(1));
+    if (k.startsWith("#") && k.length > 1) exclude.push(k.slice(1));
     else include.push(k);
   }
   return { include, exclude };
@@ -543,7 +580,10 @@ function partitionKeywords(keywords: string[]): { include: string[]; exclude: st
 
 /**
  * Fetch Kick streams for a server based on configuration
- * Matches main site implementation: app/api/streams/[serverId]/route.ts
+ * Matches main site implementation: app/api/live/kick/route.ts
+ * Uses AND logic between search types (all specified types must match)
+ * Uses OR logic within each search type (any keyword in that type can match)
+ * Supports # prefix for exclude keywords (e.g., #nopixel excludes streams with "nopixel" in title)
  */
 async function fetchKickStreams(
   serverId: string,
@@ -553,18 +593,43 @@ async function fetchKickStreams(
     return [];
   }
 
-  const categoryRules = config.filter((c) => c.search_type === "category");
-  const titleRules = config.filter((c) => c.search_type === "title");
+  const titleInclude: string[] = [];
+  const titleExclude: string[] = [];
+  const categoryInclude: string[] = [];
+  const categoryExclude: string[] = [];
 
-  // Build candidate pool from categories or top streams
+  for (const rule of config) {
+    const keyword = (rule.search_keyword || "").trim().toLowerCase();
+    if (!keyword) continue;
+
+    // Check if this is an exclude keyword (starts with #)
+    const isExclude = keyword.startsWith("#") && keyword.length > 1;
+    const cleanKeyword = isExclude ? keyword.slice(1) : keyword;
+
+    switch (rule.search_type) {
+      case "title":
+        if (isExclude) {
+          titleExclude.push(cleanKeyword);
+        } else {
+          titleInclude.push(cleanKeyword);
+        }
+        break;
+      case "category":
+        if (isExclude) {
+          categoryExclude.push(cleanKeyword);
+        } else {
+          categoryInclude.push(cleanKeyword);
+        }
+        break;
+    }
+  }
+
+  // Build candidate pool from categories
   let poolStreams: KickStreamData[] = [];
-  if (categoryRules.length) {
+  if (categoryInclude.length > 0) {
     const poolSeen = new Set<string>();
-    for (const rule of categoryRules) {
-      const keyword = (rule.search_keyword || "").trim().toLowerCase();
-      if (!keyword) continue;
-
-      const candidates = await getKickStreamsByCategoryQuery(keyword, 100);
+    for (const categoryKeyword of categoryInclude) {
+      const candidates = await getKickStreamsByCategoryQuery(categoryKeyword, 100);
       for (const s of candidates) {
         const key = (s.channel_slug || s.user_name || "").toLowerCase();
         if (!key || poolSeen.has(key)) continue;
@@ -573,24 +638,38 @@ async function fetchKickStreams(
       }
     }
   } else {
+    // If no category include keywords, fetch top streams
     poolStreams = await getKickTopStreams(100);
   }
 
-  const { include, exclude } = partitionKeywords(titleRules.map((r) => r.search_keyword));
-
-  // If no include keywords, can't filter reliably
-  if (include.length === 0) {
-    return [];
-  }
-
-  // Filter by title keywords
+  // Filter by title keywords (if any title rules exist)
   const seen = new Set<string>();
   const matched: KickStreamData[] = [];
 
   for (const s of poolStreams) {
     const title = (s.title || "").toLowerCase();
-    if (!include.some((k) => title.includes(k))) continue;
-    if (exclude.length && exclude.some((k) => title.includes(k))) continue;
+    const category = (s.category_name || "").toLowerCase();
+
+    // Title matching: include must match (if any), exclude must not match
+    let titleMatch = true;
+    if (titleInclude.length > 0) {
+      titleMatch = titleInclude.some((k) => title.includes(k));
+    }
+    if (titleMatch && titleExclude.length > 0) {
+      titleMatch = !titleExclude.some((k) => title.includes(k));
+    }
+
+    // Category matching (exact match)
+    let categoryMatch = true;
+    if (categoryInclude.length > 0) {
+      categoryMatch = categoryInclude.some((k) => category === k);
+    }
+    if (categoryMatch && categoryExclude.length > 0) {
+      categoryMatch = !categoryExclude.some((k) => category === k);
+    }
+
+    // ALL specified search types must match (AND logic between types)
+    if (!titleMatch || !categoryMatch) continue;
 
     const key = (s.channel_slug || s.user_name || "").toLowerCase();
     if (!key || seen.has(key)) continue;
