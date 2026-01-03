@@ -145,6 +145,81 @@ async function getTwitchUserIdByName(
 }
 
 /**
+ * Refresh thumbnail URLs for existing clips that may have expired
+ * Twitch thumbnail URLs expire after ~30 days, so we need to periodically refresh them
+ */
+async function refreshExpiredClipThumbnails(
+  clientId: string,
+  token: string
+): Promise<number> {
+  try {
+    // Find clips with old/potentially expired thumbnails (older than 25 days)
+    const twentyFiveDaysAgo = new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString();
+    
+    const { data: oldClips, error: fetchError } = await supabase
+      .from('twitch_clips')
+      .select('clip_id, streamer_username')
+      .lt('twitch_created_at', twentyFiveDaysAgo)
+      .eq('is_valid', true)
+      .limit(50); // Limit to 50 per run to avoid rate limits
+
+    if (fetchError || !oldClips) {
+      console.warn('[Clips ETL] Failed to fetch old clips for thumbnail refresh:', fetchError);
+      return 0;
+    }
+
+    if (oldClips.length === 0) {
+      console.log('[Clips ETL] No old clips found needing thumbnail refresh');
+      return 0;
+    }
+
+    console.log(`[Clips ETL] Refreshing thumbnails for ${oldClips.length} old clips...`);
+
+    // Fetch fresh clip data from Twitch to get updated thumbnails
+    let refreshed = 0;
+    for (const clip of oldClips) {
+      try {
+        const response = await fetch(
+          `https://api.twitch.tv/helix/clips?id=${encodeURIComponent(clip.clip_id)}`,
+          {
+            headers: {
+              'Client-ID': clientId,
+              'Authorization': `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!response.ok) continue;
+
+        const data = await response.json();
+        const freshClip = data.data?.[0];
+
+        if (freshClip?.thumbnail_url) {
+          // Update the thumbnail URL in database
+          const { error: updateError } = await supabase
+            .from('twitch_clips')
+            .update({ thumbnail_url: freshClip.thumbnail_url })
+            .eq('clip_id', clip.clip_id);
+
+          if (!updateError) {
+            refreshed++;
+          }
+        }
+      } catch (error) {
+        console.warn(`[Clips ETL] Failed to refresh thumbnail for clip ${clip.clip_id}:`, error);
+        continue;
+      }
+    }
+
+    console.log(`[Clips ETL] Successfully refreshed ${refreshed} clip thumbnails`);
+    return refreshed;
+  } catch (error) {
+    console.error('[Clips ETL] Error refreshing thumbnails:', error);
+    return 0;
+  }
+}
+
+/**
  * Fetch clips for a broadcaster with pagination
  * Matches frontend pagination: 20 pages max (up to 2000 clips per streamer)
  * Fetches clips from the last 7 days, sorted by newest first
@@ -437,7 +512,11 @@ serve(async (req) => {
       }
     }
 
-    const summary = `Fetched ${totalClipsFetched} total clips, inserted ${totalClipsInserted} new clips`;
+    // Refresh expired thumbnails (Twitch thumbnails expire after ~30 days)
+    console.log("[Clips ETL] Starting thumbnail refresh for expired clips...");
+    const thumbnailsRefreshed = await refreshExpiredClipThumbnails(TWITCH_CLIENT_ID, token);
+    
+    const summary = `Fetched ${totalClipsFetched} total clips, inserted ${totalClipsInserted} new clips, refreshed ${thumbnailsRefreshed} expired thumbnails`;
     results.push(summary);
 
     return new Response(results.join("\n"), {
