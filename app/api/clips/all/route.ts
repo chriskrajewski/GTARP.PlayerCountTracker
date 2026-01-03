@@ -5,7 +5,12 @@ import { getAPICache } from '@/lib/api-cache';
 import type { NextRequest } from 'next/server';
 
 /**
- * Clip response format with server information
+ * Platform type for clips
+ */
+export type ClipPlatform = 'twitch' | 'kick';
+
+/**
+ * Clip response format with server information and platform
  */
 export interface AllClipsResponse {
   clip_id: string;
@@ -19,6 +24,8 @@ export interface AllClipsResponse {
   profile_image_url?: string;
   server_id: string;
   server_name?: string;
+  platform: ClipPlatform;
+  channel_slug?: string; // For Kick clips
 }
 
 /**
@@ -30,9 +37,9 @@ export interface ServerInfo {
 }
 
 /**
- * Database clip record format
+ * Database Twitch clip record format
  */
-interface ClipDatabaseRecord {
+interface TwitchClipDatabaseRecord {
   clip_id: string;
   streamer_username: string;
   clip_title: string;
@@ -45,13 +52,31 @@ interface ClipDatabaseRecord {
 }
 
 /**
+ * Database Kick clip record format
+ */
+interface KickClipDatabaseRecord {
+  clip_id: string;
+  streamer_username: string;
+  clip_title: string;
+  thumbnail_url: string;
+  clip_url: string;
+  view_count: number;
+  duration_seconds: number;
+  kick_created_at: string;
+  serverId: string;
+  channel_slug: string;
+  category_name: string | null;
+}
+
+/**
  * GET /api/clips/all
  * 
- * Fetches Twitch clips from ALL servers with optional filtering.
+ * Fetches clips from BOTH Twitch and Kick from ALL servers with optional filtering.
  * 
  * Query parameters:
  * - server: (optional) Filter clips by specific server ID
  * - streamer: (optional) Filter clips by specific streamer username
+ * - platform: (optional) Filter by platform: 'twitch', 'kick', or 'all' (default)
  * - limit: (optional) Maximum number of clips to return (default: 100, max: 500)
  * 
  * Response:
@@ -73,17 +98,18 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const serverFilter = url.searchParams.get('server')?.trim() || null;
     const streamerFilter = url.searchParams.get('streamer')?.toLowerCase().trim() || null;
+    const platformFilter = url.searchParams.get('platform')?.toLowerCase().trim() as ClipPlatform | 'all' | null || 'all';
     const limitParam = url.searchParams.get('limit');
     const limit = Math.min(parseInt(limitParam || '100', 10), 500);
 
     // Generate cache key
-    const cacheKey = `clips:all:${serverFilter || 'all'}:${streamerFilter || 'all'}:${limit}`;
+    const cacheKey = `clips:all:${serverFilter || 'all'}:${streamerFilter || 'all'}:${platformFilter}:${limit}`;
 
     // Try to get from cache
     const cache = getAPICache();
     const cached = await cache.get<{ clips: AllClipsResponse[]; servers: ServerInfo[] }>('clips', cacheKey);
     if (cached) {
-      console.log(`[All Clips API] Cache hit (server: ${serverFilter || 'all'}, streamer: ${streamerFilter || 'all'})`);
+      console.log(`[All Clips API] Cache hit (server: ${serverFilter || 'all'}, platform: ${platformFilter})`);
       return NextResponse.json({
         success: true,
         data: cached.clips,
@@ -100,19 +126,30 @@ export async function GET(request: NextRequest) {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Fetch all servers that have clips
-    const { data: serversWithClips, error: serversError } = await supabase
-      .from('twitch_clips')
-      .select('serverId')
-      .eq('is_valid', true);
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FETCH SERVERS WITH CLIPS FROM BOTH PLATFORMS
+    // ═══════════════════════════════════════════════════════════════════════════
+    const serverIdSet = new Set<string>();
 
-    if (serversError) {
-      console.error('[All Clips API] Error fetching servers with clips:', serversError);
-      throw new Error('Failed to fetch servers');
+    // Fetch Twitch servers
+    if (platformFilter === 'all' || platformFilter === 'twitch') {
+      const { data: twitchServers } = await supabase
+        .from('twitch_clips')
+        .select('serverId')
+        .eq('is_valid', true);
+      (twitchServers || []).forEach((c: { serverId: string }) => serverIdSet.add(c.serverId));
     }
 
-    // Get unique server IDs
-    const uniqueServerIds = [...new Set((serversWithClips || []).map((c: { serverId: string }) => c.serverId))];
+    // Fetch Kick servers
+    if (platformFilter === 'all' || platformFilter === 'kick') {
+      const { data: kickServers } = await supabase
+        .from('kick_clips')
+        .select('serverId')
+        .eq('is_valid', true);
+      (kickServers || []).forEach((c: { serverId: string }) => serverIdSet.add(c.serverId));
+    }
+
+    const uniqueServerIds = Array.from(serverIdSet);
 
     // Fetch server names for all servers with clips
     const { data: serverNames, error: serverNamesError } = await supabase
@@ -136,86 +173,140 @@ export async function GET(request: NextRequest) {
       server_name: serverNameMap.get(id) || `Server ${id}`,
     })).sort((a, b) => a.server_name.localeCompare(b.server_name));
 
-    // Fetch clips from database
-    let query = supabase
-      .from('twitch_clips')
-      .select('clip_id, streamer_username, clip_title, thumbnail_url, embed_url, view_count, duration_seconds, twitch_created_at, serverId')
-      .eq('is_valid', true)
-      .order('view_count', { ascending: false })
-      .limit(limit);
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FETCH CLIPS FROM BOTH PLATFORMS
+    // ═══════════════════════════════════════════════════════════════════════════
+    const responseClips: AllClipsResponse[] = [];
 
-    // Apply server filter if provided
-    if (serverFilter) {
-      query = query.eq('serverId', serverFilter);
+    // Fetch Twitch clips
+    if (platformFilter === 'all' || platformFilter === 'twitch') {
+      let twitchQuery = supabase
+        .from('twitch_clips')
+        .select('clip_id, streamer_username, clip_title, thumbnail_url, embed_url, view_count, duration_seconds, twitch_created_at, serverId')
+        .eq('is_valid', true)
+        .order('view_count', { ascending: false })
+        .limit(limit);
+
+      if (serverFilter) {
+        twitchQuery = twitchQuery.eq('serverId', serverFilter);
+      }
+      if (streamerFilter) {
+        twitchQuery = twitchQuery.eq('streamer_username', streamerFilter);
+      }
+
+      const { data: twitchClips, error: twitchError } = await twitchQuery;
+
+      if (twitchError) {
+        console.error('[All Clips API] Twitch database error:', twitchError);
+      } else {
+        (twitchClips || []).forEach((clip: TwitchClipDatabaseRecord) => {
+          responseClips.push({
+            clip_id: clip.clip_id,
+            streamer_username: clip.streamer_username,
+            title: clip.clip_title,
+            thumbnail_url: clip.thumbnail_url,
+            embed_url: clip.embed_url,
+            view_count: clip.view_count,
+            duration: Math.round(clip.duration_seconds),
+            created_at: clip.twitch_created_at,
+            server_id: clip.serverId,
+            server_name: serverNameMap.get(clip.serverId) || `Server ${clip.serverId}`,
+            platform: 'twitch',
+          });
+        });
+      }
     }
 
-    // Apply streamer filter if provided
-    if (streamerFilter) {
-      query = query.eq('streamer_username', streamerFilter);
+    // Fetch Kick clips
+    if (platformFilter === 'all' || platformFilter === 'kick') {
+      let kickQuery = supabase
+        .from('kick_clips')
+        .select('clip_id, streamer_username, clip_title, thumbnail_url, clip_url, view_count, duration_seconds, kick_created_at, serverId, channel_slug')
+        .eq('is_valid', true)
+        .order('view_count', { ascending: false })
+        .limit(limit);
+
+      if (serverFilter) {
+        kickQuery = kickQuery.eq('serverId', serverFilter);
+      }
+      if (streamerFilter) {
+        kickQuery = kickQuery.eq('streamer_username', streamerFilter);
+      }
+
+      const { data: kickClips, error: kickError } = await kickQuery;
+
+      if (kickError) {
+        console.error('[All Clips API] Kick database error:', kickError);
+      } else {
+        (kickClips || []).forEach((clip: KickClipDatabaseRecord) => {
+          responseClips.push({
+            clip_id: clip.clip_id,
+            streamer_username: clip.streamer_username,
+            title: clip.clip_title,
+            thumbnail_url: clip.thumbnail_url,
+            embed_url: clip.clip_url, // Using clip_url as embed_url for Kick
+            view_count: clip.view_count,
+            duration: Math.round(clip.duration_seconds),
+            created_at: clip.kick_created_at,
+            server_id: clip.serverId,
+            server_name: serverNameMap.get(clip.serverId) || `Server ${clip.serverId}`,
+            platform: 'kick',
+            channel_slug: clip.channel_slug,
+          });
+        });
+      }
     }
 
-    const { data: clips, error } = await query;
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SORT BY VIEW COUNT AND LIMIT
+    // ═══════════════════════════════════════════════════════════════════════════
+    responseClips.sort((a, b) => b.view_count - a.view_count);
+    const limitedClips = responseClips.slice(0, limit);
 
-    if (error) {
-      console.error('[All Clips API] Database error:', error);
-      return NextResponse.json(
-        { success: false, error: 'Failed to fetch clips' },
-        { status: 500 }
-      );
-    }
-
-    // Transform database format to response format
-    const responseClips: AllClipsResponse[] = (clips || []).map((clip: ClipDatabaseRecord) => ({
-      clip_id: clip.clip_id,
-      streamer_username: clip.streamer_username,
-      title: clip.clip_title,
-      thumbnail_url: clip.thumbnail_url,
-      embed_url: clip.embed_url,
-      view_count: clip.view_count,
-      duration: Math.round(clip.duration_seconds),
-      created_at: clip.twitch_created_at,
-      server_id: clip.serverId,
-      server_name: serverNameMap.get(clip.serverId) || `Server ${clip.serverId}`,
-    }));
-
-    // Fetch profile images from streamer_server_history table
-    // Get unique streamer usernames from clips
-    const uniqueStreamers = [...new Set(responseClips.map(c => c.streamer_username.toLowerCase()))];
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FETCH PROFILE IMAGES
+    // ═══════════════════════════════════════════════════════════════════════════
+    const uniqueStreamers = [...new Set(limitedClips.map(c => c.streamer_username.toLowerCase()))];
     
     if (uniqueStreamers.length > 0) {
+      // Fetch profile images for both platforms
       const { data: streamerHistory, error: historyError } = await supabase
         .from('streamer_server_history')
-        .select('streamer_username, profile_image_url')
-        .eq('platform', 'twitch');
+        .select('streamer_username, profile_image_url, platform');
 
       if (historyError) {
         console.warn('[All Clips API] Failed to fetch streamer history:', historyError);
       }
 
       // Build profile image map using lowercase keys for case-insensitive lookup
+      // Key format: "platform:username" for platform-specific lookup
       const profileImages = new Map<string, string>();
       if (streamerHistory) {
         for (const record of streamerHistory) {
           if (record.profile_image_url) {
-            profileImages.set(record.streamer_username.toLowerCase(), record.profile_image_url);
+            const key = `${record.platform}:${record.streamer_username.toLowerCase()}`;
+            profileImages.set(key, record.profile_image_url);
           }
         }
       }
 
       // Add profile images to response clips
-      responseClips.forEach((clip: AllClipsResponse) => {
-        clip.profile_image_url = profileImages.get(clip.streamer_username.toLowerCase());
+      limitedClips.forEach((clip: AllClipsResponse) => {
+        const key = `${clip.platform}:${clip.streamer_username.toLowerCase()}`;
+        clip.profile_image_url = profileImages.get(key);
       });
     }
 
     // Cache the response
-    await cache.set('clips', cacheKey, { clips: responseClips, servers });
+    await cache.set('clips', cacheKey, { clips: limitedClips, servers });
 
-    console.log(`[All Clips API] Fetched ${responseClips.length} clips from ${servers.length} servers (server: ${serverFilter || 'all'}, streamer: ${streamerFilter || 'all'})`);
+    const twitchCount = limitedClips.filter(c => c.platform === 'twitch').length;
+    const kickCount = limitedClips.filter(c => c.platform === 'kick').length;
+    console.log(`[All Clips API] Fetched ${limitedClips.length} clips (Twitch: ${twitchCount}, Kick: ${kickCount}) from ${servers.length} servers`);
 
     return NextResponse.json({
       success: true,
-      data: responseClips,
+      data: limitedClips,
       servers,
     });
   } catch (error) {

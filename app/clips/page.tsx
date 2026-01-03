@@ -38,13 +38,32 @@ import {
   ArrowUpDown,
   Server,
   Sparkles,
+  Tv2,
 } from 'lucide-react';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CUSTOM KICK ICON
+// ═══════════════════════════════════════════════════════════════════════════
+
+const KickIcon = ({ className }: { className?: string }) => (
+  <svg 
+    viewBox="0 0 24 24" 
+    fill="currentColor" 
+    className={className}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M6 3h4v5h2V6h2V3h4v3h-2v2h-2v2h2v2h2v2h-2v2h-2v-2h-2v5h-2v-5H8v-2H6v-2h2v-2H6V3z"/>
+  </svg>
+);
 import { ClipsTimelineWaveform } from '@/components/clips-timeline-waveform';
+import { KickClipPlayer } from '@/components/kick-clip-player';
 import { useFeatureFlag, FEATURE_FLAGS } from '@/lib/feature-flags';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // INTERFACES
 // ═══════════════════════════════════════════════════════════════════════════
+
+type ClipPlatform = 'twitch' | 'kick';
 
 interface ClipData {
   clip_id: string;
@@ -58,6 +77,8 @@ interface ClipData {
   profile_image_url?: string;
   server_id: string;
   server_name?: string;
+  platform: ClipPlatform;
+  channel_slug?: string; // For Kick clips
 }
 
 interface ServerInfo {
@@ -223,15 +244,24 @@ const ClipCard = memo(function ClipCard({
               <span className="text-white">{formatDuration(clip.duration)}</span>
             </div>
             
-            {/* Twitch badge */}
-            <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded z-20"
+            {/* Platform badge */}
+            <div 
+              className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded z-20"
               style={{
-                background: 'rgba(145, 70, 255, 0.9)',
+                background: clip.platform === 'kick' 
+                  ? 'rgba(83, 252, 24, 0.9)' 
+                  : 'rgba(145, 70, 255, 0.9)',
                 backdropFilter: 'blur(4px)',
               }}
             >
-              <Twitch className="h-3 w-3 text-white" />
-              <span className="text-xs font-medium text-white">Clip</span>
+              {clip.platform === 'kick' ? (
+                <KickIcon className="h-3 w-3 text-black" />
+              ) : (
+                <Twitch className="h-3 w-3 text-white" />
+              )}
+              <span className={`text-xs font-medium ${clip.platform === 'kick' ? 'text-black' : 'text-white'}`}>
+                Clip
+              </span>
             </div>
 
             {/* Server badge */}
@@ -321,32 +351,81 @@ function ClipModal({
     });
   };
 
+  // Generate embed URL based on platform
+  const getEmbedUrl = () => {
+    if (clip.platform === 'kick') {
+      // Kick clips use direct URL - they don't have an official embed API
+      // So we'll show a thumbnail with a link to watch
+      return null;
+    }
+    return `https://clips.twitch.tv/embed?clip=${clip.clip_id}&parent=${hostname}`;
+  };
+
+  // Generate external link URL based on platform
+  const getExternalUrl = () => {
+    if (clip.platform === 'kick') {
+      const channelSlug = clip.channel_slug || clip.streamer_username;
+      return `https://kick.com/${channelSlug}?clip=${clip.clip_id}`;
+    }
+    return `https://clips.twitch.tv/${clip.clip_id}`;
+  };
+
+  const embedUrl = getEmbedUrl();
+  const externalUrl = getExternalUrl();
+  const isKick = clip.platform === 'kick';
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
         className="max-w-4xl border overflow-hidden p-0"
         style={{ 
           backgroundColor: 'rgba(14, 14, 16, 0.98)',
-          borderColor: 'rgba(168, 85, 247, 0.2)',
+          borderColor: isKick ? 'rgba(83, 252, 24, 0.2)' : 'rgba(168, 85, 247, 0.2)',
           backdropFilter: 'blur(20px)',
         }}
       >
         <DialogHeader className="p-6 pb-0">
+          <div className="flex items-center gap-2">
+            {isKick ? (
+              <div className="px-2 py-1 rounded text-xs font-medium flex items-center gap-1"
+                style={{ background: 'rgba(83, 252, 24, 0.2)', color: '#53fc18' }}>
+                <KickIcon className="h-3 w-3" />
+                Kick
+              </div>
+            ) : (
+              <div className="px-2 py-1 rounded text-xs font-medium flex items-center gap-1"
+                style={{ background: 'rgba(145, 70, 255, 0.2)', color: '#a855f7' }}>
+                <Twitch className="h-3 w-3" />
+                Twitch
+              </div>
+            )}
+          </div>
           <DialogTitle className="line-clamp-2 text-white text-lg pr-8">{clip.title}</DialogTitle>
         </DialogHeader>
         
         <div className="p-6 pt-4 space-y-4">
-          {/* Video embed */}
+          {/* Video embed or HLS player */}
           <div className="w-full aspect-video rounded-lg overflow-hidden border"
-            style={{ borderColor: 'rgba(168, 85, 247, 0.2)' }}
+            style={{ borderColor: isKick ? 'rgba(83, 252, 24, 0.2)' : 'rgba(168, 85, 247, 0.2)' }}
           >
-            <iframe
-              src={`https://clips.twitch.tv/embed?clip=${clip.clip_id}&parent=${hostname}`}
-              height="100%"
-              width="100%"
-              allowFullScreen
-              className="bg-black"
-            />
+            {embedUrl ? (
+              <iframe
+                src={embedUrl}
+                height="100%"
+                width="100%"
+                allowFullScreen
+                className="bg-black"
+              />
+            ) : (
+              // Kick clips - use HLS player for embedded playback
+              <KickClipPlayer
+                clipUrl={clip.embed_url}
+                thumbnailUrl={clip.thumbnail_url}
+                title={clip.title}
+                channelSlug={clip.channel_slug || clip.streamer_username}
+                clipId={clip.clip_id}
+              />
+            )}
           </div>
           
           {/* Stats grid */}
@@ -354,8 +433,8 @@ function ClipModal({
             className="grid grid-cols-2 md:grid-cols-5 gap-4 p-4 rounded-lg"
             style={{ 
               background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
-              borderColor: 'rgba(168, 85, 247, 0.15)',
-              border: '1px solid rgba(168, 85, 247, 0.15)'
+              borderColor: isKick ? 'rgba(83, 252, 24, 0.15)' : 'rgba(168, 85, 247, 0.15)',
+              border: `1px solid ${isKick ? 'rgba(83, 252, 24, 0.15)' : 'rgba(168, 85, 247, 0.15)'}`
             }}
           >
             <div className="space-y-1">
@@ -397,17 +476,23 @@ function ClipModal({
           
           {/* External link */}
           <a
-            href={`https://clips.twitch.tv/${clip.clip_id}`}
+            href={externalUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 border"
             style={{
-              background: 'linear-gradient(135deg, rgba(145, 70, 255, 0.2) 0%, rgba(20, 184, 166, 0.1) 100%)',
-              borderColor: 'rgba(145, 70, 255, 0.3)',
+              background: isKick 
+                ? 'linear-gradient(135deg, rgba(83, 252, 24, 0.2) 0%, rgba(20, 184, 166, 0.1) 100%)'
+                : 'linear-gradient(135deg, rgba(145, 70, 255, 0.2) 0%, rgba(20, 184, 166, 0.1) 100%)',
+              borderColor: isKick ? 'rgba(83, 252, 24, 0.3)' : 'rgba(145, 70, 255, 0.3)',
             }}
           >
-            <Twitch className="h-4 w-4 text-purple-400" />
-            <span className="text-white">Watch on Twitch</span>
+            {isKick ? (
+              <KickIcon className="h-4 w-4 text-[#53fc18]" />
+            ) : (
+              <Twitch className="h-4 w-4 text-purple-400" />
+            )}
+            <span className="text-white">Watch on {isKick ? 'Kick' : 'Twitch'}</span>
             <ExternalLink className="h-3.5 w-3.5 text-gray-400" />
           </a>
         </div>
@@ -432,7 +517,7 @@ function PageHeader() {
         <motion.div
           className="w-10 h-10 rounded-lg flex items-center justify-center"
           style={{
-            background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(20, 184, 166, 0.1) 100%)',
+            background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(83, 252, 24, 0.1) 100%)',
             border: '1px solid rgba(168, 85, 247, 0.3)',
           }}
           whileHover={{ scale: 1.05, rotate: 5 }}
@@ -442,13 +527,20 @@ function PageHeader() {
         <div>
           <p className="text-gray-400 text-sm flex items-center gap-1.5">
             <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
-            All Twitch Clips
+            All Clips
+            <span className="flex items-center gap-1 ml-1">
+              <Twitch className="h-3 w-3 text-purple-400" />
+              <span className="text-gray-500">+</span>
+              <KickIcon className="h-3 w-3 text-[#53fc18]" />
+            </span>
           </p>
         </div>
       </div>
       <p className="text-gray-400 leading-relaxed">
-        Browse and watch clips from streamers across{' '}
-        <span className="text-purple-300 font-medium">all GTA RP servers</span>.
+        Browse and watch clips from{' '}
+        <span className="text-purple-300 font-medium">Twitch</span> and{' '}
+        <span className="text-[#53fc18] font-medium">Kick</span> streamers across{' '}
+        <span className="text-cyan-300 font-medium">all GTA RP servers</span>.
         Discover highlights, funny moments, and epic roleplay from the community.
       </p>
     </motion.div>
@@ -515,6 +607,7 @@ function AllClipsContent() {
   // Get initial filters from URL query params
   const initialServer = searchParams.get('server') || 'all';
   const initialStreamer = searchParams.get('streamer') || 'all';
+  const initialPlatform = searchParams.get('platform') || 'all';
   const initialSearchQuery = searchParams.get('search') || '';
   const initialStartDate = searchParams.get('startDate') || '';
   const initialEndDate = searchParams.get('endDate') || '';
@@ -533,6 +626,7 @@ function AllClipsContent() {
 
   const [selectedServer, setSelectedServer] = useState(initialServer);
   const [selectedStreamer, setSelectedStreamer] = useState(initialStreamer);
+  const [selectedPlatform, setSelectedPlatform] = useState(initialPlatform);
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(getInitialDateRange);
   const [orderBy, setOrderBy] = useState(initialOrderBy);
@@ -552,6 +646,11 @@ function AllClipsContent() {
         // Add server filter to API call for better performance
         if (selectedServer && selectedServer !== 'all') {
           url.searchParams.set('server', selectedServer);
+        }
+
+        // Add platform filter to API call
+        if (selectedPlatform && selectedPlatform !== 'all') {
+          url.searchParams.set('platform', selectedPlatform);
         }
 
         url.searchParams.set('limit', '300');
@@ -580,7 +679,7 @@ function AllClipsContent() {
     };
 
     fetchClips();
-  }, [selectedServer]);
+  }, [selectedServer, selectedPlatform]);
 
   // Get unique streamers from loaded clips
   const streamers = useMemo(() => {
@@ -596,10 +695,11 @@ function AllClipsContent() {
 
   // URL filter update
   const updateUrlFilters = useCallback(
-    (server: string, streamer: string, search: string, range: DateRange | undefined, order: string) => {
+    (server: string, streamer: string, platform: string, search: string, range: DateRange | undefined, order: string) => {
       const params = new URLSearchParams();
       if (server !== 'all') params.set('server', server);
       if (streamer !== 'all') params.set('streamer', streamer);
+      if (platform !== 'all') params.set('platform', platform);
       if (search) params.set('search', search);
       if (range?.from) params.set('startDate', formatDateForUrl(range.from));
       if (range?.to) params.set('endDate', formatDateForUrl(range.to));
@@ -614,41 +714,49 @@ function AllClipsContent() {
     (value: string) => {
       setSelectedServer(value);
       setSelectedStreamer('all'); // Reset streamer when server changes
-      updateUrlFilters(value, 'all', searchQuery, dateRange, orderBy);
+      updateUrlFilters(value, 'all', selectedPlatform, searchQuery, dateRange, orderBy);
     },
-    [updateUrlFilters, searchQuery, dateRange, orderBy]
+    [updateUrlFilters, selectedPlatform, searchQuery, dateRange, orderBy]
   );
 
   const handleStreamerChange = useCallback(
     (value: string) => {
       setSelectedStreamer(value);
-      updateUrlFilters(selectedServer, value, searchQuery, dateRange, orderBy);
+      updateUrlFilters(selectedServer, value, selectedPlatform, searchQuery, dateRange, orderBy);
     },
-    [updateUrlFilters, selectedServer, searchQuery, dateRange, orderBy]
+    [updateUrlFilters, selectedServer, selectedPlatform, searchQuery, dateRange, orderBy]
+  );
+
+  const handlePlatformChange = useCallback(
+    (value: string) => {
+      setSelectedPlatform(value);
+      updateUrlFilters(selectedServer, selectedStreamer, value, searchQuery, dateRange, orderBy);
+    },
+    [updateUrlFilters, selectedServer, selectedStreamer, searchQuery, dateRange, orderBy]
   );
 
   const handleSearchChange = useCallback(
     (query: string) => {
       setSearchQuery(query);
-      updateUrlFilters(selectedServer, selectedStreamer, query, dateRange, orderBy);
+      updateUrlFilters(selectedServer, selectedStreamer, selectedPlatform, query, dateRange, orderBy);
     },
-    [updateUrlFilters, selectedServer, selectedStreamer, dateRange, orderBy]
+    [updateUrlFilters, selectedServer, selectedStreamer, selectedPlatform, dateRange, orderBy]
   );
 
   const handleOrderChange = useCallback(
     (value: string) => {
       setOrderBy(value);
-      updateUrlFilters(selectedServer, selectedStreamer, searchQuery, dateRange, value);
+      updateUrlFilters(selectedServer, selectedStreamer, selectedPlatform, searchQuery, dateRange, value);
     },
-    [updateUrlFilters, selectedServer, selectedStreamer, searchQuery, dateRange]
+    [updateUrlFilters, selectedServer, selectedStreamer, selectedPlatform, searchQuery, dateRange]
   );
 
   const handleDateRangeChange = useCallback(
     (range: DateRange | undefined) => {
       setDateRange(range);
-      updateUrlFilters(selectedServer, selectedStreamer, searchQuery, range, orderBy);
+      updateUrlFilters(selectedServer, selectedStreamer, selectedPlatform, searchQuery, range, orderBy);
     },
-    [updateUrlFilters, selectedServer, selectedStreamer, searchQuery, orderBy]
+    [updateUrlFilters, selectedServer, selectedStreamer, selectedPlatform, searchQuery, orderBy]
   );
 
   // Handle waveform time range selection
@@ -657,14 +765,15 @@ function AllClipsContent() {
       const newRange: DateRange = { from: startDate, to: endDate };
       setDateRange(newRange);
       setOrderBy('views-desc'); // Switch to views sorting when clicking waveform
-      updateUrlFilters(selectedServer, selectedStreamer, searchQuery, newRange, 'views-desc');
+      updateUrlFilters(selectedServer, selectedStreamer, selectedPlatform, searchQuery, newRange, 'views-desc');
     },
-    [updateUrlFilters, selectedServer, selectedStreamer, searchQuery]
+    [updateUrlFilters, selectedServer, selectedStreamer, selectedPlatform, searchQuery]
   );
 
   const handleClearFilters = useCallback(() => {
     setSelectedServer('all');
     setSelectedStreamer('all');
+    setSelectedPlatform('all');
     setSearchQuery('');
     setDateRange(undefined);
     setOrderBy('views-desc');
@@ -754,7 +863,7 @@ function AllClipsContent() {
     return sorted;
   }, [clips, selectedStreamer, searchQuery, dateRange, orderBy]);
 
-  const hasActiveFilters = selectedServer !== 'all' || selectedStreamer !== 'all' || searchQuery || dateRange?.from || dateRange?.to;
+  const hasActiveFilters = selectedServer !== 'all' || selectedStreamer !== 'all' || selectedPlatform !== 'all' || searchQuery || dateRange?.from || dateRange?.to;
 
   if (loading) {
     return <ClipsLoadingSkeleton />;
@@ -834,7 +943,7 @@ function AllClipsContent() {
             </div>
 
             {/* Filter Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               {/* Server Select */}
               <div className="space-y-2">
                 <label className="text-xs text-gray-400 flex items-center gap-1">
@@ -865,6 +974,50 @@ function AllClipsContent() {
                         {server.server_name}
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Platform Select */}
+              <div className="space-y-2">
+                <label className="text-xs text-gray-400 flex items-center gap-1">
+                  <Tv2 className="h-3 w-3 text-purple-400/70" />
+                  Platform
+                </label>
+                <Select value={selectedPlatform} onValueChange={handlePlatformChange}>
+                  <SelectTrigger 
+                    className="w-full border text-white"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+                      borderColor: 'rgba(168, 85, 247, 0.15)',
+                    }}
+                  >
+                    <SelectValue placeholder="All Platforms" />
+                  </SelectTrigger>
+                  <SelectContent 
+                    style={{
+                      background: 'rgba(18, 18, 21, 0.98)',
+                      borderColor: 'rgba(168, 85, 247, 0.2)',
+                    }}
+                  >
+                    <SelectItem value="all" className="text-white">
+                      <div className="flex items-center gap-2">
+                        <Tv2 className="h-3 w-3" />
+                        All Platforms
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="twitch" className="text-white">
+                      <div className="flex items-center gap-2">
+                        <Twitch className="h-3 w-3 text-purple-400" />
+                        Twitch
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="kick" className="text-white">
+                      <div className="flex items-center gap-2">
+                        <KickIcon className="h-3 w-3 text-[#53fc18]" />
+                        Kick
+                      </div>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
