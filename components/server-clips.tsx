@@ -39,6 +39,8 @@ import {
   Sparkles
 } from 'lucide-react';
 import { KickClipPlayer } from '@/components/kick-clip-player';
+import { cn } from '@/lib/utils';
+import { usePWAStandalone, useIsMobileDevice } from '@/hooks/use-pwa-standalone';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // INTERFACES
@@ -361,12 +363,15 @@ function ClipModal({
   clip,
   isOpen,
   onClose,
+  isCompact,
 }: {
   clip: ClipData | null;
   isOpen: boolean;
   onClose: () => void;
+  isCompact?: boolean;
 }) {
   if (!clip) return null;
+  const compactLayout = Boolean(isCompact);
 
   const hostname =
     typeof window !== 'undefined'
@@ -405,14 +410,18 @@ function ClipModal({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
-        className="max-w-4xl border overflow-hidden p-0"
+        className={cn(
+          "max-w-4xl border overflow-hidden p-0",
+          compactLayout && "w-[calc(100vw-1.5rem)] max-w-none !top-4 !left-1/2 !-translate-x-1/2 rounded-3xl overflow-y-auto max-h-[90vh] pb-6"
+        )}
         style={{ 
           backgroundColor: 'rgba(14, 14, 16, 0.98)',
           borderColor: isKick ? 'rgba(83, 252, 24, 0.2)' : 'rgba(168, 85, 247, 0.2)',
           backdropFilter: 'blur(20px)',
+          paddingBottom: compactLayout ? 'calc(1rem + env(safe-area-inset-bottom, 0px))' : undefined,
         }}
       >
-        <DialogHeader className="p-6 pb-0">
+        <DialogHeader className={cn("p-6 pb-0", compactLayout && "px-4 pt-4")}>
           <div className="flex items-center gap-2">
             {isKick ? (
               <div className="px-2 py-1 rounded text-xs font-medium flex items-center gap-1"
@@ -431,7 +440,7 @@ function ClipModal({
           <DialogTitle className="line-clamp-2 text-white text-lg pr-8">{clip.title}</DialogTitle>
         </DialogHeader>
         
-        <div className="p-6 pt-4 space-y-4">
+        <div className={cn("p-6 pt-4 space-y-4", compactLayout && "px-4")}>
           {/* Video embed or HLS player */}
           <div className="w-full aspect-video rounded-lg overflow-hidden border"
             style={{ borderColor: isKick ? 'rgba(83, 252, 24, 0.2)' : 'rgba(168, 85, 247, 0.2)' }}
@@ -458,7 +467,7 @@ function ClipModal({
           
           {/* Stats grid */}
           <div 
-            className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-lg"
+            className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-lg"
             style={{ 
               background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
               borderColor: isKick ? 'rgba(83, 252, 24, 0.15)' : 'rgba(168, 85, 247, 0.15)',
@@ -500,7 +509,7 @@ function ClipModal({
             href={externalUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 border"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 border"
             style={{
               background: isKick 
                 ? 'linear-gradient(135deg, rgba(83, 252, 24, 0.2) 0%, rgba(20, 184, 166, 0.1) 100%)'
@@ -611,6 +620,9 @@ export function ServerClips({
 }: ServerClipsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isPWA } = usePWAStandalone();
+  const isMobileDevice = useIsMobileDevice();
+  const isCompactLayout = isPWA || isMobileDevice;
 
   const [clips, setClips] = useState<ClipData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -643,6 +655,22 @@ export function ServerClips({
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(getInitialDateRange);
   const [orderBy, setOrderBy] = useState(initialOrderBy);
+  const getClipExternalUrl = useCallback((clip: ClipData): string => {
+    if (clip.platform === 'kick') {
+      const channelSlug = clip.channel_slug || clip.streamer_username;
+      return `https://kick.com/${channelSlug}?clip=${clip.clip_id}`;
+    }
+    return `https://clips.twitch.tv/${clip.clip_id}`;
+  }, []);
+  const openClipExternally = useCallback((clip: ClipData) => {
+    const targetUrl = getClipExternalUrl(clip);
+    if (typeof window === 'undefined') return;
+    if (isPWA) {
+      window.location.href = targetUrl;
+    } else {
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+    }
+  }, [getClipExternalUrl, isPWA]);
 
   // Fetch clips
   useEffect(() => {
@@ -785,9 +813,13 @@ export function ServerClips({
   }, [router]);
 
   const handleSelectClip = useCallback((clip: ClipData) => {
+    if (isCompactLayout) {
+      openClipExternally(clip);
+      return;
+    }
     setSelectedClip(clip);
     setIsModalOpen(true);
-  }, []);
+  }, [isCompactLayout, openClipExternally]);
 
   const handleCloseModal = useCallback(() => {
     setIsModalOpen(false);
@@ -1243,6 +1275,7 @@ export function ServerClips({
         clip={selectedClip}
         isOpen={isModalOpen}
         onClose={handleCloseModal}
+        isCompact={isCompactLayout}
       />
     </motion.div>
   );
