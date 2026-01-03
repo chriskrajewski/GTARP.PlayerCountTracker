@@ -3,7 +3,7 @@
 import { memo, useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from '@/components/ui/motion';
 import { Card, CardContent } from '@/components/ui/card';
-import { Eye, TrendingUp, TrendingDown, Minus, Calendar, Clock, Sparkles } from 'lucide-react';
+import { Eye, TrendingUp, TrendingDown, Minus, Calendar, Clock, Sparkles, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -627,6 +627,26 @@ export const ClipsTimelineWaveform = memo(function ClipsTimelineWaveform({
     onTimeRangeSelect(bucket.startDate, bucket.endDate);
   }, [onTimeRangeSelect]);
   
+  // Collapsed state - persist in localStorage, default to collapsed
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [hasHydrated, setHasHydrated] = useState(false);
+  
+  // Hydrate state from localStorage after mount (SSR-safe)
+  useEffect(() => {
+    const saved = localStorage.getItem('clips-timeline-expanded');
+    if (saved === 'true') {
+      setIsExpanded(true);
+    }
+    setHasHydrated(true);
+  }, []);
+  
+  // Persist expanded state to localStorage (only after hydration)
+  useEffect(() => {
+    if (hasHydrated) {
+      localStorage.setItem('clips-timeline-expanded', String(isExpanded));
+    }
+  }, [isExpanded, hasHydrated]);
+  
   // Don't render if no clips
   if (!clips || clips.length === 0) {
     return null;
@@ -651,76 +671,115 @@ export const ClipsTimelineWaveform = memo(function ClipsTimelineWaveform({
           />
         </div>
         
-        <CardContent className="p-4 md:p-6 relative z-10">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-4">
+        <CardContent className={cn("relative z-10", isExpanded ? "p-4 md:p-6" : "p-3 md:p-4")}>
+          {/* Collapsible Header */}
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="w-full flex items-center justify-between group cursor-pointer"
+          >
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-purple-400" />
               <h3 className="text-sm font-medium text-white">Viewership Timeline</h3>
-            </div>
-            <div className="flex items-center gap-3 text-xs text-gray-500">
-              <span className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-cyan-400/70" />
-                Low
-              </span>
-              <span className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-purple-400/80" />
-                Medium
-              </span>
-              <span className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-orange-400/90" />
-                High
+              <span className="text-xs text-gray-500 ml-1">
+                {isExpanded ? '' : '(Click to expand)'}
               </span>
             </div>
-          </div>
-          
-          {/* Waveform - Div-based for reliable rendering */}
-          <div className="relative">
-            {/* Center line */}
-            <div 
-              className="absolute left-0 right-0 h-px top-1/2 -translate-y-1/2"
-              style={{ background: 'rgba(168, 85, 247, 0.2)' }}
-            />
-            
-            {/* Waveform bars container */}
-            <div className="flex items-center justify-center h-[120px] gap-[1px]">
-              {buckets.map((bucket, index) => (
-                <WaveformBarDiv
-                  key={bucket.startDate.toISOString()}
-                  bucket={bucket}
-                  index={index}
-                  totalBars={buckets.length}
-                  maxHeight={110}
-                  isSelected={isBucketSelected(bucket)}
-                  isHovered={hoveredBucket?.bucket === bucket}
-                  onHover={handleHover}
-                  onClick={handleClick}
-                />
-              ))}
+            <div className="flex items-center gap-3">
+              {/* Legend - only show when expanded */}
+              <AnimatePresence>
+                {isExpanded && (
+                  <motion.div 
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 10 }}
+                    className="hidden sm:flex items-center gap-3 text-xs text-gray-500"
+                  >
+                    <span className="flex items-center gap-1">
+                      <div className="w-2 h-2 rounded-full bg-cyan-400/70" />
+                      Low
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <div className="w-2 h-2 rounded-full bg-purple-400/80" />
+                      Medium
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <div className="w-2 h-2 rounded-full bg-orange-400/90" />
+                      High
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              <motion.div
+                animate={{ rotate: isExpanded ? 180 : 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <ChevronDown className="h-4 w-4 text-gray-400 group-hover:text-white transition-colors" />
+              </motion.div>
             </div>
-            
-            {/* Tooltip */}
-            <WaveformTooltip data={hoveredBucket} bucketType={bucketType} />
-          </div>
+          </button>
           
-          {/* Date range labels */}
-          <div className="flex justify-between items-center mt-3 text-xs text-gray-500">
-            <span>{timelineStart.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
-            <span>Present</span>
-          </div>
-          
-          {/* Milestones */}
-          {processedMilestones.length > 0 && (
-            <div className="relative h-16 mt-4 -mb-2">
-              {processedMilestones.map((milestone, index) => (
-                <MilestoneLabel
-                  key={`${milestone.label}-${index}`}
-                  milestone={milestone}
-                  totalWidth={containerWidth}
-                />
-              ))}
-            </div>
-          )}
+          {/* Expandable Content */}
+          <AnimatePresence>
+            {isExpanded && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                className="overflow-hidden"
+              >
+                <div className="mt-4">
+                  {/* Waveform - Div-based for reliable rendering */}
+                  <div className="relative">
+                    {/* Center line */}
+                    <div 
+                      className="absolute left-0 right-0 h-px top-1/2 -translate-y-1/2"
+                      style={{ background: 'rgba(168, 85, 247, 0.2)' }}
+                    />
+                    
+                    {/* Waveform bars container */}
+                    <div className="flex items-center justify-center h-[120px] gap-[1px]">
+                      {buckets.map((bucket, index) => (
+                        <WaveformBarDiv
+                          key={bucket.startDate.toISOString()}
+                          bucket={bucket}
+                          index={index}
+                          totalBars={buckets.length}
+                          maxHeight={110}
+                          isSelected={isBucketSelected(bucket)}
+                          isHovered={hoveredBucket?.bucket === bucket}
+                          onHover={handleHover}
+                          onClick={handleClick}
+                        />
+                      ))}
+                    </div>
+                    
+                    {/* Tooltip */}
+                    <WaveformTooltip data={hoveredBucket} bucketType={bucketType} />
+                  </div>
+                  
+                  {/* Date range labels */}
+                  <div className="flex justify-between items-center mt-3 text-xs text-gray-500">
+                    <span>{timelineStart.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
+                    <span>Present</span>
+                  </div>
+                  
+                  {/* Milestones */}
+                  {processedMilestones.length > 0 && (
+                    <div className="relative h-16 mt-4 -mb-2">
+                      {processedMilestones.map((milestone, index) => (
+                        <MilestoneLabel
+                          key={`${milestone.label}-${index}`}
+                          milestone={milestone}
+                          totalWidth={containerWidth}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </CardContent>
       </Card>
     </motion.div>
