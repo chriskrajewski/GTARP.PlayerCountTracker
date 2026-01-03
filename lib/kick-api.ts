@@ -273,15 +273,294 @@ export async function getKickTopStreams(limit: number = 100): Promise<KickStream
 export function clearKickCache(): void {
   streamCache.clear();
   categoryCache.clear();
-  console.log('[KickAPI] Cache cleared');
+  clipCache.clear();
+  console.log('[KickAPI] All caches cleared');
 }
 
 /**
  * Get cache statistics for monitoring
  */
-export function getKickCacheStats(): { streamCacheSize: number; categoryCacheSize: number } {
+export function getKickCacheStats(): { streamCacheSize: number; categoryCacheSize: number; clipCacheSize: number } {
   return {
     streamCacheSize: streamCache.size,
     categoryCacheSize: categoryCache.size,
+    clipCacheSize: clipCache.size,
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CLIP DATA STRUCTURES AND CACHING
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Kick API endpoints for direct HTTP requests (clips not supported by @nekiro/kick-api)
+const KICK_OAUTH_URL = "https://id.kick.com/oauth/token";
+const KICK_API_BASE = "https://api.kick.com";
+
+/**
+ * Kick clip data structure
+ */
+export interface KickClipData {
+  clip_id: string;
+  channel_slug: string;
+  streamer_username: string;
+  title: string;
+  view_count: number;
+  duration_seconds: number;
+  thumbnail_url: string;
+  clip_url: string;
+  created_at: string;
+  category_name: string;
+}
+
+/**
+ * Kick Clip API response structure (v2 API)
+ */
+interface KickClipApiResponse {
+  id: string;
+  title: string;
+  clip_url: string;
+  thumbnail_url: string;
+  views: number;
+  view_count: number;
+  duration: number;
+  created_at: string;
+  video_url: string;
+  category?: {
+    id: number;
+    name: string;
+    slug: string;
+  };
+  creator?: {
+    id: number;
+    username: string;
+    slug: string;
+  };
+  channel?: {
+    id: number;
+    username: string;
+    slug: string;
+  };
+}
+
+const clipCache = new Map<string, CacheEntry<KickClipData[]>>();
+const CLIP_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// OAuth token cache for clips API
+let clipsOAuthToken: { token: string; expiresAt: number } | null = null;
+
+/**
+ * Get OAuth access token for clips API using client credentials flow
+ * Per Kick docs: pass client_id and client_secret as form body parameters
+ */
+async function getClipsAccessToken(): Promise<string | null> {
+  // Check cache first
+  if (clipsOAuthToken && clipsOAuthToken.expiresAt > Date.now() + 60000) {
+    return clipsOAuthToken.token;
+  }
+
+  if (!process.env.KICK_CLIENT_ID || !process.env.KICK_CLIENT_SECRET) {
+    console.error('[KickAPI] Kick credentials not configured for clips');
+    return null;
+  }
+
+  try {
+    const response = await fetch(KICK_OAUTH_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: process.env.KICK_CLIENT_ID,
+        client_secret: process.env.KICK_CLIENT_SECRET,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[KickAPI] OAuth error for clips: ${response.status} - ${errorText}`);
+      return null;
+    }
+
+    const data = await response.json();
+    
+    // Cache the token
+    clipsOAuthToken = {
+      token: data.access_token,
+      expiresAt: Date.now() + (data.expires_in * 1000),
+    };
+
+    return data.access_token;
+  } catch (error) {
+    console.error("[KickAPI] Failed to get OAuth token for clips:", error);
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CLIP API FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Fetch clips for a specific channel using direct HTTP requests
+ * The @nekiro/kick-api package does NOT support clips, so we use direct API calls
+ * @param channelSlug - The Kick channel slug (username)
+ * @param limit - Maximum number of clips to fetch (default 50)
+ */
+export async function getKickClipsForChannel(
+  channelSlug: string,
+  limit: number = 50
+): Promise<KickClipData[]> {
+  const cacheKey = `channel_clips_${channelSlug}_${limit}`;
+  const cached = clipCache.get(cacheKey);
+
+  if (cached && Date.now() - cached.timestamp < CLIP_CACHE_TTL) {
+    return cached.data;
+  }
+
+  // Get OAuth token for clips API
+  const accessToken = await getClipsAccessToken();
+  if (!accessToken) {
+    console.error('[KickAPI] Could not get access token for clips');
+    return [];
+  }
+
+  try {
+    const allClips: KickClipApiResponse[] = [];
+    
+    // Try multiple possible endpoints
+    const endpoints = [
+      `${KICK_API_BASE}/public/v1/channels/${channelSlug}/clips`,
+      `${KICK_API_BASE}/v2/channels/${channelSlug}/clips`,
+      `${KICK_API_BASE}/v1/channels/${channelSlug}/clips`,
+    ];
+
+    for (const baseUrl of endpoints) {
+      try {
+        const url = new URL(baseUrl);
+        url.searchParams.set("limit", String(Math.min(limit, 50)));
+
+        const response = await fetch(url.toString(), {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${accessToken}`,
+            "Accept": "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          if (response.status === 404) {
+            continue; // Try next endpoint
+          }
+          console.error(`[KickAPI] Clips API error for ${channelSlug}: ${response.status}`);
+          continue;
+        }
+
+        const data = await response.json();
+        
+        // Handle different response formats
+        let clips: KickClipApiResponse[] = [];
+        if (Array.isArray(data)) {
+          clips = data;
+        } else if (data.clips && Array.isArray(data.clips)) {
+          clips = data.clips;
+        } else if (data.data && Array.isArray(data.data)) {
+          clips = data.data;
+        }
+
+        if (clips.length > 0) {
+          allClips.push(...clips);
+          break; // Found clips, don't try other endpoints
+        }
+      } catch {
+        continue; // Try next endpoint
+      }
+    }
+
+    const transformedClips = allClips.slice(0, limit).map((clip) => transformKickClip(clip, channelSlug));
+    
+    if (transformedClips.length > 0) {
+      clipCache.set(cacheKey, { data: transformedClips, timestamp: Date.now() });
+    }
+    
+    return transformedClips;
+  } catch (error) {
+    console.error(`[KickAPI] Error fetching clips for channel ${channelSlug}:`, error);
+    return [];
+  }
+}
+
+/**
+ * Fetch clips by category ID
+ * Note: Category-based clip fetching requires iterating through channels
+ * @param categoryId - The Kick category ID
+ * @param limit - Maximum number of clips to fetch (default 100)
+ */
+export async function getKickClipsByCategory(
+  categoryId: number,
+  limit: number = 100
+): Promise<KickClipData[]> {
+  // Category-based clip fetching would require fetching streams in category,
+  // then fetching clips for each channel. Not currently implemented.
+  console.warn(`[KickAPI] Category-based clip fetching (category ${categoryId}) is not yet implemented`);
+  return [];
+}
+
+/**
+ * Fetch clips by category name/query
+ * Note: Category-based clip fetching requires iterating through channels
+ */
+export async function getKickClipsByCategoryQuery(
+  categoryQuery: string,
+  limit: number = 100
+): Promise<KickClipData[]> {
+  // Category-based clip fetching would require fetching streams in category,
+  // then fetching clips for each channel. Not currently implemented.
+  console.warn(`[KickAPI] Category-based clip fetching ("${categoryQuery}") is not yet implemented`);
+  return [];
+}
+
+/**
+ * Fetch top clips from Kick (sorted by view count)
+ * Note: Global top clips require a different API endpoint
+ * @param limit - Maximum number of clips to fetch (default 100)
+ * @param timeRange - Time range: 'day', 'week', 'month', 'all' (default 'week')
+ */
+export async function getKickTopClips(
+  limit: number = 100,
+  timeRange: 'day' | 'week' | 'month' | 'all' = 'week'
+): Promise<KickClipData[]> {
+  // Global top clips would require a different API endpoint
+  console.warn('[KickAPI] Global top clips fetching is not yet implemented');
+  return [];
+}
+
+/**
+ * Transform Kick API clip response to our standard format
+ */
+function transformKickClip(clip: KickClipApiResponse, channelSlugOverride?: string): KickClipData {
+  const channelSlug = channelSlugOverride || clip.channel?.slug || clip.creator?.slug || '';
+  const streamerName = clip.channel?.username || clip.creator?.username || channelSlug;
+
+  return {
+    clip_id: clip.id?.toString() || '',
+    channel_slug: channelSlug,
+    streamer_username: streamerName,
+    title: clip.title || 'Untitled Clip',
+    view_count: clip.view_count || clip.views || 0,
+    duration_seconds: clip.duration || 0,
+    thumbnail_url: clip.thumbnail_url || '',
+    clip_url: clip.clip_url || clip.video_url || '',
+    created_at: clip.created_at || new Date().toISOString(),
+    category_name: clip.category?.name || '',
+  };
+}
+
+/**
+ * Clear clip cache
+ */
+export function clearKickClipCache(): void {
+  clipCache.clear();
+  clipsOAuthToken = null;
+  console.log('[KickAPI] Clip cache cleared');
 }
