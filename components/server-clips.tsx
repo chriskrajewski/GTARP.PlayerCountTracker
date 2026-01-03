@@ -436,6 +436,16 @@ export function ServerClips({
       });
     }
 
+    // Helper function to normalize date to UTC midnight for day-level comparison
+    const getUTCDayTime = (dateStr: string): number => {
+      const date = new Date(dateStr);
+      // Convert to UTC and get the start of that day in UTC
+      const utcYear = date.getUTCFullYear();
+      const utcMonth = date.getUTCMonth();
+      const utcDate = date.getUTCDate();
+      return new Date(Date.UTC(utcYear, utcMonth, utcDate)).getTime();
+    };
+
     // Helper function to apply sort
     const applySortCriteria = (a: ClipData, b: ClipData, sortBy: string): number => {
       switch (sortBy) {
@@ -444,19 +454,15 @@ export function ServerClips({
         case 'views-desc':
           return b.view_count - a.view_count;
         case 'date-newest':
-          // Compare only by day, not exact timestamp
-          const dayA = new Date(a.created_at);
-          const dayB = new Date(b.created_at);
-          dayA.setHours(0, 0, 0, 0);
-          dayB.setHours(0, 0, 0, 0);
-          return dayB.getTime() - dayA.getTime();
+          // Compare by UTC day, not exact timestamp or local timezone
+          const dayBTime = getUTCDayTime(b.created_at);
+          const dayATime = getUTCDayTime(a.created_at);
+          return dayBTime - dayATime; // Newer days come first
         case 'date-oldest':
-          // Compare only by day, not exact timestamp
-          const dayA2 = new Date(a.created_at);
-          const dayB2 = new Date(b.created_at);
-          dayA2.setHours(0, 0, 0, 0);
-          dayB2.setHours(0, 0, 0, 0);
-          return dayA2.getTime() - dayB2.getTime();
+          // Compare by UTC day, not exact timestamp or local timezone
+          const dayATime2 = getUTCDayTime(a.created_at);
+          const dayBTime2 = getUTCDayTime(b.created_at);
+          return dayATime2 - dayBTime2; // Older days come first
         case 'duration-shortest':
           return a.duration - b.duration;
         case 'duration-longest':
