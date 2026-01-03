@@ -120,11 +120,14 @@ export async function GET(
     }
 
     // Transform database format to response format
+    // Generate fresh thumbnail URLs from clip ID (Twitch stored URLs expire after time)
     const responseClips: ClipResponse[] = (clips || []).map((clip: any) => ({
       clip_id: clip.clip_id,
       streamer_username: clip.streamer_username,
       title: clip.clip_title,
-      thumbnail_url: clip.thumbnail_url,
+      // Generate thumbnail from clip ID to ensure it never expires
+      // Twitch provides fresh thumbnail via this URL pattern
+      thumbnail_url: `https://clips.twitch.tv/${clip.clip_id}-preview-260x147.jpg`,
       embed_url: clip.embed_url,
       view_count: clip.view_count,
       duration: Math.round(clip.duration_seconds),
