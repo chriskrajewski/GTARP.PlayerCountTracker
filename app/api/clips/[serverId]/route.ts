@@ -120,6 +120,8 @@ export async function GET(
     }
 
     // Transform database format to response format
+    // Use the original thumbnail_url from Twitch API stored in database
+    // These URLs are served from Twitch's CDN (clips-media-assets2.twitch.tv or static-cdn.jtvnw.net)
     const responseClips: ClipResponse[] = (clips || []).map((clip: any) => ({
       clip_id: clip.clip_id,
       streamer_username: clip.streamer_username,

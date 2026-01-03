@@ -234,7 +234,6 @@ const ClipCard = memo(function ClipCard({
                 onError={() => setImageError(true)}
                 loading="lazy"
                 decoding="async"
-                crossOrigin="anonymous"
                 whileHover={{ scale: 1.05 }}
                 transition={{ duration: 0.3 }}
               />
@@ -289,12 +288,11 @@ const ClipCard = memo(function ClipCard({
                   src={clip.profile_image_url}
                   alt={clip.streamer_username}
                   className="w-6 h-6 rounded-full object-cover border border-purple-400/50"
-                  crossOrigin="anonymous"
                   onError={(e) => {
                     // Fallback to default avatar on error
                     e.currentTarget.style.display = 'none';
                     const fallback = e.currentTarget.nextElementSibling;
-                    if (fallback) fallback.style.display = 'flex';
+                    if (fallback) (fallback as HTMLElement).style.display = 'flex';
                   }}
                 />
               ) : null}
