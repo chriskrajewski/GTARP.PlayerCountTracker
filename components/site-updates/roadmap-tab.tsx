@@ -12,8 +12,8 @@ interface RoadmapTabProps {
 }
 
 const STATUS_ORDER = {
-  planned: 0,
-  in_progress: 1,
+  in_progress: 0,
+  planned: 1,
   completed: 2,
   cancelled: 3,
 };
@@ -31,6 +31,7 @@ export function RoadmapTab({ isOpen }: RoadmapTabProps) {
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
+  const [showOnlyInProgress, setShowOnlyInProgress] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -94,10 +95,14 @@ export function RoadmapTab({ isOpen }: RoadmapTabProps) {
     );
   }
 
-  // Filter items by selected category
-  const filteredItems = selectedCategory
+  // Filter items by selected category and in-progress status
+  let filteredItems = selectedCategory
     ? items.filter(item => item.category === selectedCategory)
     : items;
+
+  if (showOnlyInProgress) {
+    filteredItems = filteredItems.filter(item => item.status === 'in_progress');
+  }
 
   // Group items by status
   const groupedItems = {
@@ -109,9 +114,19 @@ export function RoadmapTab({ isOpen }: RoadmapTabProps) {
 
   return (
     <div className="space-y-4">
-      {/* Category Filter */}
+      {/* Category Filter and In Progress Toggle */}
       {categories.length > 0 && (
         <div className="flex flex-wrap gap-2 pb-3 border-b border-[#26262c]">
+          <button
+            onClick={() => setShowOnlyInProgress(!showOnlyInProgress)}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+              showOnlyInProgress
+                ? "bg-yellow-500/20 border border-yellow-500/50 text-yellow-400"
+                : "bg-[#26262c]/50 border border-[#40404a] text-[#ADADB8] hover:border-yellow-500/30"
+            }`}
+          >
+            In Progress Only
+          </button>
           <button
             onClick={() => setSelectedCategory(null)}
             className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
