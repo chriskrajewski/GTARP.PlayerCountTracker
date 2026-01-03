@@ -143,13 +143,13 @@ async function getGTAGameId(clientId: string, token: string): Promise<string | n
 
 /**
  * Fetch all GTA V streams from Twitch (limited pagination to reduce API load)
- * Matches main site implementation: app/api/streams/[serverId]/route.ts
+ * Matches main site implementation: app/api/live/twitch/route.ts
  */
 async function fetchGTAVStreams(
   clientId: string,
   token: string,
   gameId: string,
-  maxPages: number = 5
+  maxPages: number = 20
 ): Promise<TwitchApiStream[]> {
   const streams: TwitchApiStream[] = [];
   let cursor: string | null = null;
