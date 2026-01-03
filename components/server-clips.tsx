@@ -16,6 +16,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { DateRange } from 'react-day-picker';
 import { motion, AnimatePresence, AnimatedNumber, AnimatedSkeleton, MotionItem, StaggeredList } from '@/components/ui/motion';
 import { fadeInUp, springs, staggerContainer } from '@/lib/motion';
 import { 
@@ -496,10 +498,20 @@ export function ServerClips({
   const initialEndDate = searchParams.get('endDate') || '';
   const initialOrderBy = searchParams.get('orderBy') || 'date-newest';
 
+  // Initialize date range from URL params
+  const getInitialDateRange = (): DateRange | undefined => {
+    if (initialStartDate || initialEndDate) {
+      return {
+        from: initialStartDate ? new Date(initialStartDate) : undefined,
+        to: initialEndDate ? new Date(initialEndDate) : undefined,
+      };
+    }
+    return undefined;
+  };
+
   const [selectedStreamer, setSelectedStreamer] = useState(initialStreamer);
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
-  const [startDate, setStartDate] = useState(initialStartDate);
-  const [endDate, setEndDate] = useState(initialEndDate);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(getInitialDateRange);
   const [orderBy, setOrderBy] = useState(initialOrderBy);
 
   // Fetch clips
@@ -567,14 +579,20 @@ export function ServerClips({
     return { totalViews, avgDuration, topStreamer };
   }, [clips]);
 
+  // Helper to format date for URL
+  const formatDateForUrl = (date: Date | undefined): string => {
+    if (!date) return '';
+    return date.toISOString().split('T')[0];
+  };
+
   // URL filter update
   const updateUrlFilters = useCallback(
-    (streamer: string, search: string, sDate: string, eDate: string, order: string) => {
+    (streamer: string, search: string, range: DateRange | undefined, order: string) => {
       const params = new URLSearchParams();
       if (streamer !== 'all') params.set('streamer', streamer);
       if (search) params.set('search', search);
-      if (sDate) params.set('startDate', sDate);
-      if (eDate) params.set('endDate', eDate);
+      if (range?.from) params.set('startDate', formatDateForUrl(range.from));
+      if (range?.to) params.set('endDate', formatDateForUrl(range.to));
       if (order !== 'date-newest') params.set('orderBy', order);
       router.push(`?${params.toString()}`, { scroll: false });
     },
@@ -585,32 +603,39 @@ export function ServerClips({
   const handleStreamerChange = useCallback(
     (value: string) => {
       setSelectedStreamer(value);
-      updateUrlFilters(value, searchQuery, startDate, endDate, orderBy);
+      updateUrlFilters(value, searchQuery, dateRange, orderBy);
     },
-    [updateUrlFilters, searchQuery, startDate, endDate, orderBy]
+    [updateUrlFilters, searchQuery, dateRange, orderBy]
   );
 
   const handleSearchChange = useCallback(
     (query: string) => {
       setSearchQuery(query);
-      updateUrlFilters(selectedStreamer, query, startDate, endDate, orderBy);
+      updateUrlFilters(selectedStreamer, query, dateRange, orderBy);
     },
-    [updateUrlFilters, selectedStreamer, startDate, endDate, orderBy]
+    [updateUrlFilters, selectedStreamer, dateRange, orderBy]
   );
 
   const handleOrderChange = useCallback(
     (value: string) => {
       setOrderBy(value);
-      updateUrlFilters(selectedStreamer, searchQuery, startDate, endDate, value);
+      updateUrlFilters(selectedStreamer, searchQuery, dateRange, value);
     },
-    [updateUrlFilters, selectedStreamer, searchQuery, startDate, endDate]
+    [updateUrlFilters, selectedStreamer, searchQuery, dateRange]
+  );
+
+  const handleDateRangeChange = useCallback(
+    (range: DateRange | undefined) => {
+      setDateRange(range);
+      updateUrlFilters(selectedStreamer, searchQuery, range, orderBy);
+    },
+    [updateUrlFilters, selectedStreamer, searchQuery, orderBy]
   );
 
   const handleClearFilters = useCallback(() => {
     setSelectedStreamer('all');
     setSearchQuery('');
-    setStartDate('');
-    setEndDate('');
+    setDateRange(undefined);
     setOrderBy('date-newest');
     router.push('?', { scroll: false });
   }, [router]);
@@ -647,26 +672,26 @@ export function ServerClips({
     }
 
     // Helper: Get UTC day start timestamp for proper timezone-agnostic date comparison
-    const getUTCDayTime = (dateStr: string): number => {
-      const date = new Date(dateStr);
-      const utcYear = date.getUTCFullYear();
-      const utcMonth = date.getUTCMonth();
-      const utcDate = date.getUTCDate();
+    const getUTCDayTime = (date: Date | string): number => {
+      const d = typeof date === 'string' ? new Date(date) : date;
+      const utcYear = d.getUTCFullYear();
+      const utcMonth = d.getUTCMonth();
+      const utcDate = d.getUTCDate();
       return new Date(Date.UTC(utcYear, utcMonth, utcDate)).getTime();
     };
 
     // Filter by date - using UTC for timezone-agnostic comparison
-    if (startDate || endDate) {
+    if (dateRange?.from || dateRange?.to) {
       filtered = filtered.filter((c) => {
         const clipDayTime = getUTCDayTime(c.created_at);
         
-        if (startDate) {
-          const startDayTime = getUTCDayTime(startDate + 'T00:00:00Z');
+        if (dateRange.from) {
+          const startDayTime = getUTCDayTime(dateRange.from);
           if (clipDayTime < startDayTime) return false;
         }
         
-        if (endDate) {
-          const endDayTime = getUTCDayTime(endDate + 'T00:00:00Z');
+        if (dateRange.to) {
+          const endDayTime = getUTCDayTime(dateRange.to);
           if (clipDayTime > endDayTime) return false;
         }
         
@@ -720,9 +745,9 @@ export function ServerClips({
     });
 
     return sorted;
-  }, [clips, selectedStreamer, searchQuery, startDate, endDate, orderBy]);
+  }, [clips, selectedStreamer, searchQuery, dateRange, orderBy]);
 
-  const hasActiveFilters = selectedStreamer !== 'all' || searchQuery || startDate || endDate;
+  const hasActiveFilters = selectedStreamer !== 'all' || searchQuery || dateRange?.from || dateRange?.to;
 
   return (
     <motion.div 
@@ -786,7 +811,7 @@ export function ServerClips({
             </div>
 
             {/* Filter Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Streamer Select */}
               <div className="space-y-2">
                 <label className="text-xs text-gray-400 flex items-center gap-1">
@@ -853,47 +878,16 @@ export function ServerClips({
                 </Select>
               </div>
 
-              {/* Date Range - Start */}
+              {/* Date Range Picker */}
               <div className="space-y-2">
                 <label className="text-xs text-gray-400 flex items-center gap-1">
-                  <Calendar className="h-3 w-3 text-purple-400/70" />
-                  From Date
+                  <Calendar className="h-3 w-3 text-cyan-400/70" />
+                  Date Range
                 </label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => {
-                    setStartDate(e.target.value);
-                    updateUrlFilters(selectedStreamer, searchQuery, e.target.value, endDate, orderBy);
-                  }}
-                  className="w-full px-4 py-2 rounded-lg text-white border"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
-                    borderColor: 'rgba(168, 85, 247, 0.15)',
-                    colorScheme: 'dark',
-                  }}
-                />
-              </div>
-
-              {/* Date Range - End */}
-              <div className="space-y-2">
-                <label className="text-xs text-gray-400 flex items-center gap-1">
-                  <Calendar className="h-3 w-3 text-purple-400/70" />
-                  To Date
-                </label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => {
-                    setEndDate(e.target.value);
-                    updateUrlFilters(selectedStreamer, searchQuery, startDate, e.target.value, orderBy);
-                  }}
-                  className="w-full px-4 py-2 rounded-lg text-white border"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
-                    borderColor: 'rgba(168, 85, 247, 0.15)',
-                    colorScheme: 'dark',
-                  }}
+                <DateRangePicker
+                  dateRange={dateRange}
+                  onDateRangeChange={handleDateRangeChange}
+                  placeholder="All Time"
                 />
               </div>
             </div>
