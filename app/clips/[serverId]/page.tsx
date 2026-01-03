@@ -29,8 +29,8 @@ export default async function ClipsPage({
 
   const { data: server } = await supabase
     .from('server_xref')
-    .select('id, server_name')
-    .eq('id', serverId)
+    .select('server_id, server_name')
+    .eq('server_id', serverId)
     .single();
 
   if (!server) {
