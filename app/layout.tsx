@@ -14,6 +14,7 @@ import { VisitorTrackingProvider } from "@/components/visitor-tracking-provider"
 import { PWAProvider } from "@/components/pwa-provider"
 import { FeatureFlagProvider } from "@/lib/feature-flags"
 import { LiveDataStatusProvider } from "@/components/live-data-status-provider"
+import { Toaster } from "@/components/ui/toaster"
 import mixpanel from "mixpanel-browser";
 
 // Create an instance of the Mixpanel object, your token is already added to this snippet
@@ -226,6 +227,7 @@ export default function RootLayout({
                   <GoogleAnalytics />
                   <VisitorTrackingProvider />
                   {children}
+                  <Toaster />
                   <Analytics />
                   <SpeedInsights />
                 </Suspense>

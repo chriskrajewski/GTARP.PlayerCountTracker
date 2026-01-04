@@ -46,6 +46,11 @@ import {
 import { Drawer, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle, DrawerClose } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { KickClipPlayer } from '@/components/kick-clip-player';
+import { usePWAStandalone, useIsMobileDevice } from '@/hooks/use-pwa-standalone';
+import { createBrowserClient } from '@/lib/supabase-browser';
+import { getCurrentUser } from '@/lib/user-auth-supabase';
+import { useToast } from '@/hooks/use-toast';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CUSTOM KICK ICON
@@ -60,13 +65,6 @@ const KickIcon = ({ className }: { className?: string }) => (
     <path d="M1.333 0v24h21.334V0H1.333zm17.12 18.347h-4.32l-3.093-4.907-1.653 1.76v3.147H5.654V5.653h3.733v5.28l4.48-5.28h4.427l-4.907 5.44 4.986 7.254h.08z"/>
   </svg>
 );
-import { ClipsTimelineWaveform } from '@/components/clips-timeline-waveform';
-import { KickClipPlayer } from '@/components/kick-clip-player';
-import { useFeatureFlag, FEATURE_FLAGS } from '@/lib/feature-flags';
-import { usePWAStandalone, useIsMobileDevice } from '@/hooks/use-pwa-standalone';
-import { createBrowserClient } from '@/lib/supabase-browser';
-import { getCurrentUser } from '@/lib/user-auth-supabase';
-import { useToast } from '@/hooks/use-toast';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // INTERFACES
@@ -80,61 +78,40 @@ interface ClipData {
   title: string;
   thumbnail_url: string;
   embed_url: string;
-  view_count: number;
-  duration: number;
+  view_count?: number;
+  duration?: number;
   created_at: string;
   profile_image_url?: string;
   server_id: string;
   server_name?: string;
   platform: ClipPlatform;
-  channel_slug?: string; // For Kick clips
+  channel_slug?: string;
 }
 
-interface ServerInfo {
-  server_id: string;
-  server_name: string;
+interface FavoriteRecord {
+  id: number;
+  user_id: number;
+  clip_id: string;
+  platform: ClipPlatform;
+  saved_at: string;
+  notes: string | null;
+  categories: string[] | null;
+  viewing_history: string[] | null;
+  clip: ClipData | null;
 }
 
-interface AllClipsApiResponse {
+interface FavoritesApiResponse {
   success: boolean;
-  data: ClipData[];
-  servers: ServerInfo[];
+  data: FavoriteRecord[];
+  total: number;
   error?: string;
 }
-
-interface FavoritesListResponse {
-  success: boolean;
-  data: Array<{
-    clip_id: string;
-    platform: ClipPlatform;
-  }>;
-  error?: string;
-}
-
-type QuickRangeKey = 'all' | '7d' | '30d';
-
-const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 const normalizeDate = (date: Date) => {
   const normalized = new Date(date);
   normalized.setHours(0, 0, 0, 0);
   return normalized;
 };
-
-const buildRangeFromDays = (days: number): DateRange => {
-  const end = normalizeDate(new Date());
-  const start = new Date(end);
-  start.setDate(start.getDate() - (days - 1));
-  return { from: start, to: end };
-};
-
-const QUICK_RANGE_PRESETS: { key: QuickRangeKey; label: string }[] = [
-  { key: 'all', label: 'All time' },
-  { key: '7d', label: 'Last 7d' },
-  { key: '30d', label: 'Last 30d' },
-];
-
-const LOCAL_DATE_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 const formatDateForQueryParam = (date?: Date): string => {
   if (!date) return '';
@@ -143,6 +120,8 @@ const formatDateForQueryParam = (date?: Date): string => {
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
+
+const LOCAL_DATE_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 const parseDateParam = (value: string | null): Date | undefined => {
   if (!value) return undefined;
@@ -154,23 +133,6 @@ const parseDateParam = (value: string | null): Date | undefined => {
   if (!match) return undefined;
   const [, year, month, day] = match;
   return new Date(Number(year), Number(month) - 1, Number(day));
-};
-
-const toUtcBoundaryIso = (date: Date, boundary: 'start' | 'end'): string => {
-  const adjusted = new Date(date);
-  if (boundary === 'start') {
-    adjusted.setHours(0, 0, 0, 0);
-  } else {
-    adjusted.setHours(23, 59, 59, 999);
-  }
-  return adjusted.toISOString();
-};
-
-const getUtcDateRangeParams = (range: DateRange | undefined) => {
-  return {
-    startDateUtc: range?.from ? toUtcBoundaryIso(range.from, 'start') : undefined,
-    endDateUtc: range?.to ? toUtcBoundaryIso(range.to, 'end') : undefined,
-  };
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -259,7 +221,8 @@ const ClipCard = memo(function ClipCard({
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  const formatDuration = (seconds: number) => {
+  const formatDuration = (seconds?: number) => {
+    if (!seconds || seconds < 0) return 'N/A';
     if (seconds < 60) return `${seconds}s`;
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -409,7 +372,7 @@ const ClipCard = memo(function ClipCard({
             <div className="flex items-center justify-between text-xs text-gray-500">
               <div className="flex items-center gap-1">
                 <Eye className="h-3.5 w-3.5 text-cyan-400/70" />
-                <span className="text-gray-400">{clip.view_count.toLocaleString()}</span>
+                <span className="text-gray-400">{(clip.view_count ?? 0).toLocaleString()}</span>
               </div>
               <div className="flex items-center gap-1">
                 <Calendar className="h-3.5 w-3.5 text-purple-400/70" />
@@ -457,8 +420,6 @@ function ClipModal({
   // Generate embed URL based on platform
   const getEmbedUrl = () => {
     if (clip.platform === 'kick') {
-      // Kick clips use direct URL - they don't have an official embed API
-      // So we'll show a thumbnail with a link to watch
       return null;
     }
     return `https://clips.twitch.tv/embed?clip=${clip.clip_id}&parent=${hostname}`;
@@ -563,14 +524,14 @@ function ClipModal({
                 <Eye className="h-3 w-3 text-cyan-400/70" />
                 Views
               </p>
-              <p className="font-semibold text-cyan-400">{clip.view_count.toLocaleString()}</p>
+              <p className="font-semibold text-cyan-400">{(clip.view_count ?? 0).toLocaleString()}</p>
             </div>
             <div className="space-y-1">
               <p className="text-xs text-gray-400 flex items-center gap-1">
                 <Clock className="h-3 w-3 text-purple-400/70" />
                 Duration
               </p>
-              <p className="font-semibold text-white">{clip.duration}s</p>
+              <p className="font-semibold text-white">{clip.duration ? `${clip.duration}s` : 'N/A'}</p>
             </div>
             <div className="space-y-1">
               <p className="text-xs text-gray-400 flex items-center gap-1">
@@ -612,7 +573,7 @@ function ClipModal({
 // PAGE HEADER COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 
-export function PageHeader() {
+function PageHeader() {
   return (
     <motion.div 
       className="mb-6"
@@ -629,12 +590,12 @@ export function PageHeader() {
           }}
           whileHover={{ scale: 1.05, rotate: 5 }}
         >
-          <Film className="h-5 w-5 text-purple-400" />
+          <Heart className="h-5 w-5 text-pink-400" />
         </motion.div>
         <div>
           <p className="text-gray-400 text-sm flex items-center gap-1.5">
             <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
-            All Clips
+            Saved Favorites
             <span className="flex items-center gap-1 ml-1">
               <Twitch className="h-3 w-3 text-purple-400" />
               <span className="text-gray-500">+</span>
@@ -644,73 +605,23 @@ export function PageHeader() {
         </div>
       </div>
       <p className="text-gray-400 leading-relaxed">
-        Browse and watch clips from{' '}
+        Your saved clips from{' '}
         <span className="text-purple-300 font-medium">Twitch</span> and{' '}
         <span className="text-[#53fc18] font-medium">Kick</span> streamers across{' '}
         <span className="text-cyan-300 font-medium">all GTA RP servers</span>.
-        Discover highlights, funny moments, and epic roleplay from the community.
+        Browse and manage your favorite highlights and moments.
       </p>
     </motion.div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// LOADING SKELETON
+// MAIN FAVORITES CONTENT COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 
-interface ClipsLoadingSkeletonProps {
-  isCompact?: boolean;
-}
-
-export function ClipsLoadingSkeleton({ isCompact = false }: ClipsLoadingSkeletonProps = {}) {
-  return (
-    <motion.div 
-      className={cn("space-y-6", isCompact && "pb-24")}
-      initial="hidden"
-      animate="visible"
-      variants={staggerContainer}
-    >
-      {/* Filters skeleton */}
-      <motion.div variants={fadeInUp}>
-        <Card variant="elevated" animated={false}>
-          <CardContent className="p-6 space-y-4">
-            <AnimatedSkeleton className="h-5 w-32 mb-4" />
-            <AnimatedSkeleton className="h-12 w-full" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <AnimatedSkeleton key={i} className="h-10 w-full" />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* Clips grid skeleton */}
-      <motion.div 
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-        variants={fadeInUp}
-      >
-        {Array.from({ length: 9 }).map((_, i) => (
-          <ClipCardSkeleton key={i} />
-        ))}
-      </motion.div>
-    </motion.div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// MAIN PAGE CONTENT COMPONENT
-// ═══════════════════════════════════════════════════════════════════════════
-
-interface AllClipsContentProps {
-  defaultServerId?: string;
-  pagePath?: string;
-}
-
-export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllClipsContentProps = {}) {
+export function FavoritesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isTimelineEnabled = useFeatureFlag(FEATURE_FLAGS.CLIPS_TIMELINE);
   const { isPWA } = usePWAStandalone();
   const isMobileDevice = useIsMobileDevice();
   const isCompactLayout = isPWA || isMobileDevice;
@@ -718,7 +629,6 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
   const { toast } = useToast();
 
   const [clips, setClips] = useState<ClipData[]>([]);
-  const [servers, setServers] = useState<ServerInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedClip, setSelectedClip] = useState<ClipData | null>(null);
@@ -727,7 +637,7 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [savingFavorites, setSavingFavorites] = useState<Set<string>>(new Set());
-  const resolvedDefaultServer = defaultServerId || 'all';
+
   useEffect(() => {
     if (!isCompactLayout && mobileFiltersOpen) {
       setMobileFiltersOpen(false);
@@ -735,13 +645,12 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
   }, [isCompactLayout, mobileFiltersOpen]);
 
   // Get initial filters from URL query params
-  const initialServer = searchParams.get('server') || resolvedDefaultServer;
   const initialStreamer = searchParams.get('streamer') || 'all';
   const initialPlatform = searchParams.get('platform') || 'all';
   const initialSearchQuery = searchParams.get('search') || '';
   const initialStartDate = searchParams.get('startDate');
   const initialEndDate = searchParams.get('endDate');
-  const initialOrderBy = searchParams.get('orderBy') || 'views-desc';
+  const initialOrderBy = searchParams.get('orderBy') || 'date-newest';
 
   // Initialize date range from URL params
   const getInitialDateRange = (): DateRange | undefined => {
@@ -756,89 +665,197 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
     return undefined;
   };
 
-  const [selectedServer, setSelectedServer] = useState(initialServer);
   const [selectedStreamer, setSelectedStreamer] = useState(initialStreamer);
   const [selectedPlatform, setSelectedPlatform] = useState(initialPlatform);
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(getInitialDateRange);
   const [orderBy, setOrderBy] = useState(initialOrderBy);
   const deferredSearchQuery = useDeferredValue(searchQuery);
-  const getClipExternalUrl = useCallback((clip: ClipData): string => {
-    if (clip.platform === 'kick') {
-      const channelSlug = clip.channel_slug || clip.streamer_username;
-      return `https://kick.com/${channelSlug}?clip=${clip.clip_id}`;
-    }
-    return `https://clips.twitch.tv/${clip.clip_id}`;
-  }, []);
+
+  const buildFavoriteKey = useCallback((clip: ClipData) => `${clip.platform}:${clip.clip_id}`, []);
+  
   const openClipExternally = useCallback((clip: ClipData) => {
-    const targetUrl = getClipExternalUrl(clip);
+    const targetUrl = clip.platform === 'kick'
+      ? `https://kick.com/${clip.channel_slug || clip.streamer_username}?clip=${clip.clip_id}`
+      : `https://clips.twitch.tv/${clip.clip_id}`;
+    
     if (typeof window === 'undefined') return;
     if (isPWA) {
       window.location.href = targetUrl;
     } else {
       window.open(targetUrl, '_blank', 'noopener,noreferrer');
     }
-  }, [getClipExternalUrl, isPWA]);
+  }, [isPWA]);
 
-  /**
-   * Build a stable key for favorite lookups.
-   */
-  const buildFavoriteKey = useCallback((clip: ClipData) => `${clip.platform}:${clip.clip_id}`, []);
-
+  // Fetch favorites
   useEffect(() => {
-    let isMounted = true;
+    const fetchFavorites = async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-    /**
-     * Load favorites for the current user to hydrate UI state.
-     */
-    const loadFavorites = async () => {
-      const currentUser = await getCurrentUser();
-      if (!currentUser || typeof window === 'undefined') {
-        return;
-      }
+        const currentUser = await getCurrentUser();
+        if (!currentUser) {
+          setError('Please sign in to view favorites');
+          setLoading(false);
+          return;
+        }
 
-      const supabase = createBrowserClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+        const supabase = createBrowserClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
 
-      if (!token) {
-        return;
-      }
+        if (!token) {
+          setError('Authentication required');
+          setLoading(false);
+          return;
+        }
 
-      const response = await fetch('/api/favorites/list?limit=500', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+        const url = new URL('/api/favorites/list', typeof window !== 'undefined' ? window.location.origin : '');
+        url.searchParams.set('limit', '300');
 
-      if (!response.ok) {
-        return;
-      }
-
-      const data = (await response.json()) as FavoritesListResponse;
-      if (!data.success) {
-        return;
-      }
-
-      if (isMounted) {
-        const nextFavorites = new Set<string>();
-        data.data.forEach((favorite) => {
-          nextFavorites.add(`${favorite.platform}:${favorite.clip_id}`);
+        const response = await fetch(url.toString(), {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         });
-        setFavoriteIds(nextFavorites);
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch favorites');
+        }
+
+        const data: FavoritesApiResponse = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to fetch favorites');
+        }
+
+        // Extract clip data from favorite records
+        const clipsList = (data.data || [])
+          .filter((record) => record.clip !== null)
+          .map((record) => record.clip as ClipData);
+        
+        setClips(clipsList);
+        
+        // Initialize favoriteIds with all fetched clips
+        const allFavorites = new Set<string>();
+        clipsList.forEach((clip) => {
+          allFavorites.add(`${clip.platform}:${clip.clip_id}`);
+        });
+        setFavoriteIds(allFavorites);
+      } catch (err) {
+        console.error('[Favorites] Error fetching favorites:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch favorites');
+        setClips([]);
+      } finally {
+        setLoading(false);
       }
     };
 
-    loadFavorites();
-
-    return () => {
-      isMounted = false;
-    };
+    fetchFavorites();
   }, []);
 
-  /**
-   * Save or remove a clip from favorites.
-   */
+  // Get unique streamers from loaded clips
+  const streamers = useMemo(() => {
+    const uniqueStreamers = new Set(clips.map((c) => c.streamer_username));
+    return Array.from(uniqueStreamers).sort();
+  }, [clips]);
+
+  // Helper to format date for URL
+  const formatDateForUrl = (date: Date | undefined): string => {
+    if (!date) return '';
+    return formatDateForQueryParam(date);
+  };
+
+  // URL filter update
+  const updateUrlFilters = useCallback(
+    (streamer: string, platform: string, search: string, range: DateRange | undefined, order: string) => {
+      const params = new URLSearchParams();
+      if (streamer !== 'all') params.set('streamer', streamer);
+      if (platform !== 'all') params.set('platform', platform);
+      if (search) params.set('search', search);
+      if (range?.from) params.set('startDate', formatDateForUrl(range.from));
+      if (range?.to) params.set('endDate', formatDateForUrl(range.to));
+      if (order !== 'date-newest') params.set('orderBy', order);
+      router.push(`?${params.toString()}`, { scroll: false });
+    },
+    [router]
+  );
+
+  // Handlers
+  const handleStreamerChange = useCallback(
+    (value: string) => {
+      startTransition(() => {
+        setSelectedStreamer(value);
+        updateUrlFilters(value, selectedPlatform, searchQuery, dateRange, orderBy);
+      });
+    },
+    [startTransition, updateUrlFilters, selectedPlatform, searchQuery, dateRange, orderBy]
+  );
+
+  const handlePlatformChange = useCallback(
+    (value: string) => {
+      startTransition(() => {
+        setSelectedPlatform(value);
+        updateUrlFilters(selectedStreamer, value, searchQuery, dateRange, orderBy);
+      });
+    },
+    [startTransition, updateUrlFilters, selectedStreamer, searchQuery, dateRange, orderBy]
+  );
+
+  const handleSearchChange = useCallback(
+    (query: string) => {
+      setSearchQuery(query);
+      updateUrlFilters(selectedStreamer, selectedPlatform, query, dateRange, orderBy);
+    },
+    [updateUrlFilters, selectedStreamer, selectedPlatform, dateRange, orderBy]
+  );
+
+  const handleOrderChange = useCallback(
+    (value: string) => {
+      startTransition(() => {
+        setOrderBy(value);
+        updateUrlFilters(selectedStreamer, selectedPlatform, searchQuery, dateRange, value);
+      });
+    },
+    [startTransition, updateUrlFilters, selectedStreamer, selectedPlatform, searchQuery, dateRange]
+  );
+
+  const handleDateRangeChange = useCallback(
+    (range: DateRange | undefined) => {
+      startTransition(() => {
+        setDateRange(range);
+        updateUrlFilters(selectedStreamer, selectedPlatform, searchQuery, range, orderBy);
+      });
+    },
+    [startTransition, updateUrlFilters, selectedStreamer, selectedPlatform, searchQuery, orderBy]
+  );
+
+  const handleClearFilters = useCallback(() => {
+    startTransition(() => {
+      setSelectedStreamer('all');
+      setSelectedPlatform('all');
+      setSearchQuery('');
+      setDateRange(undefined);
+      setOrderBy('date-newest');
+      router.push('/favorites', { scroll: false });
+    });
+  }, [startTransition, router]);
+
+  const handleSelectClip = useCallback((clip: ClipData) => {
+    if (isCompactLayout) {
+      openClipExternally(clip);
+      return;
+    }
+    setSelectedClip(clip);
+    setIsModalOpen(true);
+  }, [isCompactLayout, openClipExternally]);
+
+  const handleCloseModal = useCallback(() => {
+    setIsModalOpen(false);
+    setTimeout(() => setSelectedClip(null), 300);
+  }, []);
+
   const handleToggleFavorite = useCallback(async (clip: ClipData) => {
     const favoriteKey = buildFavoriteKey(clip);
     if (savingFavorites.has(favoriteKey)) {
@@ -892,6 +909,7 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
         const next = new Set(prev);
         if (isFavorited) {
           next.delete(favoriteKey);
+          setClips((prevClips) => prevClips.filter((c) => buildFavoriteKey(c) !== favoriteKey));
         } else {
           next.add(favoriteKey);
         }
@@ -910,231 +928,20 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
     }
   }, [buildFavoriteKey, favoriteIds, router, savingFavorites, toast]);
 
-  // Fetch clips
-  useEffect(() => {
-    const fetchClips = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const url = new URL(
-          '/api/clips/all',
-          typeof window !== 'undefined' ? window.location.origin : ''
-        );
-
-        // Add server filter to API call for better performance
-        if (selectedServer && selectedServer !== 'all') {
-          url.searchParams.set('server', selectedServer);
-        }
-
-        // Add platform filter to API call
-        if (selectedPlatform && selectedPlatform !== 'all') {
-          url.searchParams.set('platform', selectedPlatform);
-        }
-
-        url.searchParams.set('limit', '300');
-
-        const { startDateUtc, endDateUtc } = getUtcDateRangeParams(dateRange);
-        if (startDateUtc) {
-          url.searchParams.set('startDate', startDateUtc);
-        }
-        if (endDateUtc) {
-          url.searchParams.set('endDate', endDateUtc);
-        }
-
-        const response = await fetch(url.toString());
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch clips');
-        }
-
-        const data: AllClipsApiResponse = await response.json();
-
-        if (!data.success) {
-          throw new Error(data.error || 'Failed to fetch clips');
-        }
-
-        setClips(data.data || []);
-        setServers(data.servers || []);
-      } catch (err) {
-        console.error('[All Clips] Error fetching clips:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch clips');
-        setClips([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchClips();
-  }, [selectedServer, selectedPlatform, dateRange]);
-
-  // Get unique streamers from loaded clips
-  const streamers = useMemo(() => {
-    const uniqueStreamers = new Set(clips.map((c) => c.streamer_username));
-    return Array.from(uniqueStreamers).sort();
-  }, [clips]);
-
-  // Helper to format date for URL
-  const formatDateForUrl = (date: Date | undefined): string => {
-    if (!date) return '';
-    return formatDateForQueryParam(date);
-  };
-
-  // URL filter update
-  const updateUrlFilters = useCallback(
-    (server: string, streamer: string, platform: string, search: string, range: DateRange | undefined, order: string) => {
-      const params = new URLSearchParams();
-      if (server !== 'all') params.set('server', server);
-      if (streamer !== 'all') params.set('streamer', streamer);
-      if (platform !== 'all') params.set('platform', platform);
-      if (search) params.set('search', search);
-      if (range?.from) params.set('startDate', formatDateForUrl(range.from));
-      if (range?.to) params.set('endDate', formatDateForUrl(range.to));
-      if (order !== 'views-desc') params.set('orderBy', order);
-      router.push(`?${params.toString()}`, { scroll: false });
-    },
-    [router]
-  );
-
-  // Handlers
-  const handleServerChange = useCallback(
-    (value: string) => {
-      startTransition(() => {
-        setSelectedServer(value);
-        setSelectedStreamer('all');
-        updateUrlFilters(value, 'all', selectedPlatform, searchQuery, dateRange, orderBy);
-      });
-    },
-    [startTransition, updateUrlFilters, selectedPlatform, searchQuery, dateRange, orderBy]
-  );
-
-  const handleStreamerChange = useCallback(
-    (value: string) => {
-      startTransition(() => {
-        setSelectedStreamer(value);
-        updateUrlFilters(selectedServer, value, selectedPlatform, searchQuery, dateRange, orderBy);
-      });
-    },
-    [startTransition, updateUrlFilters, selectedServer, selectedPlatform, searchQuery, dateRange, orderBy]
-  );
-
-  const handlePlatformChange = useCallback(
-    (value: string) => {
-      startTransition(() => {
-        setSelectedPlatform(value);
-        updateUrlFilters(selectedServer, selectedStreamer, value, searchQuery, dateRange, orderBy);
-      });
-    },
-    [startTransition, updateUrlFilters, selectedServer, selectedStreamer, searchQuery, dateRange, orderBy]
-  );
-
-  const handleSearchChange = useCallback(
-    (query: string) => {
-      setSearchQuery(query);
-      updateUrlFilters(selectedServer, selectedStreamer, selectedPlatform, query, dateRange, orderBy);
-    },
-    [updateUrlFilters, selectedServer, selectedStreamer, selectedPlatform, dateRange, orderBy]
-  );
-
-  const handleOrderChange = useCallback(
-    (value: string) => {
-      startTransition(() => {
-        setOrderBy(value);
-        updateUrlFilters(selectedServer, selectedStreamer, selectedPlatform, searchQuery, dateRange, value);
-      });
-    },
-    [startTransition, updateUrlFilters, selectedServer, selectedStreamer, selectedPlatform, searchQuery, dateRange]
-  );
-
-  const handleDateRangeChange = useCallback(
-    (range: DateRange | undefined) => {
-      startTransition(() => {
-        setDateRange(range);
-        updateUrlFilters(selectedServer, selectedStreamer, selectedPlatform, searchQuery, range, orderBy);
-      });
-    },
-    [startTransition, updateUrlFilters, selectedServer, selectedStreamer, selectedPlatform, searchQuery, orderBy]
-  );
-
-  // Handle waveform time range selection
-  const handleWaveformSelect = useCallback(
-    (startDate: Date, endDate: Date) => {
-      const newRange: DateRange = { from: startDate, to: endDate };
-      startTransition(() => {
-        setDateRange(newRange);
-        setOrderBy('views-desc');
-        updateUrlFilters(selectedServer, selectedStreamer, selectedPlatform, searchQuery, newRange, 'views-desc');
-      });
-    },
-    [startTransition, updateUrlFilters, selectedServer, selectedStreamer, selectedPlatform, searchQuery]
-  );
-
-  const handleQuickRangeSelect = useCallback(
-    (preset: QuickRangeKey) => {
-      startTransition(() => {
-        if (preset === 'all') {
-          setDateRange(undefined);
-          updateUrlFilters(selectedServer, selectedStreamer, selectedPlatform, searchQuery, undefined, orderBy);
-          return;
-        }
-        const days = preset === '7d' ? 7 : 30;
-        const newRange = buildRangeFromDays(days);
-        setDateRange(newRange);
-        updateUrlFilters(selectedServer, selectedStreamer, selectedPlatform, searchQuery, newRange, orderBy);
-      });
-    },
-    [startTransition, updateUrlFilters, selectedServer, selectedStreamer, selectedPlatform, searchQuery, orderBy]
-  );
-
-  const activeQuickRange = useMemo<QuickRangeKey | 'custom'>(() => {
-    if (!dateRange?.from && !dateRange?.to) return 'all';
-    if (dateRange?.from && dateRange?.to) {
-      const normalizedStart = normalizeDate(dateRange.from);
-      const normalizedEnd = normalizeDate(dateRange.to);
-      const today = normalizeDate(new Date());
-      const diffDays = Math.round((normalizedEnd.getTime() - normalizedStart.getTime()) / DAY_IN_MS);
-      const endsToday = normalizedEnd.getTime() === today.getTime();
-      if (endsToday && diffDays === 6) return '7d';
-      if (endsToday && diffDays === 29) return '30d';
-    }
-    return 'custom';
-  }, [dateRange]);
-
-  const handleClearFilters = useCallback(() => {
-    startTransition(() => {
-      setSelectedServer(resolvedDefaultServer);
-      setSelectedStreamer('all');
-      setSelectedPlatform('all');
-      setSearchQuery('');
-      setDateRange(undefined);
-      setOrderBy('views-desc');
-      router.push(pagePath, { scroll: false });
-    });
-  }, [startTransition, router, pagePath, resolvedDefaultServer]);
-
-  const handleSelectClip = useCallback((clip: ClipData) => {
-    if (isCompactLayout) {
-      openClipExternally(clip);
-      return;
-    }
-    setSelectedClip(clip);
-    setIsModalOpen(true);
-  }, [isCompactLayout, openClipExternally]);
-
-  const handleCloseModal = useCallback(() => {
-    setIsModalOpen(false);
-    setTimeout(() => setSelectedClip(null), 300);
-  }, []);
-
   // Filter and sort clips
   const filteredClips = useMemo(() => {
     let filtered = clips;
 
-    // Filter by streamer (client-side since we already fetched by server)
+    // Filter by streamer
     if (selectedStreamer !== 'all' && selectedStreamer) {
       filtered = filtered.filter(
         (c) => c.streamer_username.toLowerCase() === selectedStreamer.toLowerCase()
       );
+    }
+
+    // Filter by platform
+    if (selectedPlatform !== 'all' && selectedPlatform) {
+      filtered = filtered.filter((c) => c.platform === selectedPlatform);
     }
 
     // Filter by search
@@ -1148,7 +955,7 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
       );
     }
 
-    // Helper: Get local day start timestamp so comparisons respect user timezone
+    // Helper: Get local day start timestamp
     const getLocalDayTime = (date: Date | string): number => {
       const baseDate = typeof date === 'string' ? new Date(date) : new Date(date.getTime());
       baseDate.setHours(0, 0, 0, 0);
@@ -1178,44 +985,26 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
     const sorted = [...filtered].sort((a, b) => {
       switch (orderBy) {
         case 'views-desc': 
-          return b.view_count - a.view_count;
+          return (b.view_count ?? 0) - (a.view_count ?? 0);
         case 'views-asc': 
-          return a.view_count - b.view_count;
+          return (a.view_count ?? 0) - (b.view_count ?? 0);
         case 'date-newest':
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         case 'date-oldest':
           return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
         case 'duration-longest': 
-          return b.duration - a.duration;
+          return (b.duration ?? 0) - (a.duration ?? 0);
         case 'duration-shortest': 
-          return a.duration - b.duration;
+          return (a.duration ?? 0) - (b.duration ?? 0);
         default: 
           return 0;
       }
     });
 
     return sorted;
-  }, [clips, selectedStreamer, deferredSearchQuery, dateRange, orderBy]);
+  }, [clips, selectedStreamer, selectedPlatform, deferredSearchQuery, dateRange, orderBy]);
 
-  const hasActiveFilters = selectedServer !== 'all' || selectedStreamer !== 'all' || selectedPlatform !== 'all' || searchQuery || dateRange?.from || dateRange?.to;
-  const shouldShowTimeline = isTimelineEnabled && clips.length > 0 && !isCompactLayout;
-  const selectedServerLabel = useMemo(() => {
-    if (selectedServer === 'all') return 'All Servers';
-    return servers.find((server) => server.server_id === selectedServer)?.server_name || selectedServer;
-  }, [selectedServer, servers]);
-  const selectedPlatformLabel = selectedPlatform === 'all' ? 'All Platforms' : selectedPlatform === 'twitch' ? 'Twitch' : 'Kick';
-  const selectedStreamerLabel = selectedStreamer === 'all' ? 'All Streamers' : selectedStreamer;
-  const dateRangeLabel = useMemo(() => {
-    if (!dateRange?.from && !dateRange?.to) return 'All Time';
-    const format = (date?: Date) =>
-      date
-        ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-        : null;
-    const fromLabel = format(dateRange?.from);
-    const toLabel = format(dateRange?.to);
-    if (fromLabel && toLabel) return `${fromLabel} – ${toLabel}`;
-    return fromLabel || toLabel || 'All Time';
-  }, [dateRange]);
+  const hasActiveFilters = selectedStreamer !== 'all' || selectedPlatform !== 'all' || searchQuery || dateRange?.from || dateRange?.to;
 
   const SearchField = ({ className = '', showPending = false }: { className?: string; showPending?: boolean }) => (
     <div className={cn("space-y-1", className)}>
@@ -1223,7 +1012,7 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
         <input
           type="text"
-          placeholder="Search by title, streamer, or server name..."
+          placeholder="Search by title or streamer..."
           value={searchQuery}
           onChange={(e) => handleSearchChange(e.target.value)}
           className="w-full pl-10 pr-10 py-3 rounded-lg text-white placeholder-gray-500 transition-all duration-300 border"
@@ -1251,41 +1040,7 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
   );
 
   const FiltersGrid = () => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-      {/* Server Select */}
-      <div className="space-y-2">
-        <label className="text-xs text-gray-400 flex items-center gap-1">
-          <Server className="h-3 w-3 text-cyan-400/70" />
-          Server
-        </label>
-        <Select value={selectedServer} onValueChange={handleServerChange}>
-          <SelectTrigger 
-            className="w-full border text-white"
-            style={{
-              background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
-              borderColor: 'rgba(168, 85, 247, 0.15)',
-            }}
-          >
-            <SelectValue placeholder="All Servers" />
-          </SelectTrigger>
-          <SelectContent 
-            style={{
-              background: 'rgba(18, 18, 21, 0.98)',
-              borderColor: 'rgba(168, 85, 247, 0.2)',
-            }}
-          >
-            <SelectItem value="all" className="text-white">
-              All Servers ({servers.length})
-            </SelectItem>
-            {servers.map((server) => (
-              <SelectItem key={server.server_id} value={server.server_id} className="text-white">
-                {server.server_name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {/* Platform Select */}
       <div className="space-y-2">
         <label className="text-xs text-gray-400 flex items-center gap-1">
@@ -1378,7 +1133,7 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
               borderColor: 'rgba(168, 85, 247, 0.15)',
             }}
           >
-            <SelectValue placeholder="Sort clips" />
+            <SelectValue placeholder="Sort by" />
           </SelectTrigger>
           <SelectContent
             style={{
@@ -1386,10 +1141,10 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
               borderColor: 'rgba(168, 85, 247, 0.2)',
             }}
           >
-            <SelectItem value="views-desc" className="text-white">Views (High → Low)</SelectItem>
-            <SelectItem value="views-asc" className="text-white">Views (Low → High)</SelectItem>
             <SelectItem value="date-newest" className="text-white">Date (Newest)</SelectItem>
             <SelectItem value="date-oldest" className="text-white">Date (Oldest)</SelectItem>
+            <SelectItem value="views-desc" className="text-white">Views (High → Low)</SelectItem>
+            <SelectItem value="views-asc" className="text-white">Views (Low → High)</SelectItem>
             <SelectItem value="duration-longest" className="text-white">Duration (Longest)</SelectItem>
             <SelectItem value="duration-shortest" className="text-white">Duration (Shortest)</SelectItem>
           </SelectContent>
@@ -1411,116 +1166,6 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
     </div>
   );
 
-  const MobileSelectField = ({
-    label,
-    value,
-    onChange,
-    options,
-  }: {
-    label: string;
-    value: string;
-    onChange: (val: string) => void;
-    options: { value: string; label: string }[];
-  }) => (
-    <div className="space-y-1">
-      <label className="text-xs text-gray-400">{label}</label>
-      <div className="relative">
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full appearance-none rounded-lg border bg-gradient-to-r from-black/60 to-zinc-900/60 text-white text-sm px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-purple-500/40 border-white/10"
-        >
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
-      </div>
-    </div>
-  );
-
-  const MobileFilterControls = () => (
-    <div className="space-y-4">
-      <MobileSelectField
-        label="Server"
-        value={selectedServer}
-        onChange={handleServerChange}
-        options={[
-          { value: 'all', label: `All Servers (${servers.length})` },
-          ...servers.map((server) => ({
-            value: server.server_id,
-            label: server.server_name,
-          })),
-        ]}
-      />
-      <MobileSelectField
-        label="Platform"
-        value={selectedPlatform}
-        onChange={handlePlatformChange}
-        options={[
-          { value: 'all', label: 'All Platforms' },
-          { value: 'twitch', label: 'Twitch' },
-          { value: 'kick', label: 'Kick' },
-        ]}
-      />
-      <MobileSelectField
-        label="Streamer"
-        value={selectedStreamer}
-        onChange={handleStreamerChange}
-        options={[
-          { value: 'all', label: `All Streamers (${streamers.length})` },
-          ...streamers.map((streamer) => ({
-            value: streamer,
-            label: streamer,
-          })),
-        ]}
-      />
-      <MobileSelectField
-        label="Sort By"
-        value={orderBy}
-        onChange={handleOrderChange}
-        options={[
-          { value: 'views-desc', label: 'Views (High → Low)' },
-          { value: 'views-asc', label: 'Views (Low → High)' },
-          { value: 'date-newest', label: 'Date (Newest)' },
-          { value: 'date-oldest', label: 'Date (Oldest)' },
-          { value: 'duration-longest', label: 'Duration (Longest)' },
-          { value: 'duration-shortest', label: 'Duration (Shortest)' },
-        ]}
-      />
-      <div className="space-y-2">
-        <p className="text-xs text-gray-400 flex items-center gap-1">
-          <Calendar className="h-3 w-3 text-cyan-400/70" />
-          Quick Date Range
-        </p>
-        <div className="grid grid-cols-3 gap-2">
-          {QUICK_RANGE_PRESETS.map((preset) => (
-            <button
-              key={preset.key}
-              type="button"
-              onClick={() => handleQuickRangeSelect(preset.key)}
-              className={cn(
-                "px-3 py-2 rounded-lg text-xs font-medium border transition-colors",
-                activeQuickRange === preset.key
-                  ? "border-purple-500/60 text-white bg-purple-500/20"
-                  : "border-white/10 text-gray-300 hover:border-white/30"
-              )}
-            >
-              {preset.label}
-            </button>
-          ))}
-        </div>
-        {activeQuickRange === 'custom' && (
-          <p className="text-xs text-gray-500">
-            Custom range selected
-          </p>
-        )}
-      </div>
-    </div>
-  );
-
   const ActiveFiltersBanner = () => (
     <AnimatePresence>
       {hasActiveFilters && (
@@ -1537,7 +1182,7 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
         >
           <p className="text-sm text-gray-300">
             Showing <span className="text-purple-400 font-semibold">{filteredClips.length}</span> of{' '}
-            <span className="text-cyan-400 font-semibold">{clips.length}</span> clips
+            <span className="text-cyan-400 font-semibold">{clips.length}</span> favorites
           </p>
           <motion.button
             onClick={handleClearFilters}
@@ -1557,15 +1202,40 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
     </AnimatePresence>
   );
 
-  const FilterControls = ({ showBanner = true }: { showBanner?: boolean }) => (
-    <>
-      <FiltersGrid />
-      {showBanner && <ActiveFiltersBanner />}
-    </>
-  );
-
   if (loading) {
-    return <ClipsLoadingSkeleton isCompact={isCompactLayout} />;
+    return (
+      <motion.div 
+        className="space-y-6 pb-24"
+        initial="hidden"
+        animate="visible"
+        variants={staggerContainer}
+      >
+        {/* Filters skeleton */}
+        <motion.div variants={fadeInUp}>
+          <Card variant="elevated" animated={false}>
+            <CardContent className="p-6 space-y-4">
+              <AnimatedSkeleton className="h-5 w-32 mb-4" />
+              <AnimatedSkeleton className="h-12 w-full" />
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <AnimatedSkeleton key={i} className="h-10 w-full" />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Grid skeleton */}
+        <motion.div 
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          variants={fadeInUp}
+        >
+          {Array.from({ length: 9 }).map((_, i) => (
+            <ClipCardSkeleton key={i} />
+          ))}
+        </motion.div>
+      </motion.div>
+    );
   }
 
   return (
@@ -1575,149 +1245,41 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
       animate="visible"
       variants={staggerContainer}
     >
-      {/* Timeline Waveform Visualization */}
-      {shouldShowTimeline && (
-        <motion.div variants={fadeInUp}>
-          <ClipsTimelineWaveform
-            clips={clips}
-            onTimeRangeSelect={handleWaveformSelect}
-            selectedRange={dateRange}
-            className="mb-2"
-          />
-        </motion.div>
-      )}
-
       {/* Controls */}
       <motion.div variants={fadeInUp}>
-        {isCompactLayout ? (
-          <Drawer
-            shouldScaleBackground={false}
-            open={mobileFiltersOpen}
-            onOpenChange={setMobileFiltersOpen}
-          >
-            <Card variant="elevated" className="overflow-hidden">
-              <CardGradientBackground />
-              <CardContent className="relative z-10 space-y-4">
-                <SearchField />
-                <motion.button
-                  type="button"
-                  onClick={() => setMobileFiltersOpen(true)}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-medium border"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
-                    borderColor: 'rgba(168, 85, 247, 0.2)',
-                  }}
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
-                >
-                  <SlidersHorizontal className="h-4 w-4 text-purple-400" />
-                  <span className="text-white">Filters &amp; Sort</span>
-                </motion.button>
-                <div className="grid grid-cols-2 gap-3 text-xs text-gray-400">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500">Server</p>
-                    <p className="text-sm text-white">{selectedServerLabel}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500">Platform</p>
-                    <p className="text-sm text-white">{selectedPlatformLabel}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500">Streamer</p>
-                    <p className="text-sm text-white truncate">{selectedStreamerLabel}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500">Date Range</p>
-                    <p className="text-sm text-white">{dateRangeLabel}</p>
-                  </div>
-                </div>
-                <div className="text-sm text-gray-300">
-                  {hasActiveFilters ? (
-                    <>
-                      Showing <span className="text-purple-400 font-semibold">{filteredClips.length}</span> of{' '}
-                      <span className="text-cyan-400 font-semibold">{clips.length}</span> clips
-                    </>
-                  ) : (
-                    <>All {clips.length} clips are visible</>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-            <DrawerContent className="bg-[#08080b] text-white border-t border-purple-500/30">
-              <DrawerHeader className="text-left relative">
-                <DrawerTitle className="text-lg text-white flex items-center gap-2">
-                  <Filter className="h-4 w-4 text-purple-400" />
-                  Filters &amp; Search
-                </DrawerTitle>
-                <DrawerClose asChild>
-                  <button
-                    type="button"
-                    className="absolute right-4 top-4 rounded-full p-2 text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-                    aria-label="Close filters"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </DrawerClose>
-              </DrawerHeader>
-              <div className="px-4 pb-4 space-y-4 max-h-[70vh] overflow-y-auto">
-                <SearchField showPending={isPending} />
-                <MobileFilterControls />
-                <ActiveFiltersBanner />
-              </div>
-              <DrawerFooter className="px-4 pb-6">
-                <Button
-                  variant="outline"
-                  className="border-purple-500/40 text-purple-200 hover:bg-purple-500/10"
-                  onClick={() => {
-                    handleClearFilters();
-                    setMobileFiltersOpen(false);
-                  }}
-                >
-                  Clear All Filters
-                </Button>
-                <Button
-                  className="bg-gradient-to-r from-purple-500 to-cyan-500 text-black font-semibold hover:opacity-90"
-                  onClick={() => setMobileFiltersOpen(false)}
-                >
-                  Done
-                </Button>
-              </DrawerFooter>
-            </DrawerContent>
-          </Drawer>
-        ) : (
-          <Card variant="elevated" className="overflow-hidden">
-            <CardGradientBackground />
-            <CardHeader className="pb-4 relative z-10">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Filter className="h-5 w-5 text-purple-400" />
-                  <span className="bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-                    Filters &amp; Search
-                  </span>
-                </CardTitle>
-                
-                <motion.button
-                  onClick={() => setShowFilters(!showFilters)}
-                  className="sm:hidden inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
-                    borderColor: 'rgba(168, 85, 247, 0.2)',
-                  }}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <SlidersHorizontal className="h-4 w-4 text-purple-400" />
-                  <span className="text-white">{showFilters ? 'Hide' : 'Show'} Filters</span>
-                </motion.button>
-              </div>
-            </CardHeader>
-            
-            <CardContent className={cn("relative z-10 space-y-4", !showFilters && "hidden sm:block")}>
-              <SearchField />
-              <FilterControls />
-            </CardContent>
-          </Card>
-        )}
+        <Card variant="elevated" className="overflow-hidden">
+          <CardGradientBackground />
+          <CardHeader className="pb-4 relative z-10">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Filter className="h-5 w-5 text-purple-400" />
+                <span className="bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
+                  Filters & Search
+                </span>
+              </CardTitle>
+              
+              <motion.button
+                onClick={() => setShowFilters(!showFilters)}
+                className="sm:hidden inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+                  borderColor: 'rgba(168, 85, 247, 0.2)',
+                }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <SlidersHorizontal className="h-4 w-4 text-purple-400" />
+                <span className="text-white">{showFilters ? 'Hide' : 'Show'} Filters</span>
+              </motion.button>
+            </div>
+          </CardHeader>
+          
+          <CardContent className={cn("relative z-10 space-y-4", !showFilters && "hidden sm:block")}>
+            <SearchField />
+            <FiltersGrid />
+            <ActiveFiltersBanner />
+          </CardContent>
+        </Card>
       </motion.div>
 
       {/* Content */}
@@ -1737,7 +1299,7 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
                     <AlertCircle className="h-5 w-5 text-red-400" />
                   </div>
                   <div>
-                    <p className="font-semibold text-red-400">Unable to load clips</p>
+                    <p className="font-semibold text-red-400">Unable to load favorites</p>
                     <p className="text-sm text-red-300/70">{error}</p>
                   </div>
                 </div>
@@ -1760,11 +1322,11 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
                   transition={{ delay: 0.1, ...springs.bouncy }}
                   className="w-16 h-16 rounded-full bg-purple-500/20 flex items-center justify-center mx-auto mb-4"
                 >
-                  <Film className="h-8 w-8 text-purple-400" />
+                  <Heart className="h-8 w-8 text-pink-400" />
                 </motion.div>
-                <h3 className="text-lg font-semibold text-white mb-2">No clips found</h3>
+                <h3 className="text-lg font-semibold text-white mb-2">No favorites yet</h3>
                 <p className="text-gray-400">
-                  No clips have been collected yet. Check back later!
+                  Save clips from the Clips page to see them here!
                 </p>
               </CardContent>
             </Card>
@@ -1787,7 +1349,7 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
                 >
                   <Search className="h-8 w-8 text-cyan-400" />
                 </motion.div>
-                <h3 className="text-lg font-semibold text-white mb-2">No clips match your filters</h3>
+                <h3 className="text-lg font-semibold text-white mb-2">No favorites match your filters</h3>
                 <p className="text-gray-400 mb-4">Try adjusting your search or filter criteria.</p>
                 <motion.button
                   onClick={handleClearFilters}
@@ -1843,12 +1405,12 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
 // MAIN PAGE COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 
-export default function AllClipsPage() {
+export default function FavoritesPage() {
   return (
-    <CommonLayout showBackButton pageTitle="Clips">
+    <CommonLayout showBackButton pageTitle="Favorites">
       <PageHeader />
-      <Suspense fallback={<ClipsLoadingSkeleton />}>
-        <AllClipsContent />
+      <Suspense fallback={<div>Loading...</div>}>
+        <FavoritesContent />
       </Suspense>
     </CommonLayout>
   );
