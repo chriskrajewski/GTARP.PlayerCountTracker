@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { filterQueueEnabledServers, type QueueSegment } from '@/lib/server-queues'
 
 /**
  * Live Server Data Types
@@ -42,10 +43,20 @@ export interface LiveKickData {
   error?: string
 }
 
+export type LiveQueueSegment = QueueSegment
+
+export interface LiveQueueData {
+  totalPlayers: number
+  segments: LiveQueueSegment[]
+  lastUpdated: string
+  error?: string
+}
+
 export interface LiveServerData {
   fivem: LiveFiveMData | null
   twitch: LiveTwitchData | null
   kick: LiveKickData | null
+  queue: LiveQueueData | null
 }
 
 export interface LiveDataState {
@@ -76,6 +87,10 @@ interface UseLiveServerDataOptions {
    * Whether to fetch Kick data (default: true)
    */
   fetchKick?: boolean
+  /**
+   * Whether to fetch queue data when supported (default: true)
+   */
+  fetchQueue?: boolean
 }
 
 /**
@@ -97,7 +112,8 @@ export function useLiveServerData(
     enabled = true,
     fetchFiveM = true,
     fetchTwitch = true,
-    fetchKick = true
+    fetchKick = true,
+    fetchQueue = true
   } = options
 
   const [state, setState] = useState<LiveDataState>({
@@ -176,6 +192,30 @@ export function useLiveServerData(
   }, [fetchKick])
 
   /**
+   * Fetch live queue data
+   */
+  const fetchQueueData = useCallback(async (ids: string[]): Promise<Record<string, LiveQueueData>> => {
+    if (ids.length === 0 || !fetchQueue) return {}
+
+    const queueSupportedIds = filterQueueEnabledServers(ids)
+    if (queueSupportedIds.length === 0) return {}
+
+    try {
+      const response = await fetch(`/api/live/queue?serverIds=${queueSupportedIds.join(',')}`)
+      
+      if (!response.ok) {
+        throw new Error(`Queue API error: ${response.status}`)
+      }
+
+      const data = await response.json()
+      return data.servers || {}
+    } catch (error) {
+      console.error('Error fetching live queue data:', error)
+      return {}
+    }
+  }, [fetchQueue])
+
+  /**
    * Fetch all live data
    */
   const fetchLiveData = useCallback(async () => {
@@ -184,11 +224,12 @@ export function useLiveServerData(
     fetchInProgressRef.current = true
 
     try {
-      // Fetch FiveM, Twitch, and Kick data in parallel
-      const [fivemData, twitchData, kickData] = await Promise.all([
+      // Fetch FiveM, Twitch, Kick, and queue data in parallel
+      const [fivemData, twitchData, kickData, queueData] = await Promise.all([
         fetchFiveMData(serverIds),
         fetchTwitchData(serverIds),
-        fetchKickData(serverIds)
+        fetchKickData(serverIds),
+        fetchQueueData(serverIds)
       ])
 
       if (!mountedRef.current) return
@@ -200,7 +241,8 @@ export function useLiveServerData(
         servers[serverId] = {
           fivem: fivemData[serverId] || null,
           twitch: twitchData[serverId] || null,
-          kick: kickData[serverId] || null
+          kick: kickData[serverId] || null,
+          queue: queueData[serverId] || null
         }
       })
 
@@ -225,7 +267,7 @@ export function useLiveServerData(
     } finally {
       fetchInProgressRef.current = false
     }
-  }, [serverIds, fetchFiveMData, fetchTwitchData, fetchKickData])
+  }, [serverIds, fetchFiveMData, fetchTwitchData, fetchKickData, fetchQueueData])
 
   /**
    * Manual refresh function
@@ -301,6 +343,7 @@ export function getLiveServerStats(
   viewerCount: number
   online: boolean
   hasLiveData: boolean
+  queuePlayers: number
 } {
   const serverData = liveData.servers[serverId]
   
@@ -311,7 +354,8 @@ export function getLiveServerStats(
       streamCount: 0,
       viewerCount: 0,
       online: false,
-      hasLiveData: false
+      hasLiveData: false,
+      queuePlayers: 0
     }
   }
 
@@ -327,6 +371,7 @@ export function getLiveServerStats(
     streamCount: twitchStreams + kickStreams,
     viewerCount: twitchViewers + kickViewers,
     online: serverData.fivem?.online ?? false,
-    hasLiveData: !!(serverData.fivem || serverData.twitch || serverData.kick)
+    hasLiveData: !!(serverData.fivem || serverData.twitch || serverData.kick || serverData.queue),
+    queuePlayers: serverData.queue?.totalPlayers ?? 0
   }
 }
