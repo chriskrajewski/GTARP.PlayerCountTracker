@@ -101,9 +101,25 @@ export async function GET(request: NextRequest) {
     const platformFilter = url.searchParams.get('platform')?.toLowerCase().trim() as ClipPlatform | 'all' | null || 'all';
     const limitParam = url.searchParams.get('limit');
     const limit = Math.min(parseInt(limitParam || '100', 10), 500);
+    const startDateParam = url.searchParams.get('startDate');
+    const endDateParam = url.searchParams.get('endDate');
+
+    const parseDateParam = (value: string | null) => {
+      if (!value) return null;
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) {
+        return null;
+      }
+      return parsed;
+    };
+
+    const startDate = parseDateParam(startDateParam);
+    const endDate = parseDateParam(endDateParam);
+    const startDateIso = startDate ? startDate.toISOString() : null;
+    const endDateIso = endDate ? endDate.toISOString() : null;
 
     // Generate cache key
-    const cacheKey = `clips:all:${serverFilter || 'all'}:${streamerFilter || 'all'}:${platformFilter}:${limit}`;
+    const cacheKey = `clips:all:${serverFilter || 'all'}:${streamerFilter || 'all'}:${platformFilter}:${limit}:${startDateIso || 'none'}:${endDateIso || 'none'}`;
 
     // Try to get from cache
     const cache = getAPICache();
@@ -133,19 +149,37 @@ export async function GET(request: NextRequest) {
 
     // Fetch Twitch servers
     if (platformFilter === 'all' || platformFilter === 'twitch') {
-      const { data: twitchServers } = await supabase
+      let twitchServerQuery = supabase
         .from('twitch_clips')
         .select('serverId')
         .eq('is_valid', true);
+
+      if (startDateIso) {
+        twitchServerQuery = twitchServerQuery.gte('twitch_created_at', startDateIso);
+      }
+      if (endDateIso) {
+        twitchServerQuery = twitchServerQuery.lte('twitch_created_at', endDateIso);
+      }
+
+      const { data: twitchServers } = await twitchServerQuery;
       (twitchServers || []).forEach((c: { serverId: string }) => serverIdSet.add(c.serverId));
     }
 
     // Fetch Kick servers
     if (platformFilter === 'all' || platformFilter === 'kick') {
-      const { data: kickServers } = await supabase
+      let kickServerQuery = supabase
         .from('kick_clips')
         .select('serverId')
         .eq('is_valid', true);
+
+      if (startDateIso) {
+        kickServerQuery = kickServerQuery.gte('kick_created_at', startDateIso);
+      }
+      if (endDateIso) {
+        kickServerQuery = kickServerQuery.lte('kick_created_at', endDateIso);
+      }
+
+      const { data: kickServers } = await kickServerQuery;
       (kickServers || []).forEach((c: { serverId: string }) => serverIdSet.add(c.serverId));
     }
 
@@ -193,6 +227,12 @@ export async function GET(request: NextRequest) {
       if (streamerFilter) {
         twitchQuery = twitchQuery.eq('streamer_username', streamerFilter);
       }
+      if (startDateIso) {
+        twitchQuery = twitchQuery.gte('twitch_created_at', startDateIso);
+      }
+      if (endDateIso) {
+        twitchQuery = twitchQuery.lte('twitch_created_at', endDateIso);
+      }
 
       const { data: twitchClips, error: twitchError } = await twitchQuery;
 
@@ -231,6 +271,12 @@ export async function GET(request: NextRequest) {
       }
       if (streamerFilter) {
         kickQuery = kickQuery.eq('streamer_username', streamerFilter);
+      }
+      if (startDateIso) {
+        kickQuery = kickQuery.gte('kick_created_at', startDateIso);
+      }
+      if (endDateIso) {
+        kickQuery = kickQuery.lte('kick_created_at', endDateIso);
       }
 
       const { data: kickClips, error: kickError } = await kickQuery;
