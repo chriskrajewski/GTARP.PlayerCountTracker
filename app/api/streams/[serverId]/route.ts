@@ -70,23 +70,18 @@ interface TwitchApiStream {
   is_mature: boolean;
 }
 
-interface TwitchStreamsCachePayload {
-  gameIds: string[];
+interface TwitchGameStreamsCachePayload {
+  gameId: string;
   lastUpdated: string;
   streams: TwitchApiStream[];
 }
 
 const TWITCH_TOKEN_REFRESH_BUFFER_MS = 60 * 1000; // refresh 1 minute before expiration
+const GAME_STREAM_MEMORY_TTL_MS = 60 * 1000; // keep per-game results warm for 1 minute
 
 let cachedTwitchToken: { token: string; expiresAt: number } | null = null;
-
-function arraysEqual<T>(a: T[], b: T[]): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
-}
+const gameStreamsMemoryCache = new Map<string, { streams: TwitchApiStream[]; expiresAt: number }>();
+const inflightGameFetches = new Map<string, Promise<TwitchApiStream[]>>();
 
 // ============================================
 // TWITCH API FUNCTIONS
@@ -129,11 +124,59 @@ async function fetchStreamsFromGames(
   clientId: string,
   token: string,
   gameIds: string[],
-  maxPages: number = 75
+  maxPages: number = 40,
+  options?: { bustCache?: boolean; cache?: ReturnType<typeof getAPICache> }
 ): Promise<TwitchApiStream[]> {
   const streams: TwitchApiStream[] = [];
 
   for (const gameId of gameIds) {
+    const perGameStreams = await fetchStreamsForGame(clientId, token, gameId, maxPages, options);
+    streams.push(...perGameStreams);
+  }
+
+  return streams;
+}
+
+async function fetchStreamsForGame(
+  clientId: string,
+  token: string,
+  gameId: string,
+  maxPages: number,
+  options?: { bustCache?: boolean; cache?: ReturnType<typeof getAPICache> }
+): Promise<TwitchApiStream[]> {
+  const now = Date.now();
+  const cacheInstance = options?.cache;
+
+  if (!options?.bustCache) {
+    const memoryEntry = gameStreamsMemoryCache.get(gameId);
+    if (memoryEntry && memoryEntry.expiresAt > now) {
+      return memoryEntry.streams;
+    }
+
+    const inflight = inflightGameFetches.get(gameId);
+    if (inflight) {
+      return inflight;
+    }
+  }
+
+  let cachedPayload: TwitchGameStreamsCachePayload | null = null;
+  if (cacheInstance) {
+    try {
+      cachedPayload = await cacheInstance.get<TwitchGameStreamsCachePayload>('twitch_game_streams', gameId);
+      if (cachedPayload?.streams && !options?.bustCache) {
+        gameStreamsMemoryCache.set(gameId, {
+          streams: cachedPayload.streams,
+          expiresAt: now + GAME_STREAM_MEMORY_TTL_MS
+        });
+        return cachedPayload.streams;
+      }
+    } catch (error) {
+      console.warn(`[Streams API] Failed to read cached Twitch streams for game ${gameId}:`, error);
+    }
+  }
+
+  const fetchPromise = (async (): Promise<TwitchApiStream[]> => {
+    const fetched: TwitchApiStream[] = [];
     let cursor: string | null = null;
     let pageCount = 0;
 
@@ -158,12 +201,20 @@ async function fetchStreamsFromGames(
 
         if (!response.ok) {
           console.error(`[Streams API] Twitch API error for game ${gameId}: ${response.status}`);
+          if (response.status === 429 && cachedPayload?.streams?.length) {
+            console.warn(`[Streams API] Using cached Twitch data for game ${gameId} after rate limit`);
+            gameStreamsMemoryCache.set(gameId, {
+              streams: cachedPayload.streams,
+              expiresAt: Date.now() + GAME_STREAM_MEMORY_TTL_MS
+            });
+            return cachedPayload.streams;
+          }
           break;
         }
 
         const data = await response.json();
         const batch = Array.isArray(data.data) ? data.data : [];
-        streams.push(...batch);
+        fetched.push(...batch);
 
         cursor = data.pagination?.cursor || null;
         if (!cursor || batch.length === 0) break;
@@ -171,10 +222,56 @@ async function fetchStreamsFromGames(
       }
     } catch (error) {
       console.error(`[Streams API] Error fetching streams for game ${gameId}:`, error);
+      if (cachedPayload?.streams?.length) {
+        console.warn(`[Streams API] Falling back to cached Twitch data for game ${gameId}`);
+        gameStreamsMemoryCache.set(gameId, {
+          streams: cachedPayload.streams,
+          expiresAt: Date.now() + GAME_STREAM_MEMORY_TTL_MS
+        });
+        return cachedPayload.streams;
+      }
     }
+
+    if (fetched.length === 0 && cachedPayload?.streams?.length && options?.bustCache) {
+      console.warn(`[Streams API] No fresh Twitch data for game ${gameId}; returning cached copy`);
+      gameStreamsMemoryCache.set(gameId, {
+        streams: cachedPayload.streams,
+        expiresAt: Date.now() + GAME_STREAM_MEMORY_TTL_MS
+      });
+      return cachedPayload.streams;
+    }
+
+    gameStreamsMemoryCache.set(gameId, {
+      streams: fetched,
+      expiresAt: Date.now() + GAME_STREAM_MEMORY_TTL_MS
+    });
+
+    if (cacheInstance) {
+      try {
+        await cacheInstance.set('twitch_game_streams', gameId, {
+          gameId,
+          lastUpdated: new Date().toISOString(),
+          streams: fetched
+        });
+      } catch (error) {
+        console.warn(`[Streams API] Failed to cache Twitch streams for game ${gameId}:`, error);
+      }
+    }
+
+    return fetched;
+  })();
+
+  if (!options?.bustCache) {
+    inflightGameFetches.set(gameId, fetchPromise);
   }
 
-  return streams;
+  try {
+    return await fetchPromise;
+  } finally {
+    if (!options?.bustCache) {
+      inflightGameFetches.delete(gameId);
+    }
+  }
 }
 
 async function fetchUserProfiles(
@@ -516,36 +613,10 @@ export async function GET(
           if (gameIds.length === 0) {
             console.warn(`[Streams API] ${serverId} - No game IDs found for Twitch`);
           } else {
-            const sortedGameIds = [...gameIds].sort();
-            const upstreamCacheKey = sortedGameIds.join(',');
-            let rawStreams: TwitchApiStream[] | null = null;
-
-            if (!bustCache) {
-              try {
-                const cachedStreams = await cache.get<TwitchStreamsCachePayload>('twitch_game_streams', upstreamCacheKey);
-                if (cachedStreams && arraysEqual(cachedStreams.gameIds, sortedGameIds)) {
-                  rawStreams = cachedStreams.streams;
-                  console.log(`[Streams API] Twitch upstream cache HIT for ${serverId} (${sortedGameIds.join(', ')})`);
-                }
-              } catch (error) {
-                console.warn('[Streams API] Twitch upstream cache lookup failed:', error);
-              }
-            }
-
-            if (!rawStreams) {
-              rawStreams = await fetchStreamsFromGames(clientId, accessToken, gameIds);
-              try {
-                await cache.set('twitch_game_streams', upstreamCacheKey, {
-                  gameIds: sortedGameIds,
-                  lastUpdated: new Date().toISOString(),
-                  streams: rawStreams
-                });
-              } catch (error) {
-                console.warn('[Streams API] Failed to cache Twitch upstream data:', error);
-              }
-              console.log(`[Streams API] Twitch upstream cache MISS for ${serverId} (${sortedGameIds.join(', ')})`);
-            }
-
+            const rawStreams = await fetchStreamsFromGames(clientId, accessToken, gameIds, 75, {
+              bustCache,
+              cache
+            });
             console.log(`[Streams API] ${serverId} - Fetched ${rawStreams.length} total Twitch streams from ${gameIds.length} games`);
             
             const matchedStreams = filterTwitchStreamsByConfig(rawStreams, twitchConfig);

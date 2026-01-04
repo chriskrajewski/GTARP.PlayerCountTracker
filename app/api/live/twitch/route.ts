@@ -85,7 +85,7 @@ async function fetchLiveStreamsFromGames(
   gameIds: string[]
 ): Promise<TwitchStream[]> {
   const streams: TwitchStream[] = [];
-  const maxPages = 75; // Increased to capture more streams (up to 2000 per game)
+  const maxPages = 40; // Increased to capture more streams (up to 2000 per game)
   
   for (const gameId of gameIds) {
     let cursor: string | null = null;
