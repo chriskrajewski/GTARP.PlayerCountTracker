@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { LoginModal } from '@/components/login-modal';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { DateRange } from 'react-day-picker';
 import { motion, AnimatePresence, AnimatedSkeleton } from '@/components/ui/motion';
@@ -639,6 +640,7 @@ export function FavoritesContent() {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [savingFavorites, setSavingFavorites] = useState<Set<string>>(new Set());
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
   useEffect(() => {
     if (!isCompactLayout && mobileFiltersOpen) {
@@ -879,12 +881,7 @@ export function FavoritesContent() {
       const token = session?.access_token;
 
       if (!token) {
-        toast({
-          title: 'Sign in required',
-          description: 'Log in to save favorites.',
-          variant: 'destructive',
-        });
-        router.push('/auth');
+        setIsLoginModalOpen(true);
         return;
       }
 
@@ -1399,12 +1396,19 @@ export function FavoritesContent() {
         )}
       </AnimatePresence>
 
-      {/* Modal */}
+      {/* Modals */}
       <ClipModal
         clip={selectedClip}
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         isCompact={isCompactLayout}
+      />
+
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        onOpenChange={setIsLoginModalOpen}
+        title="Sign in to save favorites"
+        description="Log in with Discord to save and manage your favorite clips."
       />
     </motion.div>
   );
