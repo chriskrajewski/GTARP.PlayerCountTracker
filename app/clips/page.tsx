@@ -157,13 +157,21 @@ const parseDateParam = (value: string | null): Date | undefined => {
 };
 
 const toUtcBoundaryIso = (date: Date, boundary: 'start' | 'end'): string => {
-  const adjusted = new Date(date);
+  // We need to convert local timezone day boundary to UTC ISO string
+  // Get the date components in local timezone
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const day = date.getDate();
+  
   if (boundary === 'start') {
-    adjusted.setHours(0, 0, 0, 0);
+    // Start of day in local timezone: 00:00:00
+    const startOfDay = new Date(year, month, day, 0, 0, 0, 0);
+    return startOfDay.toISOString();
   } else {
-    adjusted.setHours(23, 59, 59, 999);
+    // End of day in local timezone: 23:59:59.999
+    const endOfDay = new Date(year, month, day, 23, 59, 59, 999);
+    return endOfDay.toISOString();
   }
-  return adjusted.toISOString();
 };
 
 const getUtcDateRangeParams = (range: DateRange | undefined) => {
@@ -932,7 +940,9 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
           url.searchParams.set('platform', selectedPlatform);
         }
 
-        url.searchParams.set('limit', '300');
+        // Increased limit to 500 to ensure we capture all clips for filtering
+        // especially when filtering by specific streamer or narrow date ranges
+        url.searchParams.set('limit', '500');
 
         const { startDateUtc, endDateUtc } = getUtcDateRangeParams(dateRange);
         if (startDateUtc) {
@@ -966,7 +976,7 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
     };
 
     fetchClips();
-  }, [selectedServer, selectedPlatform, dateRange]);
+  }, [selectedServer, selectedPlatform, selectedStreamer, dateRange]);
 
   // Get unique streamers from loaded clips
   const streamers = useMemo(() => {
