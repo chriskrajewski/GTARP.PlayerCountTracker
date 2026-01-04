@@ -847,27 +847,25 @@ export function ServerClips({
       );
     }
 
-    // Helper: Get UTC day start timestamp for proper timezone-agnostic date comparison
-    const getUTCDayTime = (date: Date | string): number => {
-      const d = typeof date === 'string' ? new Date(date) : date;
-      const utcYear = d.getUTCFullYear();
-      const utcMonth = d.getUTCMonth();
-      const utcDate = d.getUTCDate();
-      return new Date(Date.UTC(utcYear, utcMonth, utcDate)).getTime();
+    // Helper: Get local day start timestamp for timezone-aware comparisons
+    const getLocalDayTime = (date: Date | string): number => {
+      const baseDate = typeof date === 'string' ? new Date(date) : new Date(date.getTime());
+      baseDate.setHours(0, 0, 0, 0);
+      return baseDate.getTime();
     };
 
-    // Filter by date - using UTC for timezone-agnostic comparison
+    // Filter by date - using local timezone for accurate comparisons
     if (dateRange?.from || dateRange?.to) {
       filtered = filtered.filter((c) => {
-        const clipDayTime = getUTCDayTime(c.created_at);
+        const clipDayTime = getLocalDayTime(c.created_at);
         
         if (dateRange.from) {
-          const startDayTime = getUTCDayTime(dateRange.from);
+          const startDayTime = getLocalDayTime(dateRange.from);
           if (clipDayTime < startDayTime) return false;
         }
         
         if (dateRange.to) {
-          const endDayTime = getUTCDayTime(dateRange.to);
+          const endDayTime = getLocalDayTime(dateRange.to);
           if (clipDayTime > endDayTime) return false;
         }
         
@@ -881,14 +879,14 @@ export function ServerClips({
       const applySortCriteria = (clipA: ClipData, clipB: ClipData, sortType: string): number => {
         switch (sortType) {
           case 'date-newest':
-            // Compare by UTC day, newest first
-            const dayBTime = getUTCDayTime(clipB.created_at);
-            const dayATime = getUTCDayTime(clipA.created_at);
+            // Compare by local day, newest first
+            const dayBTime = getLocalDayTime(clipB.created_at);
+            const dayATime = getLocalDayTime(clipA.created_at);
             return dayBTime - dayATime;
           case 'date-oldest':
-            // Compare by UTC day, oldest first
-            const dayATime2 = getUTCDayTime(clipA.created_at);
-            const dayBTime2 = getUTCDayTime(clipB.created_at);
+            // Compare by local day, oldest first
+            const dayATime2 = getLocalDayTime(clipA.created_at);
+            const dayBTime2 = getLocalDayTime(clipB.created_at);
             return dayATime2 - dayBTime2;
           case 'views-desc': 
             return clipB.view_count - clipA.view_count;

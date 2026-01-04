@@ -121,6 +121,45 @@ const QUICK_RANGE_PRESETS: { key: QuickRangeKey; label: string }[] = [
   { key: '30d', label: 'Last 30d' },
 ];
 
+const LOCAL_DATE_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+const formatDateForQueryParam = (date?: Date): string => {
+  if (!date) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseDateParam = (value: string | null): Date | undefined => {
+  if (!value) return undefined;
+  if (value.includes('T')) {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+  }
+  const match = value.match(LOCAL_DATE_REGEX);
+  if (!match) return undefined;
+  const [, year, month, day] = match;
+  return new Date(Number(year), Number(month) - 1, Number(day));
+};
+
+const toUtcBoundaryIso = (date: Date, boundary: 'start' | 'end'): string => {
+  const adjusted = new Date(date);
+  if (boundary === 'start') {
+    adjusted.setHours(0, 0, 0, 0);
+  } else {
+    adjusted.setHours(23, 59, 59, 999);
+  }
+  return adjusted.toISOString();
+};
+
+const getUtcDateRangeParams = (range: DateRange | undefined) => {
+  return {
+    startDateUtc: range?.from ? toUtcBoundaryIso(range.from, 'start') : undefined,
+    endDateUtc: range?.to ? toUtcBoundaryIso(range.to, 'end') : undefined,
+  };
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ANIMATED BACKGROUND COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -664,16 +703,18 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
   const initialStreamer = searchParams.get('streamer') || 'all';
   const initialPlatform = searchParams.get('platform') || 'all';
   const initialSearchQuery = searchParams.get('search') || '';
-  const initialStartDate = searchParams.get('startDate') || '';
-  const initialEndDate = searchParams.get('endDate') || '';
+  const initialStartDate = searchParams.get('startDate');
+  const initialEndDate = searchParams.get('endDate');
   const initialOrderBy = searchParams.get('orderBy') || 'views-desc';
 
   // Initialize date range from URL params
   const getInitialDateRange = (): DateRange | undefined => {
-    if (initialStartDate || initialEndDate) {
+    const fromDate = parseDateParam(initialStartDate);
+    const toDate = parseDateParam(initialEndDate);
+    if (fromDate || toDate) {
       return {
-        from: initialStartDate ? new Date(initialStartDate) : undefined,
-        to: initialEndDate ? new Date(initialEndDate) : undefined,
+        from: fromDate,
+        to: toDate,
       };
     }
     return undefined;
@@ -727,6 +768,14 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
 
         url.searchParams.set('limit', '300');
 
+        const { startDateUtc, endDateUtc } = getUtcDateRangeParams(dateRange);
+        if (startDateUtc) {
+          url.searchParams.set('startDate', startDateUtc);
+        }
+        if (endDateUtc) {
+          url.searchParams.set('endDate', endDateUtc);
+        }
+
         const response = await fetch(url.toString());
 
         if (!response.ok) {
@@ -751,7 +800,7 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
     };
 
     fetchClips();
-  }, [selectedServer, selectedPlatform]);
+  }, [selectedServer, selectedPlatform, dateRange]);
 
   // Get unique streamers from loaded clips
   const streamers = useMemo(() => {
@@ -762,7 +811,7 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
   // Helper to format date for URL
   const formatDateForUrl = (date: Date | undefined): string => {
     if (!date) return '';
-    return date.toISOString().split('T')[0];
+    return formatDateForQueryParam(date);
   };
 
   // URL filter update
@@ -933,27 +982,25 @@ export function AllClipsContent({ defaultServerId, pagePath = '/clips' }: AllCli
       );
     }
 
-    // Helper: Get UTC day start timestamp for proper timezone-agnostic date comparison
-    const getUTCDayTime = (date: Date | string): number => {
-      const d = typeof date === 'string' ? new Date(date) : date;
-      const utcYear = d.getUTCFullYear();
-      const utcMonth = d.getUTCMonth();
-      const utcDate = d.getUTCDate();
-      return new Date(Date.UTC(utcYear, utcMonth, utcDate)).getTime();
+    // Helper: Get local day start timestamp so comparisons respect user timezone
+    const getLocalDayTime = (date: Date | string): number => {
+      const baseDate = typeof date === 'string' ? new Date(date) : new Date(date.getTime());
+      baseDate.setHours(0, 0, 0, 0);
+      return baseDate.getTime();
     };
 
     // Filter by date
     if (dateRange?.from || dateRange?.to) {
       filtered = filtered.filter((c) => {
-        const clipDayTime = getUTCDayTime(c.created_at);
+        const clipDayTime = getLocalDayTime(c.created_at);
         
         if (dateRange.from) {
-          const startDayTime = getUTCDayTime(dateRange.from);
+          const startDayTime = getLocalDayTime(dateRange.from);
           if (clipDayTime < startDayTime) return false;
         }
         
         if (dateRange.to) {
-          const endDayTime = getUTCDayTime(dateRange.to);
+          const endDayTime = getLocalDayTime(dateRange.to);
           if (clipDayTime > endDayTime) return false;
         }
         
