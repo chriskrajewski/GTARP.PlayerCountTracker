@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect, memo } from 'react';
-import { ArrowLeft, Download, ClipboardList, MessageSquare, Menu, X, Heart, Bot, Video, History, Sparkles, Film } from 'lucide-react';
+import { ArrowLeft, Download, ClipboardList, MessageSquare, Menu, X, Heart, Bot, Video, History, Sparkles, Film, LogIn, LogOut, UserCircle } from 'lucide-react';
 import FeedbackForm from '@/components/feedback-form';
 import { CSVExport } from '@/components/csv-export';
 import ServerResourceChanges from '@/components/server-resource-changes';
@@ -24,6 +24,9 @@ import { PWABottomDock } from '@/components/pwa-bottom-dock';
 import { usePWAStandalone } from '@/hooks/use-pwa-standalone';
 import { cn } from '@/lib/utils';
 import { useLiveDataStatus } from '@/components/live-data-status-provider';
+import type { User } from '@supabase/supabase-js';
+import { getCurrentUser, onUserAuthStateChange, signOutUser } from '@/lib/user-auth-supabase';
+import { useToast } from '@/hooks/use-toast';
 
 // Create an instance of the Mixpanel object, your token is already added to this snippet
       mixpanel.init('13440c630224bb2155944bc8de971af7', {
@@ -179,10 +182,13 @@ export function CommonLayout({
   timeRange = "8h",
   liveDataStatus: propLiveDataStatus
 }: CommonLayoutProps) {
+  const { toast } = useToast();
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showResourceDialog, setShowResourceDialog] = useState(false);
   const [showSiteUpdatesPanel, setShowSiteUpdatesPanel] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   
   // Get live data status from context (fallback if not provided via props)
   const { liveDataStatus: contextLiveDataStatus } = useLiveDataStatus();
@@ -204,6 +210,54 @@ export function CommonLayout({
   const isCsvExportEnabled = useFeatureFlag(FEATURE_FLAGS.CSV_EXPORT);
   const isMultiStreamEnabled = useFeatureFlag(FEATURE_FLAGS.MULTI_STREAM);
   const isClipsPageEnabled = useFeatureFlag(FEATURE_FLAGS.CLIPS_PAGE);
+
+  const displayName = authUser?.user_metadata?.name
+    || authUser?.user_metadata?.full_name
+    || authUser?.email?.split('@')[0]
+    || 'Account';
+
+  useEffect(() => {
+    let isMounted = true;
+
+    /**
+     * Fetch the current auth user for the header controls.
+     */
+    const loadUser = async () => {
+      const currentUser = await getCurrentUser();
+      if (isMounted) {
+        setAuthUser(currentUser);
+        setAuthLoading(false);
+      }
+    };
+
+    loadUser();
+
+    const subscription = onUserAuthStateChange((user) => {
+      setAuthUser(user);
+      setAuthLoading(false);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription?.unsubscribe();
+    };
+  }, []);
+
+  /**
+   * Sign out the current user and surface any errors.
+   */
+  const handleSignOut = async () => {
+    const { error } = await signOutUser();
+    if (error) {
+      toast({
+        title: 'Sign out failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+      return;
+    }
+    setAuthUser(null);
+  };
   
   useEffect(() => {
     const checkMobile = () => setIsMobileView(window.innerWidth < 640);
@@ -447,6 +501,33 @@ export function CommonLayout({
             </motion.div>
           )}
 
+          {!authLoading && authUser ? (
+            <>
+              <motion.div variants={fadeInUp} initial={false}>
+                <HeaderButton href="/favorites">
+                  <Heart className="h-3.5 w-3.5 text-pink-400" />
+                  Favorites
+                </HeaderButton>
+              </motion.div>
+              <motion.div variants={fadeInUp} initial={false}>
+                <HeaderButton onClick={handleSignOut} className="max-w-[180px]">
+                  <UserCircle className="h-3.5 w-3.5 text-cyan-300" />
+                  <span className="truncate max-w-[90px]">{displayName}</span>
+                  <LogOut className="h-3.5 w-3.5 text-[#ADADB8]" />
+                </HeaderButton>
+              </motion.div>
+            </>
+          ) : (
+            !authLoading && (
+              <motion.div variants={fadeInUp} initial={false}>
+                <HeaderButton href="/auth">
+                  <LogIn className="h-3.5 w-3.5 text-cyan-300" />
+                  Login
+                </HeaderButton>
+              </motion.div>
+            )
+          )}
+
           <motion.div variants={fadeInUp}>
             <TooltipProvider>
               <Tooltip>
@@ -587,6 +668,47 @@ export function CommonLayout({
                       Clips
                     </Link>
                   </MobileMenuItem>
+                )}
+
+                {!authLoading && authUser ? (
+                  <>
+                    <MobileMenuItem>
+                      <Link 
+                        href="/favorites" 
+                        className="flex w-full items-center gap-2 px-4 py-2.5 bg-[#18181b]/80 text-white rounded-lg border border-[#26262c] hover:border-pink-500/30 transition-all text-sm font-medium backdrop-blur-sm"
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        <Heart className="h-4 w-4 text-pink-400" />
+                        Favorites
+                      </Link>
+                    </MobileMenuItem>
+                    <MobileMenuItem>
+                      <button 
+                        onClick={() => {
+                          handleSignOut();
+                          setMobileMenuOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2 px-4 py-2.5 bg-[#18181b]/80 text-white rounded-lg border border-[#26262c] hover:border-cyan-500/30 transition-all text-sm font-medium backdrop-blur-sm"
+                      >
+                        <UserCircle className="h-4 w-4 text-cyan-300" />
+                        <span className="truncate max-w-[140px]">{displayName}</span>
+                        <LogOut className="h-4 w-4 text-[#ADADB8]" />
+                      </button>
+                    </MobileMenuItem>
+                  </>
+                ) : (
+                  !authLoading && (
+                    <MobileMenuItem>
+                      <Link 
+                        href="/auth" 
+                        className="flex w-full items-center gap-2 px-4 py-2.5 bg-[#18181b]/80 text-white rounded-lg border border-[#26262c] hover:border-cyan-500/30 transition-all text-sm font-medium backdrop-blur-sm"
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        <LogIn className="h-4 w-4 text-cyan-300" />
+                        Login
+                      </Link>
+                    </MobileMenuItem>
+                  )
                 )}
 
                 <MobileMenuItem>
