@@ -22,6 +22,7 @@ import {
   Zap
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { adminAPI } from '@/lib/admin-api';
 
 /**
  * Settings Page
@@ -40,6 +41,7 @@ interface SystemSettings {
 }
 
 export default function SettingsPage() {
+  const DEFAULT_TWITCH_PAGE_LIMIT = 35;
   const [settings, setSettings] = useState<SystemSettings>({
     visitorTrackingEnabled: true,
     heartbeatInterval: 30,
@@ -49,7 +51,11 @@ export default function SettingsPage() {
     pollingFallbackEnabled: true
   });
   const [saving, setSaving] = useState(false);
+  const [twitchPageLimit, setTwitchPageLimit] = useState<number>(DEFAULT_TWITCH_PAGE_LIMIT);
+  const [loadingTwitchSetting, setLoadingTwitchSetting] = useState(true);
+  const [savingTwitchSetting, setSavingTwitchSetting] = useState(false);
   const { toast } = useToast();
+  const isTwitchLimitValid = Number.isFinite(twitchPageLimit) && twitchPageLimit >= 1 && twitchPageLimit <= 75;
 
   const handleSettingChange = (key: keyof SystemSettings, value: any) => {
     setSettings(prev => ({
@@ -57,6 +63,73 @@ export default function SettingsPage() {
       [key]: value
     }));
   };
+
+  const loadTwitchStreamSetting = async () => {
+    try {
+      setLoadingTwitchSetting(true);
+      const response = await adminAPI.getSystemSettings();
+      const setting = response.data?.find((item) => item.key === 'twitch_stream_page_limit');
+      if (setting) {
+        const parsed = Number(setting.value);
+        if (Number.isFinite(parsed)) {
+          setTwitchPageLimit(Math.min(75, Math.max(1, parsed)));
+        } else {
+          setTwitchPageLimit(DEFAULT_TWITCH_PAGE_LIMIT);
+        }
+      } else {
+        setTwitchPageLimit(DEFAULT_TWITCH_PAGE_LIMIT);
+      }
+    } catch (error) {
+      console.error('Error loading Twitch stream setting:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load Twitch stream settings.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingTwitchSetting(false);
+    }
+  };
+
+  const handleSaveTwitchSetting = async () => {
+    if (!isTwitchLimitValid) {
+      toast({
+        title: 'Invalid value',
+        description: 'Page limit must be between 1 and 75.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setSavingTwitchSetting(true);
+      await adminAPI.updateSystemSetting({
+        key: 'twitch_stream_page_limit',
+        value: twitchPageLimit,
+        data_type: 'number',
+        description: 'Maximum Twitch pagination pages per game',
+        category: 'streams',
+      });
+
+      toast({
+        title: 'Saved',
+        description: 'Twitch stream fetching limit updated.',
+      });
+    } catch (error) {
+      console.error('Error saving Twitch stream setting:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update Twitch stream limit.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingTwitchSetting(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTwitchStreamSetting();
+  }, []);
 
   const handleSaveSettings = async () => {
     setSaving(true);
@@ -258,6 +331,56 @@ export default function SettingsPage() {
                 {/* API Cache Settings */}
                 <TabsContent value="api-cache" className="space-y-6">
                   <CacheSettingsCard />
+
+                  <Card className="bg-[#1a1a1e] border-[#26262c]">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-white">
+                        <Zap className="h-5 w-5" />
+                        Stream Fetch Settings
+                      </CardTitle>
+                      <CardDescription className="text-[#ADADB8]">
+                        Control how many Twitch pages are fetched per server request
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Label className="text-white">Max Twitch Pages Per Game</Label>
+                        <div className="flex flex-col md:flex-row gap-3">
+                          <Input
+                            type="number"
+                            min={1}
+                            max={75}
+                            value={twitchPageLimit}
+                            onChange={(e) => setTwitchPageLimit(Number(e.target.value))}
+                            disabled={loadingTwitchSetting || savingTwitchSetting}
+                            className="bg-[#26262c] border-[#40404a] text-white md:w-48"
+                          />
+                          <Button
+                            onClick={handleSaveTwitchSetting}
+                            disabled={loadingTwitchSetting || savingTwitchSetting || !isTwitchLimitValid}
+                            className="bg-[#9147ff] hover:bg-[#772ce8] text-white w-full md:w-auto"
+                          >
+                            {savingTwitchSetting ? (
+                              <>
+                                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              'Save Limit'
+                            )}
+                          </Button>
+                        </div>
+                        <p className="text-sm text-[#ADADB8]">
+                          Each page fetches up to 100 streams. Lower the limit if you hit Twitch rate limits.
+                        </p>
+                        {!isTwitchLimitValid && (
+                          <p className="text-sm text-red-400">
+                            Enter a value between 1 and 75.
+                          </p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
                 </TabsContent>
 
                 {/* System Settings */}

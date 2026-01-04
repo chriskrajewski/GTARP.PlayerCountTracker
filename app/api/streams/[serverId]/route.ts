@@ -9,6 +9,7 @@ import {
 } from '@/lib/kick-api';
 import { getAPICache } from '@/lib/api-cache';
 import { getTwitchGameIds } from '@/lib/twitch-game-ids';
+import { DEFAULT_TWITCH_STREAM_PAGE_LIMIT, getTwitchStreamPageLimit } from '@/lib/system-settings';
 
 /**
  * Streams API - Fetches live streams from BOTH Twitch and Kick for a server
@@ -78,10 +79,63 @@ interface TwitchGameStreamsCachePayload {
 
 const TWITCH_TOKEN_REFRESH_BUFFER_MS = 60 * 1000; // refresh 1 minute before expiration
 const GAME_STREAM_MEMORY_TTL_MS = 60 * 1000; // keep per-game results warm for 1 minute
+const TWITCH_RATE_LIMIT_MAX_RETRIES = 3;
+const RATE_LIMIT_DEFAULT_DELAY_MS = 2000;
 
 let cachedTwitchToken: { token: string; expiresAt: number } | null = null;
 const gameStreamsMemoryCache = new Map<string, { streams: TwitchApiStream[]; expiresAt: number }>();
 const inflightGameFetches = new Map<string, Promise<TwitchApiStream[]>>();
+
+function sleep(ms: number) {
+  return new Promise<void>(resolve => setTimeout(resolve, ms));
+}
+
+function parseRetryAfterHeader(value: string): number | null {
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && numeric > 0) {
+    if (numeric > 1e12) {
+      return Math.max(0, numeric - Date.now());
+    }
+    if (numeric > 1e9) {
+      const nowSeconds = Date.now() / 1000;
+      return Math.max(0, numeric - nowSeconds) * 1000;
+    }
+    return numeric * 1000;
+  }
+
+  const dateTs = Date.parse(value);
+  if (!Number.isNaN(dateTs)) {
+    return Math.max(0, dateTs - Date.now());
+  }
+  return null;
+}
+
+function getRateLimitDelayMs(headers: Headers): number | null {
+  const retryAfter = headers.get('retry-after');
+  if (retryAfter) {
+    const parsed = parseRetryAfterHeader(retryAfter);
+    if (parsed !== null) {
+      return parsed;
+    }
+  }
+
+  const rateLimitReset = headers.get('ratelimit-reset');
+  if (rateLimitReset) {
+    const parsed = Number(rateLimitReset);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      if (parsed > 1e12) {
+        return Math.max(0, parsed - Date.now());
+      }
+      if (parsed > 1e9) {
+        const nowSeconds = Date.now() / 1000;
+        return Math.max(0, parsed - nowSeconds) * 1000;
+      }
+      return parsed * 1000;
+    }
+  }
+
+  return null;
+}
 
 // ============================================
 // TWITCH API FUNCTIONS
@@ -124,7 +178,7 @@ async function fetchStreamsFromGames(
   clientId: string,
   token: string,
   gameIds: string[],
-  maxPages: number = 40,
+  maxPages: number = DEFAULT_TWITCH_STREAM_PAGE_LIMIT,
   options?: { bustCache?: boolean; cache?: ReturnType<typeof getAPICache> }
 ): Promise<TwitchApiStream[]> {
   const streams: TwitchApiStream[] = [];
@@ -179,6 +233,7 @@ async function fetchStreamsForGame(
     const fetched: TwitchApiStream[] = [];
     let cursor: string | null = null;
     let pageCount = 0;
+    let rateLimitRetries = 0;
 
     try {
       while (pageCount < maxPages) {
@@ -199,10 +254,19 @@ async function fetchStreamsForGame(
           }
         );
 
-        if (!response.ok) {
-          console.error(`[Streams API] Twitch API error for game ${gameId}: ${response.status}`);
-          if (response.status === 429 && cachedPayload?.streams?.length) {
-            console.warn(`[Streams API] Using cached Twitch data for game ${gameId} after rate limit`);
+        if (response.status === 429) {
+          rateLimitRetries += 1;
+          const retryDelay = getRateLimitDelayMs(response.headers) ?? RATE_LIMIT_DEFAULT_DELAY_MS * rateLimitRetries;
+          console.warn(`[Streams API] Rate limited fetching Twitch data for game ${gameId} (attempt ${rateLimitRetries}/${TWITCH_RATE_LIMIT_MAX_RETRIES}). Retrying in ${retryDelay}ms.`);
+
+          if (rateLimitRetries <= TWITCH_RATE_LIMIT_MAX_RETRIES) {
+            await sleep(retryDelay);
+            continue;
+          }
+
+          console.error(`[Streams API] Rate limit persisted for game ${gameId} after ${rateLimitRetries} attempts.`);
+          if (cachedPayload?.streams?.length) {
+            console.warn(`[Streams API] Using cached Twitch data for game ${gameId} after rate limit failure`);
             gameStreamsMemoryCache.set(gameId, {
               streams: cachedPayload.streams,
               expiresAt: Date.now() + GAME_STREAM_MEMORY_TTL_MS
@@ -211,6 +275,21 @@ async function fetchStreamsForGame(
           }
           break;
         }
+
+        if (!response.ok) {
+          console.error(`[Streams API] Twitch API error for game ${gameId}: ${response.status}`);
+          if (cachedPayload?.streams?.length) {
+            console.warn(`[Streams API] Using cached Twitch data for game ${gameId} after API error`);
+            gameStreamsMemoryCache.set(gameId, {
+              streams: cachedPayload.streams,
+              expiresAt: Date.now() + GAME_STREAM_MEMORY_TTL_MS
+            });
+            return cachedPayload.streams;
+          }
+          break;
+        }
+
+        rateLimitRetries = 0;
 
         const data = await response.json();
         const batch = Array.isArray(data.data) ? data.data : [];
@@ -613,11 +692,12 @@ export async function GET(
           if (gameIds.length === 0) {
             console.warn(`[Streams API] ${serverId} - No game IDs found for Twitch`);
           } else {
-            const rawStreams = await fetchStreamsFromGames(clientId, accessToken, gameIds, 75, {
+            const twitchPageLimit = await getTwitchStreamPageLimit({ bustCache });
+            const rawStreams = await fetchStreamsFromGames(clientId, accessToken, gameIds, twitchPageLimit, {
               bustCache,
               cache
             });
-            console.log(`[Streams API] ${serverId} - Fetched ${rawStreams.length} total Twitch streams from ${gameIds.length} games`);
+            console.log(`[Streams API] ${serverId} - Fetched ${rawStreams.length} total Twitch streams from ${gameIds.length} games (page limit=${twitchPageLimit})`);
             
             const matchedStreams = filterTwitchStreamsByConfig(rawStreams, twitchConfig);
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getStreamSearchConfigMap, type StreamSearchConfig, type SearchType } from '@/lib/stream-config';
 import { getAPICache } from '@/lib/api-cache';
 import { getTwitchGameIds } from '@/lib/twitch-game-ids';
+import { DEFAULT_TWITCH_STREAM_PAGE_LIMIT, getTwitchStreamPageLimit } from '@/lib/system-settings';
 
 /**
  * Live Twitch Stream Data API
@@ -94,17 +95,20 @@ async function getTwitchToken(): Promise<string | null> {
 async function fetchLiveStreamsFromGames(
   clientId: string,
   token: string,
-  gameIds: string[]
+  gameIds: string[],
+  maxPages?: number
 ): Promise<TwitchStream[]> {
   const streams: TwitchStream[] = [];
-  const maxPages = 40; // Increased to capture more streams (up to 2000 per game)
+  const pageLimit = typeof maxPages === 'number' && Number.isFinite(maxPages)
+    ? Math.max(1, Math.min(maxPages, 75))
+    : DEFAULT_TWITCH_STREAM_PAGE_LIMIT;
   
   for (const gameId of gameIds) {
     let cursor: string | null = null;
     let pageCount = 0;
 
     try {
-      while (pageCount < maxPages) {
+      while (pageCount < pageLimit) {
         const params = new URLSearchParams({
           game_id: gameId,
           first: '100'
@@ -159,9 +163,10 @@ async function fetchLiveStreamsFromGames(
 async function fetchLiveGTAVStreams(
   clientId: string,
   token: string,
-  gameId: string
+  gameId: string,
+  maxPages?: number
 ): Promise<TwitchStream[]> {
-  return fetchLiveStreamsFromGames(clientId, token, [gameId]);
+  return fetchLiveStreamsFromGames(clientId, token, [gameId], maxPages);
 }
 
 /**
@@ -223,8 +228,9 @@ export async function GET(request: NextRequest) {
     }
 
     const cache = getAPICache();
+    const cacheKey = `twitch_streams_${serverIds.join(',')}`;
     const servers: Record<string, TwitchServerData> = {};
-    const serversToFetch: string[] = [];
+    const serversToFetch = new Set<string>();
 
     if (!bustCache) {
       for (const serverId of serverIds) {
@@ -232,15 +238,31 @@ export async function GET(request: NextRequest) {
         if (cachedServer) {
           servers[serverId] = cachedServer;
         } else {
-          serversToFetch.push(serverId);
+          serversToFetch.add(serverId);
         }
       }
 
-      if (serversToFetch.length === 0) {
+      if (serversToFetch.size > 0) {
+        const legacyCache = await cache.get<{ servers: Record<string, TwitchServerData> }>('twitch_live_streams', cacheKey);
+        if (legacyCache?.servers) {
+          for (const serverId of Array.from(serversToFetch)) {
+            const legacyServer = legacyCache.servers[serverId];
+            if (legacyServer) {
+              servers[serverId] = legacyServer;
+              serversToFetch.delete(serverId);
+              // Backfill per-server cache for future requests
+              await cache.set('twitch_live_streams', serverId, legacyServer);
+            }
+          }
+        }
+      }
+
+      if (serversToFetch.size === 0) {
         const responseData = {
           servers,
           timestamp: getLatestTimestamp(servers)
         };
+        await cache.set('twitch_live_streams', cacheKey, responseData);
 
         console.log('[LiveTwitch] Returning cached data for servers:', serverIds.join(', '));
         return NextResponse.json(responseData, {
@@ -251,7 +273,9 @@ export async function GET(request: NextRequest) {
         });
       }
     } else {
-      serversToFetch.push(...serverIds);
+      for (const serverId of serverIds) {
+        serversToFetch.add(serverId);
+      }
     }
 
     // Get Twitch authentication
@@ -271,6 +295,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const serversToProcess = Array.from(serversToFetch);
+    if (serversToProcess.length === 0) {
+      console.log('[LiveTwitch] Returning cached data after cache reconciliation for servers:', serverIds.join(', '));
+      const responseData = {
+        servers,
+        timestamp: getLatestTimestamp(servers),
+      };
+      await cache.set('twitch_live_streams', cacheKey, responseData);
+
+      return NextResponse.json(responseData, {
+        headers: {
+          'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+          'X-Cache': 'HIT',
+        },
+      });
+    }
+
     // Load per-server search config from Supabase (no hardcoded mappings)
     if (bustCache) {
       console.log('[LiveTwitch] Cache bust requested - clearing stream config cache');
@@ -278,7 +319,7 @@ export async function GET(request: NextRequest) {
       clearStreamConfigCache();
     }
     
-    const rawConfig = await getStreamSearchConfigMap(serversToFetch, 'twitch');
+    const rawConfig = await getStreamSearchConfigMap(serversToProcess, 'twitch');
     const configByServer = normalizeConfigMap(rawConfig);
 
     // Collect all unique category keywords from all servers (preserve original casing for Twitch API lookups)
@@ -319,8 +360,9 @@ export async function GET(request: NextRequest) {
     const fetchTimestamp = new Date().toISOString();
 
     // Fetch live streams from all configured games
-    const allStreams = await fetchLiveStreamsFromGames(clientId, token, gameIds);
-    console.log(`[LiveTwitch] Fetched ${allStreams.length} total streams from ${gameIds.length} games`);
+    const twitchPageLimit = await getTwitchStreamPageLimit({ bustCache });
+    const allStreams = await fetchLiveStreamsFromGames(clientId, token, gameIds, twitchPageLimit);
+    console.log(`[LiveTwitch] Fetched ${allStreams.length} total streams from ${gameIds.length} games (page limit=${twitchPageLimit})`);
 
     // Normalize once for matching efficiency
     const normalized = allStreams.map(s => ({
@@ -330,7 +372,7 @@ export async function GET(request: NextRequest) {
       _tagsLower: Array.isArray(s.tags) ? s.tags.map(t => (t || '').toLowerCase()) : []
     }));
 
-    for (const serverId of serversToFetch) {
+    for (const serverId of serversToProcess) {
       const cfg = configByServer.get(serverId) || [];
       if (cfg.length === 0) {
         const serverData: TwitchServerData = {
@@ -464,6 +506,9 @@ export async function GET(request: NextRequest) {
       servers,
       timestamp: getLatestTimestamp(servers)
     };
+
+    // Cache combined response for compatibility with existing tooling
+    await cache.set('twitch_live_streams', cacheKey, responseData);
 
     return NextResponse.json(responseData, {
       headers: {
