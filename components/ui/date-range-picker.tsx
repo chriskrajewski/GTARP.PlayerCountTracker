@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { format, subDays, subMonths, subYears, startOfMonth, endOfDay } from "date-fns"
+import { format, startOfDay, subDays, subMonths, subYears, startOfMonth, endOfDay } from "date-fns"
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react"
 import { DateRange, DayPicker } from "react-day-picker"
 
@@ -23,6 +23,16 @@ interface DatePreset {
 }
 
 const datePresets: DatePreset[] = [
+  {
+    label: "Today",
+    getValue: () => {
+      const today = new Date()
+      return {
+        from: startOfDay(today),
+        to: endOfDay(today),
+      }
+    },
+  },
   {
     label: "1 Day",
     getValue: () => ({
