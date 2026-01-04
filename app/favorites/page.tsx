@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo, memo, Suspense, useTransition, useDeferredValue } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { CommonLayout } from '@/components/common-layout';
+import { useFeatureFlag, FEATURE_FLAGS } from '@/lib/feature-flags';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
@@ -627,6 +628,7 @@ export function FavoritesContent() {
   const isCompactLayout = isPWA || isMobileDevice;
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
+  const isFavoritesEnabled = useFeatureFlag(FEATURE_FLAGS.FAVORITES);
 
   const [clips, setClips] = useState<ClipData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -643,6 +645,13 @@ export function FavoritesContent() {
       setMobileFiltersOpen(false);
     }
   }, [isCompactLayout, mobileFiltersOpen]);
+
+  // Redirect if favorites feature is disabled
+  useEffect(() => {
+    if (!isFavoritesEnabled) {
+      router.replace('/');
+    }
+  }, [isFavoritesEnabled, router]);
 
   // Get initial filters from URL query params
   const initialStreamer = searchParams.get('streamer') || 'all';

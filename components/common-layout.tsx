@@ -210,6 +210,7 @@ export function CommonLayout({
   const isCsvExportEnabled = useFeatureFlag(FEATURE_FLAGS.CSV_EXPORT);
   const isMultiStreamEnabled = useFeatureFlag(FEATURE_FLAGS.MULTI_STREAM);
   const isClipsPageEnabled = useFeatureFlag(FEATURE_FLAGS.CLIPS_PAGE);
+  const isFavoritesEnabled = useFeatureFlag(FEATURE_FLAGS.FAVORITES);
 
   const displayName = authUser?.user_metadata?.name
     || authUser?.user_metadata?.full_name
@@ -503,12 +504,14 @@ export function CommonLayout({
 
           {!authLoading && authUser ? (
             <>
-              <motion.div variants={fadeInUp} initial={false}>
-                <HeaderButton href="/favorites">
-                  <Heart className="h-3.5 w-3.5 text-pink-400" />
-                  Favorites
-                </HeaderButton>
-              </motion.div>
+              {isFavoritesEnabled && (
+                <motion.div variants={fadeInUp} initial={false}>
+                  <HeaderButton href="/favorites">
+                    <Heart className="h-3.5 w-3.5 text-pink-400" />
+                    Favorites
+                  </HeaderButton>
+                </motion.div>
+              )}
               <motion.div variants={fadeInUp} initial={false}>
                 <HeaderButton onClick={handleSignOut} className="max-w-[180px]">
                   <UserCircle className="h-3.5 w-3.5 text-cyan-300" />
@@ -672,16 +675,18 @@ export function CommonLayout({
 
                 {!authLoading && authUser ? (
                   <>
-                    <MobileMenuItem>
-                      <Link 
-                        href="/favorites" 
-                        className="flex w-full items-center gap-2 px-4 py-2.5 bg-[#18181b]/80 text-white rounded-lg border border-[#26262c] hover:border-pink-500/30 transition-all text-sm font-medium backdrop-blur-sm"
-                        onClick={() => setMobileMenuOpen(false)}
-                      >
-                        <Heart className="h-4 w-4 text-pink-400" />
-                        Favorites
-                      </Link>
-                    </MobileMenuItem>
+                    {isFavoritesEnabled && (
+                      <MobileMenuItem>
+                        <Link 
+                          href="/favorites" 
+                          className="flex w-full items-center gap-2 px-4 py-2.5 bg-[#18181b]/80 text-white rounded-lg border border-[#26262c] hover:border-pink-500/30 transition-all text-sm font-medium backdrop-blur-sm"
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          <Heart className="h-4 w-4 text-pink-400" />
+                          Favorites
+                        </Link>
+                      </MobileMenuItem>
+                    )}
                     <MobileMenuItem>
                       <button 
                         onClick={() => {

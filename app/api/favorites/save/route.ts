@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { NextRequest } from 'next/server';
 import type { Database } from '@/lib/supabase.types';
 import { rateLimiter } from '@/lib/rateLimiter';
+import { getOrCreateAppUser } from '@/lib/app-users';
 
 interface SaveFavoriteBody {
   clip_id: string;
@@ -61,11 +62,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid platform' }, { status: 400 });
     }
 
-    const { data: appUser, error: appUserError } = await supabase
-      .from('app_users')
-      .select('id')
-      .eq('auth_user_id', user.id)
-      .single();
+    const { appUser, error: appUserError } = await getOrCreateAppUser(supabase, user);
 
     if (appUserError || !appUser) {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
