@@ -43,6 +43,18 @@ interface TwitchServerData {
   error?: string;
 }
 
+function getLatestTimestamp(servers: Record<string, TwitchServerData>): string {
+  let latest = 0;
+  for (const data of Object.values(servers)) {
+    const parsed = Date.parse(data.lastUpdated);
+    if (!Number.isNaN(parsed) && parsed > latest) {
+      latest = parsed;
+    }
+  }
+
+  return latest ? new Date(latest).toISOString() : new Date().toISOString();
+}
+
 /**
  * Get Twitch OAuth token
  */
@@ -210,21 +222,36 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Check cache first
     const cache = getAPICache();
-    const cacheKey = `twitch_streams_${serverIds.join(',')}`;
-    
+    const servers: Record<string, TwitchServerData> = {};
+    const serversToFetch: string[] = [];
+
     if (!bustCache) {
-      const cachedData = await cache.get('twitch_live_streams', cacheKey);
-      if (cachedData) {
+      for (const serverId of serverIds) {
+        const cachedServer = await cache.get<TwitchServerData>('twitch_live_streams', serverId);
+        if (cachedServer) {
+          servers[serverId] = cachedServer;
+        } else {
+          serversToFetch.push(serverId);
+        }
+      }
+
+      if (serversToFetch.length === 0) {
+        const responseData = {
+          servers,
+          timestamp: getLatestTimestamp(servers)
+        };
+
         console.log('[LiveTwitch] Returning cached data for servers:', serverIds.join(', '));
-        return NextResponse.json(cachedData, {
+        return NextResponse.json(responseData, {
           headers: {
             'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
             'X-Cache': 'HIT',
           },
         });
       }
+    } else {
+      serversToFetch.push(...serverIds);
     }
 
     // Get Twitch authentication
@@ -251,7 +278,7 @@ export async function GET(request: NextRequest) {
       clearStreamConfigCache();
     }
     
-    const rawConfig = await getStreamSearchConfigMap(serverIds, 'twitch');
+    const rawConfig = await getStreamSearchConfigMap(serversToFetch, 'twitch');
     const configByServer = normalizeConfigMap(rawConfig);
 
     // Collect all unique category keywords from all servers (preserve original casing for Twitch API lookups)
@@ -288,9 +315,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Build response object
-    const servers: Record<string, TwitchServerData> = {};
-    const timestamp = new Date().toISOString();
+    // Build response object for cache misses
+    const fetchTimestamp = new Date().toISOString();
 
     // Fetch live streams from all configured games
     const allStreams = await fetchLiveStreamsFromGames(clientId, token, gameIds);
@@ -304,16 +330,18 @@ export async function GET(request: NextRequest) {
       _tagsLower: Array.isArray(s.tags) ? s.tags.map(t => (t || '').toLowerCase()) : []
     }));
 
-    for (const serverId of serverIds) {
+    for (const serverId of serversToFetch) {
       const cfg = configByServer.get(serverId) || [];
       if (cfg.length === 0) {
-        servers[serverId] = {
+        const serverData: TwitchServerData = {
           streamCount: 0,
           viewerCount: 0,
           topStreams: [],
-          lastUpdated: timestamp,
+          lastUpdated: fetchTimestamp,
           error: 'No Twitch search config found for this server (stream_search_config)'
         };
+        servers[serverId] = serverData;
+        await cache.set('twitch_live_streams', serverId, serverData);
         continue;
       }
 
@@ -422,21 +450,20 @@ export async function GET(request: NextRequest) {
         .sort((a, b) => b.viewers - a.viewers)
         .slice(0, 5);
 
-      servers[serverId] = {
+      const serverData: TwitchServerData = {
         streamCount: matches.length,
         viewerCount,
         topStreams,
-        lastUpdated: timestamp
+        lastUpdated: fetchTimestamp
       };
+      servers[serverId] = serverData;
+      await cache.set('twitch_live_streams', serverId, serverData);
     }
 
     const responseData = {
       servers,
-      timestamp
+      timestamp: getLatestTimestamp(servers)
     };
-
-    // Cache the response
-    await cache.set('twitch_live_streams', cacheKey, responseData);
 
     return NextResponse.json(responseData, {
       headers: {
