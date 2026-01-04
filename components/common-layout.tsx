@@ -24,6 +24,7 @@ import { PWABottomDock } from '@/components/pwa-bottom-dock';
 import { usePWAStandalone } from '@/hooks/use-pwa-standalone';
 import { cn } from '@/lib/utils';
 import { useLiveDataStatus } from '@/components/live-data-status-provider';
+import { LoginModal } from '@/components/login-modal';
 import type { User } from '@supabase/supabase-js';
 import { getCurrentUser, onUserAuthStateChange, signOutUser } from '@/lib/user-auth-supabase';
 import { useToast } from '@/hooks/use-toast';
@@ -189,6 +190,7 @@ export function CommonLayout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   
   // Get live data status from context (fallback if not provided via props)
   const { liveDataStatus: contextLiveDataStatus } = useLiveDataStatus();
@@ -523,7 +525,7 @@ export function CommonLayout({
           ) : (
             !authLoading && (
               <motion.div variants={fadeInUp} initial={false}>
-                <HeaderButton href="/auth">
+                <HeaderButton onClick={() => setIsLoginModalOpen(true)}>
                   <LogIn className="h-3.5 w-3.5 text-cyan-300" />
                   Login
                 </HeaderButton>
@@ -856,6 +858,14 @@ export function CommonLayout({
           />
         )}
       </AnimatePresence>
+
+      {/* Login Modal */}
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        onOpenChange={setIsLoginModalOpen}
+        title="Sign in to continue"
+        description="Log in with Discord to access all features including saved favorites."
+      />
     </div>
   );
 } 
