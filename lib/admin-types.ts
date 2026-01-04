@@ -133,6 +133,18 @@ export interface SystemConfiguration {
   validation_rules?: Record<string, any>;
 }
 
+export interface SystemSetting {
+  id: string;
+  key: string;
+  value: string;
+  data_type: 'string' | 'number' | 'boolean' | 'json';
+  description?: string | null;
+  category?: string | null;
+  updated_at?: string;
+  updated_by?: string | null;
+  created_at?: string;
+}
+
 export interface AuditLog {
   id: string;
   user_id?: string;

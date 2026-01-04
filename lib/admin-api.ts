@@ -8,6 +8,7 @@ import {
   DataCollectionStatus,
   APIUsageMetrics,
   SystemConfiguration,
+  SystemSetting,
   AuditLog,
   BackupRecord,
   DatabaseHealth,
@@ -269,6 +270,21 @@ class AdminAPI {
 
   async deleteSystemConfiguration(configId: string): Promise<AdminAPIResponse<void>> {
     return this.delete(`/config/${configId}`);
+  }
+
+  async getSystemSettings(params?: { category?: string }): Promise<AdminAPIResponse<SystemSetting[]>> {
+    const query = params?.category ? { category: params.category } : undefined;
+    return this.get<SystemSetting[]>('/settings', query);
+  }
+
+  async updateSystemSetting(data: {
+    key: string;
+    value: string | number | boolean | Record<string, unknown>;
+    data_type?: 'string' | 'number' | 'boolean' | 'json';
+    description?: string;
+    category?: string;
+  }): Promise<AdminAPIResponse<SystemSetting>> {
+    return this.post<SystemSetting>('/settings', data);
   }
 
   // ==================== MAINTENANCE ====================

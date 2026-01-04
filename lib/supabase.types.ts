@@ -155,6 +155,41 @@ export type Database = {
           dismissed_at?: string
         }
       }
+      system_settings: {
+        Row: {
+          id: string
+          key: string
+          value: string
+          data_type: 'string' | 'number' | 'boolean' | 'json'
+          description: string | null
+          category: string | null
+          updated_at: string
+          updated_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          key: string
+          value: string
+          data_type?: 'string' | 'number' | 'boolean' | 'json'
+          description?: string | null
+          category?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          key?: string
+          value?: string
+          data_type?: 'string' | 'number' | 'boolean' | 'json'
+          description?: string | null
+          category?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          created_at?: string
+        }
+      }
       site_updates: {
         Row: {
           id: number
