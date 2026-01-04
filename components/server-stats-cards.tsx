@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { type PlayerCountData, StreamCountData, ViewerCountData, ServerCapacityData, getServerStats, getStreamerStats, getViewerStats, calculateTimeAtMaxCapacity } from "@/lib/data"
-import { Users, Twitch, TrendingUp, Wifi, WifiOff, Radio, Gauge, AlertCircle, Sparkles, Activity, Film } from 'lucide-react'
+import { Users, Twitch, TrendingUp, Wifi, WifiOff, Gauge, AlertCircle, Sparkles, Activity, Film } from 'lucide-react'
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { motion, AnimatePresence } from "motion/react"
@@ -25,6 +25,35 @@ function KickIcon({ className }: { className?: string }) {
       <path d="M1.333 0v24h21.334V0H1.333zm17.12 18.347h-4.32l-3.093-4.907-1.653 1.76v3.147H5.654V5.653h3.733v5.28l4.48-5.28h4.427l-4.907 5.44 4.986 7.254h.08z"/>
     </svg>
   );
+}
+
+function QueueIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`h-4 w-4 ${className ?? ''}`}
+    >
+      {/* Three users in a line representing queue - front to back with decreasing opacity */}
+      {/* Front user (full opacity) */}
+      <circle cx="6" cy="8" r="2.5" fill="currentColor" />
+      <path d="M2 16c0-2.2 1.8-4 4-4s4 1.8 4 4" fill="currentColor" />
+      {/* Middle user (medium opacity) */}
+      <g opacity="0.6">
+        <circle cx="12" cy="8" r="2.5" fill="currentColor" />
+        <path d="M8 16c0-2.2 1.8-4 4-4s4 1.8 4 4" fill="currentColor" />
+      </g>
+      {/* Back user (low opacity) */}
+      <g opacity="0.35">
+        <circle cx="18" cy="8" r="2.5" fill="currentColor" />
+        <path d="M14 16c0-2.2 1.8-4 4-4s4 1.8 4 4" fill="currentColor" />
+      </g>
+    </svg>
+  )
 }
 
 // Animated background gradient for cards
@@ -198,6 +227,19 @@ export default function ServerStatsCards({
   const kickViewers = liveData?.kick?.viewerCount ?? 0
   const currentViewers = twitchViewers + kickViewers
   const isOnline = liveData?.fivem?.online ?? false
+  const queueData = liveData?.queue ?? null
+  const hasQueueInfo = !!(queueData && !queueData.error)
+  const queueSegments = queueData?.segments ?? []
+  const queuePrimarySegment = queueSegments.find(segment => segment.type === "public") || queueSegments[0]
+  const queuePrimaryPlayers = queuePrimarySegment ? queuePrimarySegment.players : queueData?.totalPlayers ?? 0
+  const queuePrimaryLabel = queuePrimarySegment?.label ?? "Queue"
+  const prioritizedQueueSegments = queueSegments.filter(segment => 
+    segment.type === "public" || segment.type === "allowlist"
+  )
+  let queueSegmentsToDisplay = (prioritizedQueueSegments.length > 0 ? prioritizedQueueSegments : queueSegments).slice(0, 2)
+  if (queueSegmentsToDisplay.length === 0 && queuePrimarySegment) {
+    queueSegmentsToDisplay = [queuePrimarySegment]
+  }
   
   // Get latest max capacity - prefer live data
   const latestCapacity = hasLiveData && liveMaxCapacity > 0 
@@ -229,8 +271,16 @@ export default function ServerStatsCards({
     return 'shadow-emerald-500/30'
   }
 
+  const getQueueGlow = () => 'shadow-cyan-500/30'
+
   // Determine if we're showing live or historical current data
   const isShowingLiveData = hasLiveData && !liveLoading
+
+  const currentPlayerSuffix = latestCapacity ? (
+    <div className="flex items-center gap-1 text-xs text-gray-500">
+      <span>/ {latestCapacity}</span>
+    </div>
+  ) : null
 
   return (
     <motion.div
@@ -282,52 +332,82 @@ export default function ServerStatsCards({
               </CardTitle>
             </div>
             
-            {/* Restart Countdown - positioned between server name and capacity */}
-            {showRestartCountdown && (
-              <div className="flex-shrink-0">
-                <RestartCountdown prediction={restartPrediction || null} />
-              </div>
-            )}
-            
-            {/* Current Capacity indicator - shows on every card */}
-            {showCapacityIndicator && latestCapacity && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.2, ...springs.snappy }}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border backdrop-blur-sm shadow-lg flex-shrink-0 ${getCapacityGlow(currentCapacityPercent)}`}
-                style={{
-                  background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
-                  borderColor: currentCapacityPercent >= 100 
-                    ? 'rgba(239, 68, 68, 0.3)' 
-                    : currentCapacityPercent >= 80 
-                      ? 'rgba(249, 115, 22, 0.3)'
-                      : 'rgba(0, 217, 255, 0.2)'
-                }}
-              >
-                {/* Capacity indicator - shows if currently at max */}
-                {currentPlayers >= latestCapacity ? (
-                  <motion.span
-                    animate={{ 
-                      scale: [1, 1.2, 1],
-                      opacity: [0.8, 1, 0.8]
-                    }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                    className="text-red-400"
-                  >
-                    <AlertCircle className="h-3.5 w-3.5" />
-                  </motion.span>
-                ) : (
-                  <Gauge className={`h-3.5 w-3.5 ${getCapacityColor(currentCapacityPercent)}`} />
-                )}
-                <div className="flex flex-col items-end">
-                  <span className={`text-sm font-bold ${getCapacityColor(currentCapacityPercent)}`}>
-                    {currentCapacityPercent}%
-                  </span>
-                  <span className="text-[9px] text-gray-500 -mt-0.5">capacity</span>
+            <div className="flex items-center gap-2 flex-nowrap">
+              {/* Restart Countdown - positioned between server name and metrics */}
+              {showRestartCountdown && (
+                <div className="flex-shrink-0">
+                  <RestartCountdown prediction={restartPrediction || null} />
                 </div>
-              </motion.div>
-            )}
+              )}
+
+              {/* Queue indicator */}
+              {hasQueueInfo && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.25, ...springs.snappy }}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border backdrop-blur-sm shadow-lg flex-shrink-0 ${getQueueGlow()}`}
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+                    borderColor: 'rgba(0, 217, 255, 0.2)'
+                  }}
+                >
+                  <QueueIcon className="text-gray-200" />
+                  <div className="flex items-center gap-3">
+                    {queueSegmentsToDisplay.map(segment => (
+                      <div key={segment.type} className="flex flex-col items-end">
+                        <span className="text-sm font-bold text-gray-200">
+                          {segment.players}
+                        </span>
+                        <span className="text-[9px] text-gray-400 -mt-0.5">
+                          {segment.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+              
+              {/* Current Capacity indicator - shows on every card */}
+              {showCapacityIndicator && latestCapacity && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.2, ...springs.snappy }}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border backdrop-blur-sm shadow-lg flex-shrink-0 ${getCapacityGlow(currentCapacityPercent)}`}
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
+                    borderColor: currentCapacityPercent >= 100 
+                      ? 'rgba(239, 68, 68, 0.3)' 
+                      : currentCapacityPercent >= 80 
+                        ? 'rgba(249, 115, 22, 0.3)'
+                        : 'rgba(0, 217, 255, 0.2)'
+                  }}
+                >
+                  {/* Capacity indicator - shows if currently at max */}
+                  {currentPlayers >= latestCapacity ? (
+                    <motion.span
+                      animate={{ 
+                        scale: [1, 1.2, 1],
+                        opacity: [0.8, 1, 0.8]
+                      }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                      className="text-red-400"
+                    >
+                      <AlertCircle className="h-3.5 w-3.5" />
+                    </motion.span>
+                  ) : (
+                    <Gauge className={`h-3.5 w-3.5 ${getCapacityColor(currentCapacityPercent)}`} />
+                  )}
+                  <div className="flex flex-col items-end">
+                    <span className={`text-sm font-bold ${getCapacityColor(currentCapacityPercent)}`}>
+                      {currentCapacityPercent}%
+                    </span>
+                    <span className="text-[9px] text-gray-500 -mt-0.5">capacity</span>
+                  </div>
+                </motion.div>
+              )}
+            </div>
           </motion.div>
         </CardHeader>
         
@@ -341,7 +421,7 @@ export default function ServerStatsCards({
             isLive={isShowingLiveData}
             loading={loading && !hasLiveData}
             color={isShowingLiveData ? "green" : "white"}
-            suffix={latestCapacity && <span className="text-sm text-gray-500">/ {latestCapacity}</span>}
+            suffix={currentPlayerSuffix}
             delay={0}
           />
           <StatItem 
