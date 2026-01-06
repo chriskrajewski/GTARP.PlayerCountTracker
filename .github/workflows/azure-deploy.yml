@@ -85,5 +85,5 @@ jobs:
       - name: Restart Azure App Service
         run: |
           echo "Restarting Azure App Service to ensure new deployment takes effect..."
-          az webapp restart --name rpstats --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }}
+          az webapp restart --name rpstats --resource-group rpstats.com
           echo "App Service restart completed."
