@@ -4,8 +4,8 @@ import { NextRequest, NextResponse } from 'next/server'
  * Middleware for BotID verification
  * 
  * This middleware can be used to protect specific routes globally.
- * Currently configured to allow all requests through, but can be extended
- * to verify BotID headers for sensitive endpoints.
+ * It gracefully handles both Vercel and non-Vercel environments.
+ * On non-Vercel platforms (like Azure), BotID headers won't be present and are skipped.
  * 
  * @see https://vercel.com/docs/botid/get-started
  */
@@ -38,20 +38,25 @@ export function middleware(request: NextRequest) {
   )
 
   if (isProtectedRoute) {
-    // Get BotID headers
+    // Get BotID headers (only available on Vercel)
     const botidHeader = request.headers.get('x-vercel-botid')
     const botidScore = request.headers.get('x-vercel-botid-score')
+    
+    // Check if we're running on Vercel
+    const isVercel = botidHeader !== null || process.env.VERCEL === '1'
 
     // Log verification attempt
     console.debug('[BotID Middleware]', {
       pathname,
       hasBotIDHeader: !!botidHeader,
       botidScore: botidScore ? parseFloat(botidScore) : null,
+      isVercel,
       timestamp: new Date().toISOString(),
     })
 
     // Note: Actual bot detection is handled in route handlers
     // This middleware just logs the verification attempt
+    // On non-Vercel platforms, BotID headers simply won't exist and are skipped
   }
 
   return NextResponse.next()

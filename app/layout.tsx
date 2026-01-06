@@ -4,18 +4,31 @@ import "../styles/ios-safe-area.css"
 import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
-import { Analytics } from "@vercel/analytics/react"
 import { Suspense } from "react"
-import { SpeedInsights } from "@vercel/speed-insights/react"
 import Script from "next/script";
 import GoogleAnalytics from "@/components/google-analytics";
-import { BotIDProvider } from "@/components/botid-provider"
 import { VisitorTrackingProvider } from "@/components/visitor-tracking-provider"
 import { PWAProvider } from "@/components/pwa-provider"
 import { FeatureFlagProvider } from "@/lib/feature-flags"
 import { LiveDataStatusProvider } from "@/components/live-data-status-provider"
 import { Toaster } from "@/components/ui/toaster"
+import { isVercel } from "@/lib/platform"
 import mixpanel from "mixpanel-browser";
+
+// Conditionally import Vercel-specific packages
+const Analytics = isVercel ? require("@vercel/analytics/react").Analytics : () => null;
+const SpeedInsights = isVercel ? require("@vercel/speed-insights/react").SpeedInsights : () => null;
+
+// Conditionally import BotID provider - only load on Vercel
+let BotIDProvider: any = () => null;
+if (isVercel) {
+  try {
+    BotIDProvider = require("@/components/botid-provider").BotIDProvider;
+  } catch (e) {
+    // Fallback if import fails
+    BotIDProvider = () => null;
+  }
+}
 
 // Create an instance of the Mixpanel object, your token is already added to this snippet
       mixpanel.init('13440c630224bb2155944bc8de971af7', {

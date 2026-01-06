@@ -2,6 +2,7 @@ import { withBotId } from 'botid/next/config'
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -210,4 +211,9 @@ const nextConfig = {
   }
 }
 
-export default withBotId(nextConfig)
+/**
+ * Conditionally apply BotID wrapper
+ * BotID is a Vercel-specific feature and should only be applied on Vercel deployments
+ */
+const isVercel = process.env.VERCEL === '1';
+export default isVercel ? withBotId(nextConfig) : nextConfig
