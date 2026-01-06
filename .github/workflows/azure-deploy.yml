@@ -45,6 +45,25 @@ jobs:
           # These should be build-time secrets only - runtime secrets set in Azure Portal
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || '' }}
           SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' }}
+          
+      - name: Prepare deployment
+        run: |
+          # Create deployment directory
+          mkdir -p deploy
+          # Copy standalone build to deployment folder
+          cp -r .next/standalone/* deploy/
+          # Copy public folder for static assets
+          cp -r public deploy/
+          # Copy static folder from .next for optimized assets
+          mkdir -p deploy/.next
+          cp -r .next/static deploy/.next/
+          # List what we're deploying
+          echo "Contents of deploy folder:"
+          ls -la deploy/
+          # Create zip file for deployment
+          cd deploy && zip -r ../deploy.zip . && cd ..
+          echo "Created deploy.zip"
+          ls -la deploy.zip
 
       - name: Login to Azure
         uses: azure/login@v2
