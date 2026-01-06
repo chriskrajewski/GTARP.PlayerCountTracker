@@ -14,6 +14,7 @@ jobs:
     
     permissions:
       contents: read
+      id-token: write
 
     steps:
       - name: Checkout repository
@@ -26,7 +27,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Run linting
         run: npm run lint
@@ -36,14 +37,54 @@ jobs:
         run: npm run check-types
         continue-on-error: true
 
+      - name: Verify environment variables
+        run: |
+          echo "Checking if required secrets are set..."
+          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ]; then
+            echo "::error::NEXT_PUBLIC_SUPABASE_URL is not set!"
+            exit 1
+          fi
+          if [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then
+            echo "::error::NEXT_PUBLIC_SUPABASE_ANON_KEY is not set!"
+            exit 1
+          fi
+          echo "NEXT_PUBLIC_SUPABASE_URL length: ${#NEXT_PUBLIC_SUPABASE_URL}"
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY length: ${#NEXT_PUBLIC_SUPABASE_ANON_KEY}"
+          echo "✓ All required environment variables are set"
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
       - name: Build application
         run: npm run build
         env:
           # Build-time environment variables
           NEXT_TELEMETRY_DISABLED: 1
-          # These should be build-time secrets only - runtime secrets set in Azure Portal
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || '' }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' }}
+          # Public Supabase credentials (REQUIRED - build will fail if not set)
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          # Server-side Supabase credentials (needed for build)
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+      - name: Prepare deployment
+        run: |
+          # Create deployment directory
+          mkdir -p deploy
+          # Copy standalone build to deployment folder
+          cp -r .next/standalone/* deploy/
+          # Copy public folder for static assets
+          cp -r public deploy/
+          # Copy static folder from .next for optimized assets
+          mkdir -p deploy/.next
+          cp -r .next/static deploy/.next/
+          # List what we're deploying
+          echo "Contents of deploy folder:"
+          ls -la deploy/
+          # Create zip file for deployment
+          cd deploy && zip -r ../deploy.zip . && cd ..
+          echo "Created deploy.zip"
+          ls -la deploy.zip
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -57,4 +98,4 @@ jobs:
         with:
           app-name: 'rpstats'
           slot-name: 'Production'
-          package: .
+          package: deploy.zip
