@@ -42,8 +42,8 @@ jobs:
           # Build-time environment variables
           NEXT_TELEMETRY_DISABLED: 1
           # These should be build-time secrets only - runtime secrets set in Azure Portal
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || '' }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' }}
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || '' }}
+          SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' }}
 
       - name: Login to Azure
         uses: azure/login@v2
