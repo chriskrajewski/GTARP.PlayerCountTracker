@@ -42,9 +42,12 @@ jobs:
         env:
           # Build-time environment variables
           NEXT_TELEMETRY_DISABLED: 1
-          # These should be build-time secrets only - runtime secrets set in Azure Portal
-          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || '' }}
-          SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' }}
+          # Public Supabase credentials (REQUIRED - build will fail if not set)
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          # Server-side Supabase credentials (needed for build)
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           
       - name: Prepare deployment
         run: |
