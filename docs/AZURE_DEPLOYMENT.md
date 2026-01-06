@@ -74,6 +74,12 @@ This document provides complete instructions for deploying the GTARP Player Coun
    - Set **Startup Command** to: `node server.js`
    - Click "Save"
 
+4. **Optional: Enable Managed Identity**
+   - Left sidebar: Click "Identity"
+   - Under "System assigned", toggle "On"
+   - Click "Save"
+   - This simplifies authentication without storing secrets locally
+
 ---
 
 ## Environment Variables
@@ -121,32 +127,33 @@ These should be set automatically but verify:
 - Repository owner/admin access
 - Azure credentials (see below)
 
-### Step 1: Get Azure Publish Profile
+### Step 1: Get Azure Service Principal Credentials
 
-1. **In Azure Portal**
-   - Go to your App Service
-   - Click "Get publish profile" (top toolbar)
-   - Save the downloaded `.PublishSettings` file
+Azure uses an identity-based approach with client ID, tenant ID, and subscription ID instead of publish profiles.
 
-2. **Extract Credentials**
-   - Open the file in a text editor
-   - Copy the entire contents
-   - You'll paste this as a secret
-
-### Step 2: Get Azure Service Principal Credentials
-
-1. **Create Service Principal**
+1. **Create Service Principal** (if not already created):
    ```bash
-   az ad sp create-for-rbac --name gtarp-player-tracker-deploy \
+   az ad sp create-for-rbac --name rpstats-deploy \
      --role contributor \
-     --scopes /subscriptions/{subscription-id}/resourceGroups/{resource-group-name}
+     --scopes /subscriptions/{subscription-id}
    ```
 
-2. **Copy the Output**
-   - Note: `appId`, `password`, `tenant`
-   - You'll need these for GitHub secrets
+2. **Get Your Subscription ID**:
+   ```bash
+   az account show --query id -o tsv
+   ```
 
-### Step 3: Add GitHub Secrets
+3. **Get Your Tenant ID**:
+   ```bash
+   az account show --query tenantId -o tsv
+   ```
+
+4. **Record the output** with these key values:
+   - `appId` (becomes `AZUREAPPSERVICE_CLIENTID`)
+   - `password` (save securely, used for authentication)
+   - `tenant` (becomes `AZUREAPPSERVICE_TENANTID`)
+
+### Step 2: Add GitHub Secrets
 
 1. **Navigate to Repository Settings**
    - Go to your GitHub repository
@@ -159,11 +166,9 @@ These should be set automatically but verify:
 
    | Secret Name | Value |
    |-------------|-------|
-   | `AZURE_WEBAPP_PUBLISH_PROFILE` | Contents of the `.PublishSettings` file |
-   | `AZURE_WEBAPP_NAME` | Your App Service name (e.g., `gtarp-player-tracker`) |
-   | `AZURE_SUBSCRIPTION_ID` | Azure Subscription ID |
-   | `AZURE_RESOURCE_GROUP` | Resource group name |
-   | `AZURE_ACCESS_TOKEN` | Service principal password/token |
+   | `AZUREAPPSERVICE_CLIENTID` | The `appId` from the service principal |
+   | `AZUREAPPSERVICE_TENANTID` | The `tenant` from the service principal |
+   | `AZUREAPPSERVICE_SUBSCRIPTIONID` | Your Azure subscription ID |
    | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
    | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key |
 
@@ -244,23 +249,22 @@ The application automatically deploys when you push to the `main` branch:
      - Install dependencies
      - Run linting
      - Build application
-     - Deploy to Azure
-     - Restart service
+     - Login to Azure
+     - Deploy to App Service
 
 3. **Monitor Deployment**
    - Green checkmark: Deployment successful
    - Red X: Deployment failed (check logs)
 
-### Manual Deployment
+### What Gets Deployed
 
-If needed, manually trigger the workflow:
+The workflow deploys the entire project directory (`.`) with:
+- Built Next.js application
+- node_modules (installed during build)
+- Public assets
+- Configuration files
 
-1. **Go to Actions**
-   - GitHub repository > Actions tab
-   - Click "Deploy to Azure App Service"
-   - Click "Run workflow"
-   - Select branch (usually `main`)
-   - Click "Run workflow"
+The app starts via the startup command: `node server.js`
 
 ---
 

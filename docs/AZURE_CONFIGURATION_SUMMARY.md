@@ -139,13 +139,11 @@ Runtime Check
 ### GitHub Repository Secrets
 Set these secrets in your GitHub repository settings (Settings → Secrets and variables → Actions):
 
-| Secret | Description | Obtained From |
-|--------|-------------|---------------|
-| `AZURE_WEBAPP_PUBLISH_PROFILE` | Azure publish profile XML | Azure Portal (Get publish profile) |
-| `AZURE_WEBAPP_NAME` | App Service name | Azure Portal |
-| `AZURE_SUBSCRIPTION_ID` | Azure subscription ID | Azure Portal |
-| `AZURE_RESOURCE_GROUP` | Resource group name | Azure Portal |
-| `AZURE_ACCESS_TOKEN` | Service principal token | `az ad sp create-for-rbac` |
+| Secret | Description | How to Get |
+|--------|-------------|-----------|
+| `AZUREAPPSERVICE_CLIENTID` | Service principal client ID | From `az ad sp create-for-rbac` output |
+| `AZUREAPPSERVICE_TENANTID` | Azure tenant ID | From `az account show` |
+| `AZUREAPPSERVICE_SUBSCRIPTIONID` | Azure subscription ID | From `az account show` |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | Supabase dashboard |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key | Supabase dashboard |
 
