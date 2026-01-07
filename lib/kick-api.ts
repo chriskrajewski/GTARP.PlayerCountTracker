@@ -35,6 +35,63 @@ const streamCache = new Map<string, CacheEntry<KickStreamData[]>>();
 const categoryCache = new Map<string, CacheEntry<number>>();
 const STREAM_CACHE_TTL = 30 * 1000; // 30 seconds
 const CATEGORY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const RATE_LIMIT_BACKOFF_MS = 60 * 1000; // 1 minute backoff when rate limited
+
+const rateLimitBackoff = new Map<string, number>();
+
+function isBackoffActive(cacheKey: string): boolean {
+  const until = rateLimitBackoff.get(cacheKey);
+  if (!until) {
+    return false;
+  }
+
+  if (Date.now() < until) {
+    return true;
+  }
+
+  rateLimitBackoff.delete(cacheKey);
+  return false;
+}
+
+function markRateLimit(cacheKey: string) {
+  rateLimitBackoff.set(cacheKey, Date.now() + RATE_LIMIT_BACKOFF_MS);
+}
+
+function getErrorStatus(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null) {
+    return undefined;
+  }
+
+  const err = error as Record<string, any>;
+  return err.status ?? err.code ?? err?.originalError?.status ?? err?.response?.status;
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return typeof error === 'string' ? error : 'Unknown error';
+}
+
+function handleKickApiError(cacheKey: string, cached: CacheEntry<KickStreamData[]> | undefined, error: unknown, context: string): KickStreamData[] {
+  const status = getErrorStatus(error);
+  const message = getErrorMessage(error);
+  const isRateLimit = status === 429 || /rate limit/i.test(message);
+
+  if (isRateLimit) {
+    markRateLimit(cacheKey);
+    console.warn(`[KickAPI] Rate limited for ${context}. Using cached data if available.`);
+  } else {
+    console.error(`[KickAPI] Error fetching streams for ${context}:`, error);
+  }
+
+  if (cached) {
+    console.warn(`[KickAPI] Serving stale cache for ${context}`);
+    return cached.data;
+  }
+
+  return [];
+}
 
 // Kick API client singleton
 let kickClient: InstanceType<typeof KickClient> | null = null;
@@ -144,6 +201,15 @@ export async function getKickStreamsByCategoryId(
     return cached.data;
   }
 
+  if (isBackoffActive(cacheKey)) {
+    if (cached) {
+      console.warn(`[KickAPI] Backoff active for category ${categoryId}. Returning stale cache.`);
+      return cached.data;
+    }
+    console.warn(`[KickAPI] Backoff active for category ${categoryId} with no cache. Returning empty.`);
+    return [];
+  }
+
   const client = getKickClient();
   if (!client) {
     console.error('[KickAPI] Client not configured');
@@ -182,10 +248,10 @@ export async function getKickStreamsByCategoryId(
     const result = allStreams.slice(0, limit);
 
     streamCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    rateLimitBackoff.delete(cacheKey);
     return result;
   } catch (error) {
-    console.error(`[KickAPI] Error fetching streams for category ${categoryId}:`, error);
-    return [];
+    return handleKickApiError(cacheKey, cached, error, `category ${categoryId}`);
   }
 }
 
@@ -221,6 +287,15 @@ export async function getKickTopStreams(limit: number = 100): Promise<KickStream
 
   if (cached && Date.now() - cached.timestamp < STREAM_CACHE_TTL) {
     return cached.data;
+  }
+
+  if (isBackoffActive(cacheKey)) {
+    if (cached) {
+      console.warn('[KickAPI] Backoff active for top streams. Returning stale cache.');
+      return cached.data;
+    }
+    console.warn('[KickAPI] Backoff active for top streams with no cache. Returning empty.');
+    return [];
   }
 
   const client = getKickClient();
@@ -260,10 +335,10 @@ export async function getKickTopStreams(limit: number = 100): Promise<KickStream
     const result = allStreams.slice(0, limit);
 
     streamCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    rateLimitBackoff.delete(cacheKey);
     return result;
   } catch (error) {
-    console.error('[KickAPI] Error fetching top streams:', error);
-    return [];
+    return handleKickApiError(cacheKey, cached, error, 'top streams');
   }
 }
 
@@ -274,6 +349,7 @@ export function clearKickCache(): void {
   streamCache.clear();
   categoryCache.clear();
   clipCache.clear();
+  rateLimitBackoff.clear();
   console.log('[KickAPI] All caches cleared');
 }
 

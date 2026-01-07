@@ -6,6 +6,7 @@ import {
   type KickStreamData
 } from '@/lib/kick-api';
 import { getStreamSearchConfigByPlatform, getKickSupportedServers } from '@/lib/stream-config';
+import { getAPICache } from '@/lib/api-cache';
 
 /**
  * Live Kick.com Stream Data API
@@ -177,12 +178,15 @@ async function fetchKickStreamsForServer(serverId: string): Promise<KickServerDa
   };
 }
 
+const CACHE_NAMESPACE = 'kick_live_streams';
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const serverIdsParam = searchParams.get('serverIds');
     const serverId = searchParams.get('serverId'); // Legacy support
     const format = searchParams.get('format') || 'stats';
+    const bustCache = searchParams.get('bustCache') === 'true';
 
     // Check if Kick API is configured
     if (!isKickApiConfigured()) {
@@ -206,14 +210,66 @@ export async function GET(request: NextRequest) {
 
     const timestamp = new Date().toISOString();
 
+    const normalizedServerIds = serverIdsParam
+      ? Array.from(new Set(serverIdsParam.split(',').map(id => id.trim()).filter(Boolean)))
+      : [];
+    const normalizedSingleServerId = !serverIdsParam && serverId ? serverId.trim() : '';
+
+    const cache = getAPICache();
+    const cacheKey = normalizedServerIds.length
+      ? `kick_streams_${normalizedServerIds.join(',')}`
+      : normalizedSingleServerId
+        ? `kick_stream_${normalizedSingleServerId}`
+        : '';
+    const servers: Record<string, KickServerData> = {};
+
+    if (!bustCache && cacheKey) {
+      const idsToCheck = normalizedServerIds.length
+        ? normalizedServerIds
+        : normalizedSingleServerId
+          ? [normalizedSingleServerId]
+          : [];
+
+      for (const id of idsToCheck) {
+        const cachedServer = await cache.get<KickServerData>(CACHE_NAMESPACE, id);
+        if (cachedServer) {
+          servers[id] = cachedServer;
+        }
+      }
+
+      if (idsToCheck.length > Object.keys(servers).length && cacheKey) {
+        const legacyCache = await cache.get<{ servers: Record<string, KickServerData> }>(CACHE_NAMESPACE, cacheKey);
+        if (legacyCache?.servers) {
+          for (const id of idsToCheck) {
+            if (servers[id]) continue;
+            const legacyServer = legacyCache.servers[id];
+            if (legacyServer) {
+              servers[id] = legacyServer;
+              await cache.set(CACHE_NAMESPACE, id, legacyServer);
+            }
+          }
+        }
+      }
+
+      if (Object.keys(servers).length === idsToCheck.length && idsToCheck.length > 0) {
+        const responseData = {
+          servers,
+          timestamp: new Date().toISOString()
+        };
+        await cache.set(CACHE_NAMESPACE, cacheKey, responseData);
+
+        return NextResponse.json(responseData, {
+          headers: {
+            'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+            'X-Cache': 'HIT',
+          },
+        });
+      }
+    }
+
     // Multi-server mode (preferred)
     if (serverIdsParam) {
-      const serverIds = Array.from(new Set(
-        serverIdsParam
-          .split(',')
-          .map(id => id.trim())
-          .filter(Boolean)
-      ));
+      const serverIds = normalizedServerIds;
 
       if (serverIds.length === 0) {
         return NextResponse.json(
@@ -230,24 +286,63 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      // Fetch data for all servers in parallel
-      const serverDataPromises = serverIds.map(async (id) => {
+      const idsToProcess = bustCache
+        ? serverIds
+        : serverIds.filter(id => !servers[id]);
+
+      if (idsToProcess.length === 0 && Object.keys(servers).length > 0) {
+        const ordered: Record<string, KickServerData> = {};
+        for (const id of serverIds) {
+          if (servers[id]) {
+            ordered[id] = servers[id];
+          }
+        }
+        const responseData = {
+          servers: ordered,
+          timestamp
+        };
+        if (cacheKey) {
+          await cache.set(CACHE_NAMESPACE, cacheKey, responseData);
+        }
+
+        return NextResponse.json(responseData, {
+          headers: {
+            'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60'
+          }
+        });
+      }
+
+      if (bustCache) {
+        for (const id of serverIds) {
+          delete servers[id];
+        }
+      }
+
+      const serverDataPromises = idsToProcess.map(async (id) => {
         const data = await fetchKickStreamsForServer(id);
-        return { serverId: id, data };
+        servers[id] = data;
+        await cache.set(CACHE_NAMESPACE, id, data);
       });
 
-      const results = await Promise.all(serverDataPromises);
+      await Promise.all(serverDataPromises);
 
-      // Build response object
-      const servers: Record<string, KickServerData> = {};
-      results.forEach(({ serverId, data }) => {
-        servers[serverId] = data;
-      });
+      const ordered: Record<string, KickServerData> = {};
+      for (const id of serverIds) {
+        if (servers[id]) {
+          ordered[id] = servers[id];
+        }
+      }
 
-      return NextResponse.json({
-        servers,
+      const responseData = {
+        servers: ordered,
         timestamp
-      }, {
+      };
+
+      if (cacheKey) {
+        await cache.set(CACHE_NAMESPACE, cacheKey, responseData);
+      }
+
+      return NextResponse.json(responseData, {
         headers: {
           'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60'
         }
@@ -255,8 +350,33 @@ export async function GET(request: NextRequest) {
     }
 
     // Legacy single-server mode
-    if (serverId) {
-      const data = await fetchKickStreamsForServer(serverId);
+    const targetServerId = normalizedSingleServerId;
+
+    if (targetServerId) {
+      if (!bustCache && servers[targetServerId]) {
+        const data = servers[targetServerId];
+        return NextResponse.json({
+          streamCount: data.streamCount,
+          viewerCount: data.viewerCount,
+          topStreams: data.topStreams,
+          lastUpdated: data.lastUpdated,
+          ...(data.error && { error: data.error })
+        }, {
+          headers: {
+            'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+            'X-Cache': 'HIT'
+          }
+        });
+      }
+
+      const data = await fetchKickStreamsForServer(targetServerId);
+      await cache.set(CACHE_NAMESPACE, targetServerId, data);
+      if (cacheKey) {
+        await cache.set(CACHE_NAMESPACE, cacheKey, {
+          servers: { [targetServerId]: data },
+          timestamp
+        });
+      }
 
       // Return stats-only format (default for API compatibility)
       if (format === 'stats') {
