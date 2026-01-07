@@ -97,9 +97,3 @@ jobs:
           app-name: 'rpstats'
           slot-name: 'Production'
           package: deploy.zip
-
-      - name: Restart Azure App Service
-        run: |
-          echo "Restarting Azure App Service to ensure new deployment takes effect..."
-          az webapp restart --name rpstats --resource-group rpstats.com
-          echo "App Service restart completed."
