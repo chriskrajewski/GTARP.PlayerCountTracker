@@ -42,6 +42,16 @@ jobs:
       #   run: npm run check-types
       #   continue-on-error: true
 
+      - name: Write build env file
+        run: |
+          cat > .env.production <<'EOF'
+          NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+          SUPABASE_URL=${SUPABASE_URL}
+          SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+          EOF
+          echo ".env.production written"
+
       - name: Verify public envs are present
         run: |
           node -e "console.log('NEXT_PUBLIC_SUPABASE_URL set:', !!process.env.NEXT_PUBLIC_SUPABASE_URL)"
