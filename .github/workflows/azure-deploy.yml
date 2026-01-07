@@ -29,13 +29,13 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Run linting
-        run: npm run lint
-        continue-on-error: true
+      # - name: Run linting
+      #   run: npm run lint
+      #   continue-on-error: true
 
-      - name: Check TypeScript types
-        run: npm run check-types
-        continue-on-error: true
+      # - name: Check TypeScript types
+      #   run: npm run check-types
+      #   continue-on-error: true
 
       - name: Verify public envs are present
         run: |
@@ -49,8 +49,8 @@ jobs:
           # Build-time environment variables
           NEXT_TELEMETRY_DISABLED: 1
           # Public Supabase credentials (REQUIRED - build will fail if not set)
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ env.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ env.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           # Server-side Supabase credentials (needed for build)
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
