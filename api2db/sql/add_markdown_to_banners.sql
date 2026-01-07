@@ -45,3 +45,4 @@ FROM information_schema.columns
 WHERE table_name = 'notification_banners' 
 ORDER BY ordinal_position;
 
+

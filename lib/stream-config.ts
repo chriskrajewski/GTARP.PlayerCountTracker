@@ -38,10 +38,7 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 const STREAM_CONFIG_TABLE = process.env.STREAM_SEARCH_CONFIG_TABLE || 'stream_search_config';
 
-// Log which table is being used on first import
-if (typeof window === 'undefined') {
-  console.log(`[StreamConfig] Using table: ${STREAM_CONFIG_TABLE}`);
-}
+// Note: Logging is deferred to first actual use to avoid initializing Supabase during build time
 
 /**
  * Get stream search configuration for a specific server
