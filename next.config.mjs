@@ -3,6 +3,14 @@ import { withBotId } from 'botid/next/config'
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  // Explicitly define public environment variables to ensure they're inlined at build time
+  // This is critical for Turbopack/Next.js 16+ compatibility
+  env: {
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    NEXT_PUBLIC_GA_TRACKING_ID: process.env.NEXT_PUBLIC_GA_TRACKING_ID,
+    NEXT_PUBLIC_STATSIG_CLIENT_KEY: process.env.NEXT_PUBLIC_STATSIG_CLIENT_KEY,
+  }, 
   eslint: {
     ignoreDuringBuilds: true,
   },
