@@ -11,15 +11,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Since you're using Vercel + Supabase, most maintenance is handled automatically
+    // Azure App Services handles most scaling/maintenance tasks automatically
     const maintenanceStatus = {
       system_status: 'operational', // operational, maintenance, degraded
       scheduled_maintenance: null,
       last_maintenance: null,
-      uptime_percent: 99.9, // Vercel + Supabase uptime
+      uptime_percent: 99.9, // Azure + Supabase uptime
       available_operations: [],
       recent_maintenance_logs: [],
-      note: 'Maintenance is handled automatically by Vercel and Supabase. No manual maintenance operations are available.',
+      note: 'Maintenance is handled automatically by Azure App Services and Supabase. No manual maintenance operations are available.',
     };
 
     return NextResponse.json({
@@ -40,6 +40,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   return NextResponse.json({
     success: false,
-    error: 'Manual maintenance operations are not supported. System maintenance is handled automatically by Vercel and Supabase.',
+    error: 'Manual maintenance operations are not supported. System maintenance is handled automatically by Azure App Services and Supabase.',
   }, { status: 400 });
 }

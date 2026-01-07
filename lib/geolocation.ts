@@ -79,54 +79,102 @@ function cleanupCache(): void {
 
 /**
  * Extract real client IP from request headers
- * Handles various proxy configurations (Vercel, Cloudflare, nginx, etc.)
+ * Handles various proxy configurations (Azure Front Door, Cloudflare, nginx, etc.)
  * 
  * @param headers Request headers
  * @returns Client IP address or null
  */
 export function extractClientIp(headers: Headers): string | null {
-  // Priority order for IP extraction:
-  // 1. Cloudflare's CF-Connecting-IP (most reliable if using Cloudflare)
-  // 2. X-Forwarded-For (standard proxy header, take first IP - most common)
-  // 3. Vercel's x-vercel-forwarded-for
-  // 4. X-Real-IP (nginx, some load balancers - but often set to proxy IP)
+  // Normalize IP strings to strip ports/IPv6 wrappers
+  const normalizeIp = (ip: string | null | undefined): string | null => {
+    if (!ip) {
+      return null;
+    }
+    let normalized = ip.trim();
+    
+    if (!normalized) {
+      return null;
+    }
+    
+    // Remove IPv4-mapped IPv6 prefix
+    if (normalized.startsWith('::ffff:')) {
+      normalized = normalized.substring(7);
+    }
+    
+    // Remove brackets for IPv6 with ports ([2001:db8::1]:1234)
+    if (normalized.startsWith('[')) {
+      const closingIndex = normalized.indexOf(']');
+      if (closingIndex !== -1) {
+        normalized = normalized.substring(1, closingIndex);
+      }
+    }
+    
+    // Remove port for IPv4 with :port
+    if (normalized.includes(':') && normalized.includes('.')) {
+      normalized = normalized.split(':')[0] ?? normalized;
+    }
+    
+    // Remove zone identifiers (e.g., fe80::1%eth0)
+    if (normalized.includes('%')) {
+      normalized = normalized.split('%')[0] ?? normalized;
+    }
+    
+    return normalized || null;
+  };
   
-  const cfConnectingIp = headers.get('cf-connecting-ip');
-  if (cfConnectingIp && !isPrivateIp(cfConnectingIp.trim())) {
-    return cfConnectingIp.trim();
-  }
+  const getFirstListIp = (value: string | null): string | null => {
+    if (!value) {
+      return null;
+    }
+    const first = value.split(',')[0]?.trim();
+    return normalizeIp(first);
+  };
   
-  // X-Forwarded-For is the most reliable for getting the original client IP
-  // Format: "client, proxy1, proxy2" - first IP is the original client
-  const xForwardedFor = headers.get('x-forwarded-for');
-  if (xForwardedFor) {
-    const firstIp = xForwardedFor.split(',')[0]?.trim();
-    if (firstIp && !isPrivateIp(firstIp)) {
-      return firstIp;
+  const parseForwardedHeader = (value: string | null): string | null => {
+    if (!value) {
+      return null;
+    }
+    
+    // Only examine the first forwarded component
+    const first = value.split(',')[0];
+    const match = /for=([^;]+)/i.exec(first);
+    if (!match || !match[1]) {
+      return null;
+    }
+    
+    // Remove surrounding quotes if present
+    const candidate = match[1].replace(/"/g, '').trim();
+    return normalizeIp(candidate);
+  };
+  
+  // Priority order for IP extraction, covering common proxy providers
+  const headerChecks: Array<() => string | null> = [
+    () => normalizeIp(headers.get('cf-connecting-ip')),
+    () => normalizeIp(headers.get('x-azure-clientip')),
+    () => normalizeIp(headers.get('x-arr-clientip')),
+    () => normalizeIp(headers.get('x-client-ip')),
+    () => normalizeIp(headers.get('x-clientip')),
+    () => normalizeIp(headers.get('true-client-ip')),
+    () => normalizeIp(headers.get('x-ms-client-ip')),
+    () => normalizeIp(headers.get('x-ms-original-forwarded-for')),
+    () => getFirstListIp(headers.get('x-forwarded-for')),
+    () => getFirstListIp(headers.get('x-original-forwarded-for')),
+    () => getFirstListIp(headers.get('x-vercel-forwarded-for')),
+    () => normalizeIp(headers.get('x-real-ip')),
+    () => parseForwardedHeader(headers.get('forwarded')),
+  ];
+  
+  for (const getIp of headerChecks) {
+    const ip = getIp();
+    if (ip && !isPrivateIp(ip)) {
+      return ip;
     }
   }
   
-  const vercelForwardedFor = headers.get('x-vercel-forwarded-for');
-  if (vercelForwardedFor) {
-    const firstIp = vercelForwardedFor.split(',')[0]?.trim();
-    if (firstIp && !isPrivateIp(firstIp)) {
-      return firstIp;
-    }
-  }
-  
-  // X-Real-IP is often set by proxies to their own IP, so check it last
-  const xRealIp = headers.get('x-real-ip');
-  if (xRealIp && !isPrivateIp(xRealIp.trim())) {
-    return xRealIp.trim();
-  }
-  
-  // If all headers contain private IPs, return the first X-Forwarded-For IP anyway
-  // (useful for logging/debugging even if we can't geolocate)
-  if (xForwardedFor) {
-    const firstIp = xForwardedFor.split(',')[0]?.trim();
-    if (firstIp) {
-      return firstIp;
-    }
+  // As a fallback, return the first forward header even if private for debugging
+  const fallback = getFirstListIp(headers.get('x-forwarded-for')) ?? normalizeIp(headers.get('x-real-ip'));
+  if (fallback) {
+    return fallback;
   }
   
   return null;

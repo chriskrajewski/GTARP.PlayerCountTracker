@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase-server';
-import { verifyBotID } from '@/lib/botid';
 import { logApiRequest } from '@/lib/apiLogger';
 import { extractClientIp, getGeoLocation } from '@/lib/geolocation';
 
@@ -9,7 +8,6 @@ import { extractClientIp, getGeoLocation } from '@/lib/geolocation';
  * 
  * Create a new visitor session
  * Source: PRD §4.1 FR-6, FR-11; Blueprint §7.1
- * Implements: Session creation with BotID classification
  */
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
@@ -24,18 +22,8 @@ export async function POST(request: NextRequest) {
       // Body is optional
     }
 
-    // Verify BotID to classify visitor
-    // Source: PRD §7.1 O-4, E-1 (BotID classification)
-    const botIdResult = await verifyBotID({
-      checkLevel: 'basic',
-      isDevelopment: process.env.NODE_ENV === 'development'
-    });
-
-    // Classification logic:
-    // - If isHuman is true, it's a legitimate human visitor (not a bot)
-    // - If isBot is true and isVerifiedBot is false, it's an unverified/suspicious bot
-    // - If isVerifiedBot is true, it's a known/verified bot (like Google crawler)
-    const isBot = !botIdResult.isHuman;
+    // BotID verification has been removed now that we're running exclusively on Azure
+    const isBot = false;
 
     // Create Supabase client
     // Source: Blueprint §6.1 (Database operations)
@@ -111,7 +99,6 @@ export async function POST(request: NextRequest) {
       metadata: {
         session_id: data.session_id,
         is_bot: isBot,
-        bot_classification: botIdResult.classificationReason,
         geo_country: geoLocation.country,
         geo_city: geoLocation.city,
         has_geolocation: Boolean(geoLocation.country)
