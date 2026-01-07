@@ -9,11 +9,10 @@
  * Optimized for PWA and mobile app support.
  */
 
-const CACHE_NAME = 'gtarp-pct-cache-v2';
-const ADMIN_CACHE_NAME = 'gtarp-admin-cache-v1';
+// Bump cache versions to force refresh of cached bundles after deployments
+const CACHE_NAME = 'gtarp-pct-cache-v3';
+const ADMIN_CACHE_NAME = 'gtarp-admin-cache-v2';
 const STATIC_ASSETS = [
-  '/',
-  '/admin',
   '/placeholder-logo.png',
   '/placeholder-logo.svg',
   '/placeholder.jpg',
