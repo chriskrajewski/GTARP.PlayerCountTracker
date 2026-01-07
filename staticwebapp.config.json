@@ -1,7 +1,3 @@
 {
-  "buildSkipDetection": false,
-  "env": {
-    "NODE_VERSION": "20"
-  }
+  "buildSkipDetection": true
 }
-
