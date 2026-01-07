@@ -15,10 +15,6 @@ import { Toaster } from "@/components/ui/toaster"
 import { isVercel } from "@/lib/platform"
 import mixpanel from "mixpanel-browser";
 
-// Conditionally import Vercel-specific packages
-const Analytics = isVercel ? require("@vercel/analytics/react").Analytics : () => null;
-const SpeedInsights = isVercel ? require("@vercel/speed-insights/react").SpeedInsights : () => null;
-
 // Conditionally import BotID provider - only load on Vercel
 let BotIDProvider: any = () => null;
 if (isVercel) {
@@ -241,8 +237,6 @@ export default function RootLayout({
                   <VisitorTrackingProvider />
                   {children}
                   <Toaster />
-                  <Analytics />
-                  <SpeedInsights />
                 </Suspense>
               </FeatureFlagProvider>
             </PWAProvider>
