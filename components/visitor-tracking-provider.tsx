@@ -502,13 +502,55 @@ export function VisitorTrackingProvider() {
           trackPerformance();
         }
 
+        let isRecreatingSession = false;
+
+        const recreateSession = async () => {
+          if (isRecreatingSession) {
+            return;
+          }
+          isRecreatingSession = true;
+          try {
+            logger.info('Recreating visitor session after missing heartbeat', { sessionId });
+            localStorage.removeItem(SESSION_STORAGE_KEY);
+            localStorage.removeItem(SESSION_CREATED_KEY);
+            const newSessionId = await createNewSession();
+            if (newSessionId) {
+              sessionId = newSessionId;
+            } else {
+              throw new Error('Failed to recreate visitor session');
+            }
+          } catch (err) {
+            logger.error('Failed to recreate visitor session after heartbeat 404', err);
+          } finally {
+            isRecreatingSession = false;
+          }
+        };
+
+        const sendHeartbeat = async () => {
+          if (!sessionId) {
+            return;
+          }
+
+          try {
+            const response = await fetch('/api/visitors/heartbeat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ session_id: sessionId })
+            });
+
+            if (response.status === 404) {
+              await recreateSession();
+            } else if (!response.ok) {
+              logger.warn('Heartbeat request failed', { status: response.status });
+            }
+          } catch (err) {
+            logger.error('Failed to send heartbeat', err);
+          }
+        };
+
         // Setup heartbeat (every 30 seconds)
         heartbeatIntervalRef.current = setInterval(() => {
-          fetch('/api/visitors/heartbeat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ session_id: sessionId })
-          }).catch(err => logger.error('Failed to send heartbeat', err));
+          sendHeartbeat();
         }, 30000);
 
         // Clear initialization flag after a delay
