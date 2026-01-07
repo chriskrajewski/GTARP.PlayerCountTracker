@@ -37,6 +37,12 @@ jobs:
         run: npm run check-types
         continue-on-error: true
 
+      - name: Verify public envs are present
+        run: |
+          node -e "console.log('NEXT_PUBLIC_SUPABASE_URL set:', !!process.env.NEXT_PUBLIC_SUPABASE_URL)"
+          node -e "console.log('NEXT_PUBLIC_SUPABASE_ANON_KEY set:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)"
+      
+
       - name: Build application
         run: npm run build
         env:
