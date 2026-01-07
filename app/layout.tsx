@@ -36,6 +36,7 @@ const inter = Inter({ subsets: ["latin"] })
 
 // PWA and SEO Metadata
 export const metadata: Metadata = {
+  metadataBase: new URL('https://rpstats.com'),
   title: {
     default: "RPStats.com",
     template: "%s | RPStats.com"
