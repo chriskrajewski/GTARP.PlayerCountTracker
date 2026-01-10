@@ -12,19 +12,7 @@ import { PWAProvider } from "@/components/pwa-provider"
 import { FeatureFlagProvider } from "@/lib/feature-flags"
 import { LiveDataStatusProvider } from "@/components/live-data-status-provider"
 import { Toaster } from "@/components/ui/toaster"
-import { isVercel } from "@/lib/platform"
 import mixpanel from "mixpanel-browser";
-
-// Conditionally import BotID provider - only load on Vercel
-let BotIDProvider: any = () => null;
-if (isVercel) {
-  try {
-    BotIDProvider = require("@/components/botid-provider").BotIDProvider;
-  } catch (e) {
-    // Fallback if import fails
-    BotIDProvider = () => null;
-  }
-}
 
 // Create an instance of the Mixpanel object, your token is already added to this snippet
       mixpanel.init('13440c630224bb2155944bc8de971af7', {
@@ -36,6 +24,7 @@ const inter = Inter({ subsets: ["latin"] })
 
 // PWA and SEO Metadata
 export const metadata: Metadata = {
+  metadataBase: new URL('https://rpstats.com'),
   title: {
     default: "RPStats.com",
     template: "%s | RPStats.com"
@@ -131,7 +120,7 @@ export default function RootLayout({
 
       
       <head>
-      {(process.env.NODE_ENV === "development" || process.env.VERCEL_ENV === "preview") && (
+      {process.env.NODE_ENV !== "production" && (
        // eslint-disable-next-line @next/next/no-sync-scripts
        //Import Mixpanel SDK
 
@@ -232,7 +221,6 @@ export default function RootLayout({
             <PWAProvider>
               <FeatureFlagProvider>
                 <Suspense>
-                  <BotIDProvider />
                   <GoogleAnalytics />
                   <VisitorTrackingProvider />
                   {children}

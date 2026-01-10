@@ -1,0 +1,54 @@
+name: Deploy to Azure App Service
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: rpstats-app
+  NODE_VERSION: '20.x'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+      - name: Copy static files to standalone
+        run: |
+          cp -r public .next/standalone/public
+          cp -r .next/static .next/standalone/.next/static
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          package: .next/standalone
+
+      - name: Logout from Azure
+        run: az logout
+        if: always()

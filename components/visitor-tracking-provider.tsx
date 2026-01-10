@@ -51,6 +51,7 @@ interface ConnectionInfo {
 const SESSION_STORAGE_KEY = 'gtarp_visitor_session_id';
 const SESSION_CREATED_KEY = 'gtarp_visitor_session_created';
 const SESSION_INIT_FLAG = 'gtarp_session_initializing';
+const SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24; // 24 hours
 
 /**
  * Parse user agent to extract browser and OS information
@@ -212,11 +213,22 @@ export function VisitorTrackingProvider() {
         sessionStorage.setItem(SESSION_INIT_FLAG, 'true');
 
         // Check for existing session in localStorage
-        const storedSessionId = localStorage.getItem(SESSION_STORAGE_KEY);
+        let storedSessionId = localStorage.getItem(SESSION_STORAGE_KEY);
         const createdAt = localStorage.getItem(SESSION_CREATED_KEY);
 
         let sessionId: string;
         let shouldTrackPageView = true;
+
+        if (storedSessionId && createdAt) {
+          const createdAtTime = Date.parse(createdAt);
+          const sessionAgeMs = Date.now() - createdAtTime;
+          if (Number.isFinite(createdAtTime) && sessionAgeMs > SESSION_MAX_AGE_MS) {
+            logger.info('Stored visitor session expired locally, creating new one', { sessionAgeMs });
+            localStorage.removeItem(SESSION_STORAGE_KEY);
+            localStorage.removeItem(SESSION_CREATED_KEY);
+            storedSessionId = null;
+          }
+        }
 
         if (storedSessionId && createdAt) {
           // Validate and reactivate existing session via heartbeat
@@ -502,13 +514,55 @@ export function VisitorTrackingProvider() {
           trackPerformance();
         }
 
+        let isRecreatingSession = false;
+
+        const recreateSession = async () => {
+          if (isRecreatingSession) {
+            return;
+          }
+          isRecreatingSession = true;
+          try {
+            logger.info('Recreating visitor session after missing heartbeat', { sessionId });
+            localStorage.removeItem(SESSION_STORAGE_KEY);
+            localStorage.removeItem(SESSION_CREATED_KEY);
+            const newSessionId = await createNewSession();
+            if (newSessionId) {
+              sessionId = newSessionId;
+            } else {
+              throw new Error('Failed to recreate visitor session');
+            }
+          } catch (err) {
+            logger.error('Failed to recreate visitor session after heartbeat 404', err);
+          } finally {
+            isRecreatingSession = false;
+          }
+        };
+
+        const sendHeartbeat = async () => {
+          if (!sessionId) {
+            return;
+          }
+
+          try {
+            const response = await fetch('/api/visitors/heartbeat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ session_id: sessionId })
+            });
+
+            if (response.status === 404) {
+              await recreateSession();
+            } else if (!response.ok) {
+              logger.warn('Heartbeat request failed', { status: response.status });
+            }
+          } catch (err) {
+            logger.error('Failed to send heartbeat', err);
+          }
+        };
+
         // Setup heartbeat (every 30 seconds)
         heartbeatIntervalRef.current = setInterval(() => {
-          fetch('/api/visitors/heartbeat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ session_id: sessionId })
-          }).catch(err => logger.error('Failed to send heartbeat', err));
+          sendHeartbeat();
         }, 30000);
 
         // Clear initialization flag after a delay

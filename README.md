@@ -61,10 +61,6 @@ Check it out at https://fivemstats.krtech.io
    npm install
    npm run dev
    ```
-   or with Vercel CLI:
-   ```bash
-   vercel dev
-   ```
 
 4. **Production Build**:
    ```bash
@@ -91,19 +87,9 @@ This application includes several security measures for production deployment:
 4. Implement DDoS protection (Cloudflare or similar)
 5. Use environment-specific configurations
 
-## Deployment with Vercel
+## Deployment
 
-This project is optimized for deployment on Vercel:
-
-```bash
-vercel
-```
-
-For production:
-
-```bash
-vercel --prod
-```
+This project is optimized for deployment on Azure App Services. Review the full walkthrough in `docs/AZURE_DEPLOYMENT.md`, or run the provided GitHub Actions workflow (`.github/workflows/azure-deploy.yml`) to deploy from the `main` branch.
 
 ## Multi-Stream Viewer
 
