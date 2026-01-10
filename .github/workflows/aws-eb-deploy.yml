@@ -135,7 +135,12 @@ jobs:
           echo "Environment Status: $STATUS"
           echo "Environment Health: $HEALTH"
           
-          if [ "$STATUS" != "Ready" ] || [ "$HEALTH" != "Ok" ]; then
+          # AWS EB Health values: Green (healthy), Yellow (degraded), Red (unhealthy), Grey (unknown)
+          if [ "$STATUS" != "Ready" ] || [ "$HEALTH" != "Green" ]; then
             echo "Deployment verification failed"
+            echo "Expected Status: Ready, Got: $STATUS"
+            echo "Expected Health: Green, Got: $HEALTH"
             exit 1
           fi
+          
+          echo "✅ Deployment verified successfully!"
