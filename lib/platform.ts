@@ -19,15 +19,6 @@ export const isVercel = process.env.VERCEL === '1';
 export const isAzure = process.env.WEBSITE_SITE_NAME !== undefined;
 
 /**
- * Check if the application is running on AWS Elastic Beanstalk
- * AWS EB sets AWS_EB_PLATFORM_NAME or AWS_EXECUTION_ENV for deployed applications
- */
-export const isAWS = 
-  process.env.AWS_EB_PLATFORM_NAME !== undefined ||
-  process.env.AWS_EXECUTION_ENV !== undefined ||
-  process.env.ELASTIC_BEANSTALK_ENVIRONMENT !== undefined;
-
-/**
  * Check if the application is running in a development environment
  */
 export const isDevelopment = process.env.NODE_ENV === 'development';
@@ -43,7 +34,6 @@ export const isProduction = process.env.NODE_ENV === 'production';
 export const getPlatformName = (): string => {
   if (isVercel) return 'Vercel';
   if (isAzure) return 'Azure App Services';
-  if (isAWS) return 'AWS Elastic Beanstalk';
   if (isDevelopment) return 'Development';
   return 'Unknown';
 };
