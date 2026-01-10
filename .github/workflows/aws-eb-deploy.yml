@@ -1,0 +1,141 @@
+name: Deploy to AWS Elastic Beanstalk
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  EB_APPLICATION_NAME: rpstats
+  EB_ENVIRONMENT_NAME: rpstats-env
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run linting
+        run: npm run lint || true
+        continue-on-error: true
+
+      - name: Run type checking
+        run: npm run check-types || true
+        continue-on-error: true
+
+      - name: Build application
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+        run: npm run build
+
+      - name: Prepare deployment package
+        run: |
+          # Create deployment directory
+          mkdir -p deploy-package
+          
+          # Copy standalone build (contains server.js and server code)
+          cp -r .next/standalone/* deploy-package/
+          
+          # Copy static assets (must be in .next/static relative to server.js)
+          mkdir -p deploy-package/.next
+          cp -r .next/static deploy-package/.next/static
+          
+          # Copy public assets
+          cp -r public deploy-package/public
+          
+          # Copy configuration files
+          cp Procfile deploy-package/
+          cp -r .ebextensions deploy-package/ 2>/dev/null || true
+          cp -r .platform deploy-package/ 2>/dev/null || true
+          
+          # Verify server.js exists
+          if [ ! -f "deploy-package/server.js" ]; then
+            echo "ERROR: server.js not found in deploy-package"
+            exit 1
+          fi
+          
+          # Create zip file
+          cd deploy-package
+          zip -r ../deploy.zip . -q
+          cd ..
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install EB CLI
+        run: |
+          pip install --upgrade pip
+          pip install awsebcli --upgrade
+
+      - name: Deploy to Elastic Beanstalk
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
+        run: |
+          # Create application version
+          VERSION_LABEL="app-$(date +%Y%m%d%H%M%S)-$(git rev-parse --short HEAD)"
+          
+          # Upload to S3
+          aws s3 cp deploy.zip s3://${{ secrets.AWS_S3_BUCKET }}/$VERSION_LABEL.zip
+          
+          # Create application version in EB
+          aws elasticbeanstalk create-application-version \
+            --application-name ${{ env.EB_APPLICATION_NAME }} \
+            --version-label $VERSION_LABEL \
+            --source-bundle S3Bucket=${{ secrets.AWS_S3_BUCKET }},S3Key=$VERSION_LABEL.zip \
+            --description "Deployed from GitHub Actions - $(git log -1 --pretty=format:'%h - %s')"
+          
+          # Update environment
+          aws elasticbeanstalk update-environment \
+            --application-name ${{ env.EB_APPLICATION_NAME }} \
+            --environment-name ${{ env.EB_ENVIRONMENT_NAME }} \
+            --version-label $VERSION_LABEL
+
+      - name: Wait for deployment
+        run: |
+          echo "Waiting for deployment to complete..."
+          aws elasticbeanstalk wait environment-updated \
+            --application-name ${{ env.EB_APPLICATION_NAME }} \
+            --environment-names ${{ env.EB_ENVIRONMENT_NAME }}
+
+      - name: Verify deployment
+        run: |
+          STATUS=$(aws elasticbeanstalk describe-environments \
+            --application-name ${{ env.EB_APPLICATION_NAME }} \
+            --environment-names ${{ env.EB_ENVIRONMENT_NAME }} \
+            --query 'Environments[0].Status' \
+            --output text)
+          
+          HEALTH=$(aws elasticbeanstalk describe-environments \
+            --application-name ${{ env.EB_APPLICATION_NAME }} \
+            --environment-names ${{ env.EB_ENVIRONMENT_NAME }} \
+            --query 'Environments[0].Health' \
+            --output text)
+          
+          echo "Environment Status: $STATUS"
+          echo "Environment Health: $HEALTH"
+          
+          if [ "$STATUS" != "Ready" ] || [ "$HEALTH" != "Ok" ]; then
+            echo "Deployment verification failed"
+            exit 1
+          fi
