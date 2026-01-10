@@ -1,0 +1,81 @@
+# Elastic Beanstalk ignore file
+# Similar to .gitignore but for EB deployments
+
+# Development files
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# Dependencies (not needed for standalone build)
+node_modules/
+
+# Build artifacts (will be generated during deployment)
+.next/
+out/
+dist/
+build/
+
+# Git files
+.git/
+.gitignore
+.github/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files
+__tests__/
+__checks__/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+coverage/
+
+# Documentation
+docs/
+README.md
+LICENSE
+
+# CI/CD (keep only AWS-related)
+.github/workflows/azure-*.yml
+.github/workflows/azure-static-web-apps-*.yml
+
+# Scripts (not needed in production)
+scripts/
+
+# Azure-specific files
+staticwebapp.config.json
+scripts/azure-startup.sh
+
+# Checkly configuration
+checkly.config.ts
+
+# TypeScript config (not needed at runtime)
+tsconfig.json
+next-env.d.ts
+
+# Linting
+.eslintrc.json
+eslint.config.js
+
+# Other config files
+components.json
+postcss.config.mjs
+tailwind.config.ts
+
+# Python files (if not needed)
+api2db/python/
+
+# SQL files (if not needed)
+api2db/sql/
