@@ -48,70 +48,29 @@ jobs:
           # Create deployment directory
           mkdir -p deploy-package
           
-          # Copy standalone build (contains server.js and server code)
-          cp -r .next/standalone/* deploy-package/
+          # Copy standalone build (includes server.js, server/, minimal node_modules, and .next manifests)
+          # Use dot suffix to include hidden .next directory required by the runtime
+          cp -a .next/standalone/. deploy-package/
           
-          # Create .next directory structure
+          # Ensure static assets are available alongside the standalone bundle
           mkdir -p deploy-package/.next
-          
-          # Copy static assets (must be in .next/static relative to server.js)
-          cp -r .next/static deploy-package/.next/static
-          
-          # Copy BUILD_ID file (required for Next.js to recognize production build)
-          if [ -f ".next/BUILD_ID" ]; then
-            cp .next/BUILD_ID deploy-package/.next/BUILD_ID
-            echo "✓ Copied BUILD_ID"
-          else
-            echo "⚠ WARNING: BUILD_ID not found, creating one"
-            echo "$(date +%s)" > deploy-package/.next/BUILD_ID
-          fi
-          
-          # Copy all manifest and required files from .next that standalone server needs
-          # The standalone build doesn't include these in standalone/, but server.js looks for them
-          echo "Copying required .next manifest files..."
-          
-          # Copy all JSON manifest files
-          find .next -maxdepth 1 -name "*.json" -type f | while read -r file; do
-            filename=$(basename "$file")
-            cp "$file" "deploy-package/.next/$filename"
-            echo "✓ Copied $filename"
-          done
-          
-          # Copy server directory if it exists (contains server-side code and pages)
-          if [ -d ".next/server" ]; then
-            # Only copy the structure, not all files (standalone/ already has the server code)
-            # But we need the pages manifest and other server metadata
-            mkdir -p deploy-package/.next/server
-            if [ -f ".next/server/pages-manifest.json" ]; then
-              cp .next/server/pages-manifest.json deploy-package/.next/server/
-              echo "✓ Copied server/pages-manifest.json"
-            fi
-            if [ -f ".next/server/app-paths-manifest.json" ]; then
-              cp .next/server/app-paths-manifest.json deploy-package/.next/server/
-              echo "✓ Copied server/app-paths-manifest.json"
-            fi
-            if [ -f ".next/server/middleware-manifest.json" ]; then
-              cp .next/server/middleware-manifest.json deploy-package/.next/server/
-              echo "✓ Copied server/middleware-manifest.json"
-            fi
-          fi
+          cp -a .next/static deploy-package/.next/static
           
           # Copy public assets
-          cp -r public deploy-package/public
+          cp -a public deploy-package/public
           
-          # Copy package.json (needed for npm start command)
-          cp package.json deploy-package/
-          
-          # Copy configuration files
+          # Copy runtime configuration files
           cp Procfile deploy-package/
-          cp -r .ebextensions deploy-package/ 2>/dev/null || true
-          cp -r .platform deploy-package/ 2>/dev/null || true
+          cp -a .ebextensions deploy-package/.ebextensions 2>/dev/null || true
+          cp -a .platform deploy-package/.platform 2>/dev/null || true
           
-          # Verify server.js exists
-          if [ ! -f "deploy-package/server.js" ]; then
-            echo "ERROR: server.js not found in deploy-package"
-            exit 1
-          fi
+          # Verify required files exist
+          for f in server.js package.json; do
+            if [ ! -f "deploy-package/$f" ]; then
+              echo "ERROR: $f not found in deploy-package"
+              exit 1
+            fi
+          done
           
           # List deployment package structure for debugging
           echo "Deployment package structure:"
