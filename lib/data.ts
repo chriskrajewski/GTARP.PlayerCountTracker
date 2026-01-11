@@ -82,6 +82,16 @@ export type LastRefreshInfo = {
   last_refresh: string;
 }
 
+export type PaginationOptions = {
+  page?: number;
+  pageSize?: number;
+  maxRecords?: number;
+}
+
+const MAX_RESPONSE_RECORDS = 10000
+const MAX_PERIOD_LIMIT = 100
+const MIN_POINTS_PER_SERVER = 100
+
 // New type for server colors
 export type ServerColor = {
   server_id: string;
@@ -141,6 +151,20 @@ function applySampling(data: PlayerCountData[], timeRange: TimeRange): PlayerCou
   return sampledData
 }
 
+function getPaginationBounds(recordLimit: number, options?: PaginationOptions) {
+  const maxRecords = Math.max(1, Math.min(options?.maxRecords ?? MAX_RESPONSE_RECORDS, recordLimit))
+  const pageSize = Math.max(1, Math.min(options?.pageSize ?? maxRecords, maxRecords))
+  const page = Math.max(1, Math.floor(options?.page ?? 1))
+  const start = (page - 1) * pageSize
+
+  if (start >= maxRecords) {
+    return { start: 0, end: -1, isEmpty: true }
+  }
+
+  const end = Math.min(start + pageSize - 1, maxRecords - 1)
+  return { start, end, isEmpty: false }
+}
+
 // Time-based sampling with proper timestamp alignment for multiple servers
 export async function getPlayerCountsWithTimeBasedSampling(serverIds: string[], timeRange: TimeRange): Promise<PlayerCountData[]> {
   const isClient = typeof window !== "undefined"
@@ -149,6 +173,8 @@ export async function getPlayerCountsWithTimeBasedSampling(serverIds: string[], 
   const now = new Date()
   let startDate: Date
   let daysDifference: number
+  const anchorTimestamps = new Set<string>()
+  const recordMap = new Map<string, PlayerCountData>()
   
   // Calculate start date and days
   switch (timeRange) {
@@ -177,54 +203,136 @@ export async function getPlayerCountsWithTimeBasedSampling(serverIds: string[], 
   }
   
   try {
-    const allData: PlayerCountData[] = []
-    
-    // Calculate sample periods and intervals
     let samplePeriods: number
     let daysPerPeriod: number
-    
+    let targetDataPoints: number
+
     if (timeRange === "7d") {
-      samplePeriods = 14 // More frequent sampling for 7d
+      samplePeriods = 14
       daysPerPeriod = 0.5
+      targetDataPoints = 100
     } else if (timeRange === "30d") {
-      samplePeriods = 20 // Sample every 1.5 days for 30d
+      samplePeriods = 20
       daysPerPeriod = 1.5
+      targetDataPoints = 150
     } else if (timeRange === "90d") {
-      samplePeriods = 30 // Sample every 3 days for 90d
-      daysPerPeriod = 3
-    } else {
-      samplePeriods = Math.min(40, daysDifference) // Max 40 sample periods for longer ranges
+      samplePeriods = 25
       daysPerPeriod = daysDifference / samplePeriods
+      targetDataPoints = 200
+    } else if (timeRange === "180d") {
+      samplePeriods = 30
+      daysPerPeriod = daysDifference / samplePeriods
+      targetDataPoints = 250
+    } else {
+      samplePeriods = 20
+      daysPerPeriod = daysDifference / samplePeriods
+      targetDataPoints = 250
     }
-    
-    // Fetch data for each sample period
-    for (let i = 0; i < samplePeriods; i++) {
-      const periodStart = new Date(startDate.getTime() + (i * daysPerPeriod * 24 * 60 * 60 * 1000))
-      const periodEnd = new Date(periodStart.getTime() + (daysPerPeriod * 24 * 60 * 60 * 1000))
-      
-      const { data, error } = await client
+
+    const perPeriodLimit = Math.max(1, Math.min(MAX_PERIOD_LIMIT, Math.ceil(targetDataPoints / samplePeriods)))
+    const startIso = startDate.toISOString()
+    const endIso = now.toISOString()
+
+    const addRecords = (records: PlayerCountData[] | null | undefined) => {
+      if (!records || records.length === 0) return
+      records.forEach(record => {
+        const key = `${record.server_id}|${record.timestamp}`
+        if (!recordMap.has(key)) {
+          recordMap.set(key, record)
+        }
+      })
+    }
+
+    const fetchPeriodWindow = async (periodStart: Date, periodEnd: Date, ascending: boolean) => {
+      let query = client
         .from('player_counts')
         .select('server_id, timestamp, player_count')
         .gte('timestamp', periodStart.toISOString())
         .lt('timestamp', periodEnd.toISOString())
-        .in('server_id', serverIds.length > 0 ? serverIds : [])
-        .order('timestamp', { ascending: true })
-        .limit(200) // Higher limit for better coverage
-      
-      if (!error && data && data.length > 0) {
-        allData.push(...data)
+        .order('timestamp', { ascending })
+        .limit(perPeriodLimit)
+
+      if (serverIds.length > 0) {
+        query = query.in('server_id', serverIds)
+      }
+
+      const { data, error } = await query
+      if (error) {
+        console.warn('Time-based sampling period fetch failed:', error)
+        return
+      }
+
+      addRecords(data)
+    }
+
+    for (let i = 0; i < samplePeriods; i++) {
+      const periodStart = new Date(startDate.getTime() + (i * daysPerPeriod * 24 * 60 * 60 * 1000))
+      const periodEnd = new Date(Math.min(
+        periodStart.getTime() + (daysPerPeriod * 24 * 60 * 60 * 1000),
+        now.getTime()
+      ))
+
+      if (periodEnd <= periodStart) {
+        continue
+      }
+
+      await fetchPeriodWindow(periodStart, periodEnd, true)
+      await fetchPeriodWindow(periodStart, periodEnd, false)
+    }
+
+    if (serverIds.length > 0) {
+      for (const serverId of serverIds) {
+        const [firstResult, lastResult, peakResult] = await Promise.all([
+          client
+            .from('player_counts')
+            .select('server_id, timestamp, player_count')
+            .eq('server_id', serverId)
+            .gte('timestamp', startIso)
+            .lte('timestamp', endIso)
+            .order('timestamp', { ascending: true })
+            .limit(1),
+          client
+            .from('player_counts')
+            .select('server_id, timestamp, player_count')
+            .eq('server_id', serverId)
+            .gte('timestamp', startIso)
+            .lte('timestamp', endIso)
+            .order('timestamp', { ascending: false })
+            .limit(1),
+          client
+            .from('player_counts')
+            .select('server_id, timestamp, player_count')
+            .eq('server_id', serverId)
+            .gte('timestamp', startIso)
+            .lte('timestamp', endIso)
+            .order('player_count', { ascending: false })
+            .limit(1),
+        ])
+
+        addRecords(firstResult.data)
+        addRecords(lastResult.data)
+        addRecords(peakResult.data)
+
+        if (firstResult.data?.[0]) {
+          anchorTimestamps.add(firstResult.data[0].timestamp)
+        }
+        if (lastResult.data?.[0]) {
+          anchorTimestamps.add(lastResult.data[0].timestamp)
+        }
+        if (peakResult.data?.[0]) {
+          anchorTimestamps.add(peakResult.data[0].timestamp)
+        }
       }
     }
-    
-    // Now apply intelligent sampling that maintains timestamp alignment
-    if (allData.length === 0) {
+
+    if (recordMap.size === 0) {
       return []
     }
     
     // Group data by timestamp to ensure all servers are represented at each time point
     const timestampGroups: Record<string, PlayerCountData[]> = {}
     
-    allData.forEach(item => {
+    recordMap.forEach(item => {
       const timestampKey = item.timestamp
       if (!timestampGroups[timestampKey]) {
         timestampGroups[timestampKey] = []
@@ -237,28 +345,36 @@ export async function getPlayerCountsWithTimeBasedSampling(serverIds: string[], 
       .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
     
     // Calculate how many timestamps we want to keep for optimal performance
-    const targetDataPoints = timeRange === "7d" ? 100 : timeRange === "30d" ? 150 : timeRange === "90d" ? 200 : 250
-    const step = Math.max(1, Math.floor(sortedTimestamps.length / targetDataPoints))
+    const minTargetPoints = Math.max(MIN_POINTS_PER_SERVER, targetDataPoints)
+    const step = Math.max(1, Math.floor(sortedTimestamps.length / minTargetPoints))
     
     // Sample timestamps at regular intervals to maintain even distribution
     const sampledData: PlayerCountData[] = []
+    const includedTimestamps = new Set<string>()
     for (let i = 0; i < sortedTimestamps.length; i += step) {
       const timestamp = sortedTimestamps[i]
       const dataAtTimestamp = timestampGroups[timestamp]
       
       // Add all servers' data for this timestamp
       sampledData.push(...dataAtTimestamp)
+      includedTimestamps.add(timestamp)
     }
     
     // Always include the last timestamp if it wasn't included
     if (sortedTimestamps.length > 0) {
       const lastTimestamp = sortedTimestamps[sortedTimestamps.length - 1]
-      const lastTimestampIncluded = sampledData.some(item => item.timestamp === lastTimestamp)
-      
-      if (!lastTimestampIncluded) {
+      if (!includedTimestamps.has(lastTimestamp)) {
         sampledData.push(...timestampGroups[lastTimestamp])
+        includedTimestamps.add(lastTimestamp)
       }
     }
+
+    anchorTimestamps.forEach((timestamp) => {
+      if (!includedTimestamps.has(timestamp) && timestampGroups[timestamp]) {
+        sampledData.push(...timestampGroups[timestamp])
+        includedTimestamps.add(timestamp)
+      }
+    })
     
     return sampledData.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
     
@@ -450,7 +566,11 @@ function getRecordLimitForTimeRange(timeRange: TimeRange): number {
   }
 }
 
-export async function getPlayerCounts(serverIds: string[], timeRange: TimeRange): Promise<PlayerCountData[]> {
+export async function getPlayerCounts(
+  serverIds: string[],
+  timeRange: TimeRange,
+  options?: PaginationOptions
+): Promise<PlayerCountData[]> {
   // Check if we're in a browser environment
   const isClient = typeof window !== "undefined"
   const client = isClient ? supabase : createServerClient()
@@ -462,12 +582,17 @@ export async function getPlayerCounts(serverIds: string[], timeRange: TimeRange)
   // For specific time ranges, we want chronological order
   const fetchingAll = timeRange === "all"
   const recordLimit = getRecordLimitForTimeRange(timeRange)
+  const pagination = getPaginationBounds(recordLimit, options)
+
+  if (pagination.isEmpty) {
+    return []
+  }
   
   let query = client
     .from("player_counts")
     .select("server_id, timestamp, player_count")
     .order("timestamp", { ascending: !fetchingAll }) // Descending for "all", ascending for time ranges
-    .limit(recordLimit)
+    .range(pagination.start, pagination.end)
 
   if (serverIds.length > 0) {
     query = query.in("server_id", serverIds)
@@ -534,15 +659,25 @@ export async function getPlayerCounts(serverIds: string[], timeRange: TimeRange)
   return data
 }
 
-export async function getStreamCounts(serverIds: string[], timeRange: TimeRange): Promise<StreamCountData[]> {
+export async function getStreamCounts(
+  serverIds: string[],
+  timeRange: TimeRange,
+  options?: PaginationOptions
+): Promise<StreamCountData[]> {
   const isClient = typeof window !== "undefined";
   const client = isClient ? supabase : createServerClient();
+  const recordLimit = 10000
+  const pagination = getPaginationBounds(recordLimit, options)
+
+  if (pagination.isEmpty) {
+    return []
+  }
 
   let query = client
     .from("streamer_count")
     .select("server_id, timestamp, streamercount")
     .order("timestamp", { ascending: true })
-    .limit(10000);
+    .range(pagination.start, pagination.end);
 
   if (serverIds.length > 0) {
     query = query.in("server_id", serverIds);
@@ -602,15 +737,25 @@ export async function getStreamCounts(serverIds: string[], timeRange: TimeRange)
   return data || []; // Ensure we always return an array
 }
 
-export async function getViewerCounts(serverIds: string[], timeRange: TimeRange): Promise<ViewerCountData[]> {
+export async function getViewerCounts(
+  serverIds: string[],
+  timeRange: TimeRange,
+  options?: PaginationOptions
+): Promise<ViewerCountData[]> {
   const isClient = typeof window !== "undefined";
   const client = isClient ? supabase : createServerClient();
+  const recordLimit = 50000
+  const pagination = getPaginationBounds(recordLimit, options)
+
+  if (pagination.isEmpty) {
+    return []
+  }
 
   let query = client
     .from("viewer_count")
     .select("server_id, timestamp, viewcount")
     .order("timestamp", { ascending: true })
-    .limit(50000); // Increase limit for larger time ranges
+    .range(pagination.start, pagination.end);
 
   if (serverIds.length > 0) {
     query = query.in("server_id", serverIds);
@@ -676,19 +821,28 @@ export async function getViewerCounts(serverIds: string[], timeRange: TimeRange)
  * @param timeRange Time range to fetch data for
  * @returns Array of capacity data points
  */
-export async function getServerCapacities(serverIds: string[], timeRange: TimeRange): Promise<ServerCapacityData[]> {
+export async function getServerCapacities(
+  serverIds: string[],
+  timeRange: TimeRange,
+  options?: PaginationOptions
+): Promise<ServerCapacityData[]> {
   const isClient = typeof window !== "undefined";
   const client = isClient ? supabase : createServerClient();
 
   // When fetching "all" data, we want newest first with a reasonable limit
   const fetchingAll = timeRange === "all"
   const recordLimit = getRecordLimitForTimeRange(timeRange)
+  const pagination = getPaginationBounds(recordLimit, options)
+
+  if (pagination.isEmpty) {
+    return []
+  }
 
   let query = client
     .from("server_capacity")
     .select("server_id, timestamp, max_capacity")
     .order("timestamp", { ascending: !fetchingAll }) // Descending for "all", ascending for time ranges
-    .limit(recordLimit);
+    .range(pagination.start, pagination.end);
 
   if (serverIds.length > 0) {
     query = query.in("server_id", serverIds);
