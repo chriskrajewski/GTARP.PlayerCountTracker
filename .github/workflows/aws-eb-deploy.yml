@@ -51,9 +51,20 @@ jobs:
           # Copy standalone build (contains server.js and server code)
           cp -r .next/standalone/* deploy-package/
           
-          # Copy static assets (must be in .next/static relative to server.js)
+          # Create .next directory structure
           mkdir -p deploy-package/.next
+          
+          # Copy static assets (must be in .next/static relative to server.js)
           cp -r .next/static deploy-package/.next/static
+          
+          # Copy BUILD_ID file (required for Next.js to recognize production build)
+          if [ -f ".next/BUILD_ID" ]; then
+            cp .next/BUILD_ID deploy-package/.next/BUILD_ID
+            echo "✓ Copied BUILD_ID"
+          else
+            echo "⚠ WARNING: BUILD_ID not found, creating one"
+            echo "$(date +%s)" > deploy-package/.next/BUILD_ID
+          fi
           
           # Copy public assets
           cp -r public deploy-package/public
@@ -81,7 +92,13 @@ jobs:
           test -f deploy-package/package.json && echo "✓ package.json exists" || echo "✗ package.json missing"
           test -f deploy-package/Procfile && echo "✓ Procfile exists" || echo "✗ Procfile missing"
           test -d deploy-package/.next/static && echo "✓ .next/static exists" || echo "✗ .next/static missing"
+          test -f deploy-package/.next/BUILD_ID && echo "✓ .next/BUILD_ID exists" || echo "✗ .next/BUILD_ID missing"
           test -d deploy-package/public && echo "✓ public exists" || echo "✗ public missing"
+          
+          # Show .next directory contents
+          echo ""
+          echo ".next directory contents:"
+          ls -la deploy-package/.next/ || echo "No .next directory"
           
           # Create zip file
           cd deploy-package
