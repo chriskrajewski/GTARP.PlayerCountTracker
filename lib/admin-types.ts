@@ -52,6 +52,14 @@ export interface UserSession {
   last_activity?: string;
 }
 
+export interface MemoryUsageSnapshot {
+  rss_mb: number;
+  heap_total_mb: number;
+  heap_used_mb: number;
+  external_mb: number;
+  array_buffers_mb: number;
+}
+
 export interface SystemMetrics {
   total_servers: number;
   total_players_today: number;
@@ -61,6 +69,7 @@ export interface SystemMetrics {
   database_size: string;
   api_requests_today: number;
   error_rate: number;
+  memory_usage_mb?: MemoryUsageSnapshot | null;
 }
 
 export interface ServerConfiguration {
