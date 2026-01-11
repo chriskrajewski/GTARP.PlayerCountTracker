@@ -89,7 +89,40 @@ This application includes several security measures for production deployment:
 
 ## Deployment
 
-This project is optimized for deployment on Azure App Services. Review the full walkthrough in `docs/AZURE_DEPLOYMENT.md`, or run the provided GitHub Actions workflow (`.github/workflows/azure-deploy.yml`) to deploy from the `main` branch.
+This project supports deployment to multiple platforms:
+
+- **Azure App Services**: Review the full walkthrough in `docs/AZURE_DEPLOYMENT.md`, or run the provided GitHub Actions workflow (`.github/workflows/azure-deploy.yml`) to deploy from the `main` branch.
+- **AWS Elastic Beanstalk**: Deploy using the GitHub Actions workflow (`.github/workflows/aws-eb-deploy.yml`).
+
+## Monitoring (Elastic Beanstalk)
+
+For Elastic Beanstalk deployments, comprehensive CloudWatch alarms and dashboards are available:
+
+### Quick Setup
+
+```bash
+# Create all recommended CloudWatch alarms
+./scripts/setup-eb-alarms.sh
+
+# Create CloudWatch dashboard for visual monitoring
+./scripts/setup-eb-dashboard.sh
+```
+
+### Documentation
+
+- **[CloudWatch Alarms Guide](./docs/EB_CLOUDWATCH_ALARMS.md)** - Complete guide to all alarms, thresholds, and troubleshooting
+- **[Quick Reference](./docs/EB_ALARMS_QUICK_REFERENCE.md)** - Quick reference for common alarm operations
+
+### Alarm Categories
+
+The setup script creates alarms for:
+- **Critical**: Environment health, severe errors, critical CPU/resource usage
+- **Performance**: CPU utilization, response times, memory monitoring
+- **Availability**: HTTP 4xx/5xx errors, downtime detection
+- **Traffic**: Request volume patterns and anomalies
+- **Scaling**: Instance count and auto-scaling events
+
+All alarms are configured to send notifications via SNS. Subscribe your email or other notification channels to receive alerts.
 
 ## Multi-Stream Viewer
 
