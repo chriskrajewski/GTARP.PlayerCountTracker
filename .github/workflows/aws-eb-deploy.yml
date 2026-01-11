@@ -58,6 +58,9 @@ jobs:
           # Copy public assets
           cp -r public deploy-package/public
           
+          # Copy package.json (needed for npm start command)
+          cp package.json deploy-package/
+          
           # Copy configuration files
           cp Procfile deploy-package/
           cp -r .ebextensions deploy-package/ 2>/dev/null || true
@@ -69,10 +72,24 @@ jobs:
             exit 1
           fi
           
+          # List deployment package structure for debugging
+          echo "Deployment package structure:"
+          ls -la deploy-package/ | head -20
+          echo ""
+          echo "Checking for key files:"
+          test -f deploy-package/server.js && echo "✓ server.js exists" || echo "✗ server.js missing"
+          test -f deploy-package/package.json && echo "✓ package.json exists" || echo "✗ package.json missing"
+          test -f deploy-package/Procfile && echo "✓ Procfile exists" || echo "✗ Procfile missing"
+          test -d deploy-package/.next/static && echo "✓ .next/static exists" || echo "✗ .next/static missing"
+          test -d deploy-package/public && echo "✓ public exists" || echo "✗ public missing"
+          
           # Create zip file
           cd deploy-package
           zip -r ../deploy.zip . -q
           cd ..
+          
+          echo "Deployment package created: deploy.zip"
+          ls -lh deploy.zip
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
