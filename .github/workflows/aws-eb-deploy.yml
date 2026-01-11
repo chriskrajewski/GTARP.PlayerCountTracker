@@ -66,6 +66,36 @@ jobs:
             echo "$(date +%s)" > deploy-package/.next/BUILD_ID
           fi
           
+          # Copy all manifest and required files from .next that standalone server needs
+          # The standalone build doesn't include these in standalone/, but server.js looks for them
+          echo "Copying required .next manifest files..."
+          
+          # Copy all JSON manifest files
+          find .next -maxdepth 1 -name "*.json" -type f | while read -r file; do
+            filename=$(basename "$file")
+            cp "$file" "deploy-package/.next/$filename"
+            echo "✓ Copied $filename"
+          done
+          
+          # Copy server directory if it exists (contains server-side code and pages)
+          if [ -d ".next/server" ]; then
+            # Only copy the structure, not all files (standalone/ already has the server code)
+            # But we need the pages manifest and other server metadata
+            mkdir -p deploy-package/.next/server
+            if [ -f ".next/server/pages-manifest.json" ]; then
+              cp .next/server/pages-manifest.json deploy-package/.next/server/
+              echo "✓ Copied server/pages-manifest.json"
+            fi
+            if [ -f ".next/server/app-paths-manifest.json" ]; then
+              cp .next/server/app-paths-manifest.json deploy-package/.next/server/
+              echo "✓ Copied server/app-paths-manifest.json"
+            fi
+            if [ -f ".next/server/middleware-manifest.json" ]; then
+              cp .next/server/middleware-manifest.json deploy-package/.next/server/
+              echo "✓ Copied server/middleware-manifest.json"
+            fi
+          fi
+          
           # Copy public assets
           cp -r public deploy-package/public
           
@@ -93,6 +123,7 @@ jobs:
           test -f deploy-package/Procfile && echo "✓ Procfile exists" || echo "✗ Procfile missing"
           test -d deploy-package/.next/static && echo "✓ .next/static exists" || echo "✗ .next/static missing"
           test -f deploy-package/.next/BUILD_ID && echo "✓ .next/BUILD_ID exists" || echo "✗ .next/BUILD_ID missing"
+          test -f deploy-package/.next/routes-manifest.json && echo "✓ .next/routes-manifest.json exists" || echo "✗ .next/routes-manifest.json missing"
           test -d deploy-package/public && echo "✓ public exists" || echo "✗ public missing"
           
           # Show .next directory contents
