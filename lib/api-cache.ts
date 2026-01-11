@@ -42,7 +42,21 @@ class APICache {
   private supabase: ReturnType<typeof createClient>;
   private configCache: Map<string, CacheConfig> = new Map();
   private configCacheExpiry: number = 0;
-  private CONFIG_CACHE_TTL = 60000; // 1 minute
+  private CONFIG_CACHE_TTL = 30000; // 30 seconds
+  private CONFIG_CACHE_MAX_ENTRIES = 50;
+
+  private touchConfigCache(apiName: string, config: CacheConfig) {
+    this.configCache.delete(apiName);
+    this.configCache.set(apiName, config);
+  }
+
+  private enforceConfigCacheLimit() {
+    while (this.configCache.size > this.CONFIG_CACHE_MAX_ENTRIES) {
+      const oldestKey = this.configCache.keys().next().value;
+      if (!oldestKey) break;
+      this.configCache.delete(oldestKey);
+    }
+  }
 
   constructor() {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -64,7 +78,11 @@ class APICache {
 
     // Check if in-memory cache is still valid
     if (this.configCache.has(apiName) && now < this.configCacheExpiry) {
-      return this.configCache.get(apiName) || null;
+      const cached = this.configCache.get(apiName) || null;
+      if (cached) {
+        this.touchConfigCache(apiName, cached);
+      }
+      return cached;
     }
 
     try {
@@ -80,7 +98,8 @@ class APICache {
       }
 
       if (data) {
-        this.configCache.set(apiName, data);
+        this.touchConfigCache(apiName, data);
+        this.enforceConfigCacheLimit();
         this.configCacheExpiry = now + this.CONFIG_CACHE_TTL;
       }
 

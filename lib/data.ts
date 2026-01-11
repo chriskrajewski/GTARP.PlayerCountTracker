@@ -427,6 +427,29 @@ export async function getLatestServerResourceSnapshots(serverIds: string[], limi
   return latest
 }
 
+function getRecordLimitForTimeRange(timeRange: TimeRange): number {
+  switch (timeRange) {
+    case "1h":
+    case "2h":
+    case "4h":
+    case "6h":
+    case "8h":
+    case "24h":
+      return 50000
+    case "7d":
+    case "30d":
+      return 20000
+    case "90d":
+    case "180d":
+      return 15000
+    case "365d":
+    case "all":
+      return 10000
+    default:
+      return 50000
+  }
+}
+
 export async function getPlayerCounts(serverIds: string[], timeRange: TimeRange): Promise<PlayerCountData[]> {
   // Check if we're in a browser environment
   const isClient = typeof window !== "undefined"
@@ -438,7 +461,7 @@ export async function getPlayerCounts(serverIds: string[], timeRange: TimeRange)
   // When fetching "all" data, we want newest first with a reasonable limit
   // For specific time ranges, we want chronological order
   const fetchingAll = timeRange === "all"
-  const recordLimit = fetchingAll ? 100000 : 50000 // Higher limit for "all" to get more history
+  const recordLimit = getRecordLimitForTimeRange(timeRange)
   
   let query = client
     .from("player_counts")
@@ -519,7 +542,7 @@ export async function getStreamCounts(serverIds: string[], timeRange: TimeRange)
     .from("streamer_count")
     .select("server_id, timestamp, streamercount")
     .order("timestamp", { ascending: true })
-    .limit(50000); // Increase limit for larger time ranges
+    .limit(10000);
 
   if (serverIds.length > 0) {
     query = query.in("server_id", serverIds);
@@ -659,7 +682,7 @@ export async function getServerCapacities(serverIds: string[], timeRange: TimeRa
 
   // When fetching "all" data, we want newest first with a reasonable limit
   const fetchingAll = timeRange === "all"
-  const recordLimit = fetchingAll ? 100000 : 50000
+  const recordLimit = getRecordLimitForTimeRange(timeRange)
 
   let query = client
     .from("server_capacity")
