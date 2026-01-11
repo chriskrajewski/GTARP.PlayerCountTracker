@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase-server';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 /**
  * Live FiveM Server Data API
  * 
@@ -36,6 +39,20 @@ const FIVEM_HEADERS = {
   'Origin': 'https://servers.fivem.net'
 };
 
+// Cache configuration
+const CACHE_TTL_MS = 15_000; // fresh cache window to reduce upstream calls
+const STALE_FALLBACK_MS = 2 * 60_000; // allow stale data for 2 minutes when upstream fails
+
+type CacheStatus = 'live' | 'cache-hit' | 'cache-fallback';
+
+interface CacheEntry {
+  data: FiveMServerData;
+  fetchedAt: number;
+}
+
+const liveCache = new Map<string, CacheEntry>();
+const pendingRequests = new Map<string, Promise<ServerDataResult>>();
+
 interface FiveMServerData {
   currentPlayers: number;
   maxCapacity: number;
@@ -45,9 +62,39 @@ interface FiveMServerData {
   error?: string;
 }
 
+interface ServerDataResult {
+  data: FiveMServerData;
+  cacheStatus: CacheStatus;
+}
+
 interface ServerXref {
   server_id: string;
   server_name: string;
+}
+
+/**
+ * Get a cached entry if it is within the allowed age
+ */
+function getCachedData(serverId: string, maxAgeMs: number): FiveMServerData | null {
+  const entry = liveCache.get(serverId);
+  if (!entry) return null;
+
+  const age = Date.now() - entry.fetchedAt;
+
+  if (age <= maxAgeMs) {
+    return entry.data;
+  }
+
+  // Drop long-stale entries to keep the cache tidy
+  if (age > STALE_FALLBACK_MS) {
+    liveCache.delete(serverId);
+  }
+
+  return null;
+}
+
+function setCachedData(serverId: string, data: FiveMServerData) {
+  liveCache.set(serverId, { data, fetchedAt: Date.now() });
 }
 
 /**
@@ -57,6 +104,8 @@ async function fetchServerData(serverId: string): Promise<FiveMServerData> {
   try {
     const response = await fetch(`${FIVEM_API_BASE}${serverId}`, {
       headers: FIVEM_HEADERS,
+      cache: 'no-store',
+      next: { revalidate: 0 },
       // Short timeout to prevent blocking
       signal: AbortSignal.timeout(10000)
     });
@@ -111,6 +160,54 @@ async function fetchServerData(serverId: string): Promise<FiveMServerData> {
       lastUpdated: new Date().toISOString(),
       error: errorMessage
     };
+  }
+}
+
+/**
+ * Fetch live data with caching and stale fallback to prevent UI dropouts
+ */
+async function getServerDataWithCache(serverId: string): Promise<ServerDataResult> {
+  const freshCache = getCachedData(serverId, CACHE_TTL_MS);
+  if (freshCache) {
+    return { data: freshCache, cacheStatus: 'cache-hit' };
+  }
+
+  // Reuse in-flight request for the same server to avoid duplicate upstream calls
+  const inflight = pendingRequests.get(serverId);
+  if (inflight) {
+    return inflight;
+  }
+
+  const requestPromise: Promise<ServerDataResult> = (async () => {
+    const liveData = await fetchServerData(serverId);
+
+    if (liveData.online) {
+      setCachedData(serverId, liveData);
+      return { data: liveData, cacheStatus: 'live' };
+    }
+
+    const fallback = getCachedData(serverId, STALE_FALLBACK_MS);
+    if (fallback) {
+      return {
+        data: {
+          ...fallback,
+          error: liveData.error
+            ? `${liveData.error} (serving cached data)`
+            : 'Serving cached data after live fetch failure'
+        },
+        cacheStatus: 'cache-fallback'
+      };
+    }
+
+    return { data: liveData, cacheStatus: 'live' };
+  })();
+
+  pendingRequests.set(serverId, requestPromise);
+
+  try {
+    return await requestPromise;
+  } finally {
+    pendingRequests.delete(serverId);
   }
 }
 
@@ -174,9 +271,19 @@ export async function GET(request: NextRequest) {
     // Fetch server names from database
     const serverNames = await getServerNames(serverIds);
 
+    const cacheStats = {
+      live: 0,
+      cacheHit: 0,
+      cacheFallback: 0
+    };
+
     // Fetch live data for all servers in parallel
     const serverDataPromises = serverIds.map(async (serverId) => {
-      const data = await fetchServerData(serverId);
+      const { data, cacheStatus } = await getServerDataWithCache(serverId);
+
+      if (cacheStatus === 'live') cacheStats.live += 1;
+      if (cacheStatus === 'cache-hit') cacheStats.cacheHit += 1;
+      if (cacheStatus === 'cache-fallback') cacheStats.cacheFallback += 1;
       
       // Use database server name if available, otherwise use API name
       if (serverNames.has(serverId)) {
@@ -194,7 +301,7 @@ export async function GET(request: NextRequest) {
       servers[serverId] = data;
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       servers,
       timestamp: new Date().toISOString()
     }, {
@@ -203,6 +310,13 @@ export async function GET(request: NextRequest) {
         'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30'
       }
     });
+
+    response.headers.set(
+      'X-FiveM-Live-Cache',
+      `live=${cacheStats.live};fresh=${cacheStats.cacheHit};fallback=${cacheStats.cacheFallback}`
+    );
+
+    return response;
   } catch (error) {
     console.error('Error in live FiveM API:', error);
     return NextResponse.json(
