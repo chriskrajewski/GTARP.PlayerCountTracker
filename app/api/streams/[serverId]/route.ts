@@ -79,12 +79,20 @@ interface TwitchGameStreamsCachePayload {
 
 const TWITCH_TOKEN_REFRESH_BUFFER_MS = 60 * 1000; // refresh 1 minute before expiration
 const GAME_STREAM_MEMORY_TTL_MS = 60 * 1000; // keep per-game results warm for 1 minute
+const GAME_STREAM_MEMORY_MAX_ENTRIES = 50;
+const MAX_STREAMS_PER_GAME = 500;
+const INFLIGHT_GAME_FETCH_MAX = 20;
+const INFLIGHT_GAME_FETCH_TTL_MS = 30 * 1000;
+const GAME_STREAM_CACHE_CLEANUP_INTERVAL_MS = 60 * 1000;
+const INFLIGHT_FETCH_CLEANUP_INTERVAL_MS = 10 * 1000;
 const TWITCH_RATE_LIMIT_MAX_RETRIES = 3;
 const RATE_LIMIT_DEFAULT_DELAY_MS = 2000;
 
 let cachedTwitchToken: { token: string; expiresAt: number } | null = null;
 const gameStreamsMemoryCache = new Map<string, { streams: TwitchApiStream[]; expiresAt: number }>();
-const inflightGameFetches = new Map<string, Promise<TwitchApiStream[]>>();
+const inflightGameFetches = new Map<string, { promise: Promise<TwitchApiStream[]>; startedAt: number }>();
+let lastGameStreamsCacheCleanup = 0;
+let lastInflightFetchCleanup = 0;
 
 function sleep(ms: number) {
   return new Promise<void>(resolve => setTimeout(resolve, ms));
@@ -135,6 +143,86 @@ function getRateLimitDelayMs(headers: Headers): number | null {
   }
 
   return null;
+}
+
+function trimStreams(streams: TwitchApiStream[]): TwitchApiStream[] {
+  if (streams.length <= MAX_STREAMS_PER_GAME) {
+    return streams;
+  }
+  return streams.slice(0, MAX_STREAMS_PER_GAME);
+}
+
+function touchGameStreamsCache(gameId: string, entry: { streams: TwitchApiStream[]; expiresAt: number }) {
+  gameStreamsMemoryCache.delete(gameId);
+  gameStreamsMemoryCache.set(gameId, entry);
+}
+
+function setGameStreamsCacheEntry(gameId: string, streams: TwitchApiStream[], expiresAt: number) {
+  const entry = { streams, expiresAt };
+  gameStreamsMemoryCache.delete(gameId);
+  gameStreamsMemoryCache.set(gameId, entry);
+  enforceGameStreamsCacheLimit();
+}
+
+function enforceGameStreamsCacheLimit() {
+  while (gameStreamsMemoryCache.size > GAME_STREAM_MEMORY_MAX_ENTRIES) {
+    const oldestKey = gameStreamsMemoryCache.keys().next().value;
+    if (!oldestKey) break;
+    gameStreamsMemoryCache.delete(oldestKey);
+  }
+}
+
+function cleanupGameStreamsCache() {
+  const now = Date.now();
+  for (const [key, entry] of gameStreamsMemoryCache.entries()) {
+    if (entry.expiresAt <= now) {
+      gameStreamsMemoryCache.delete(key);
+    }
+  }
+  enforceGameStreamsCacheLimit();
+}
+
+function maybeCleanupGameStreamsCache() {
+  const now = Date.now();
+  if (now - lastGameStreamsCacheCleanup >= GAME_STREAM_CACHE_CLEANUP_INTERVAL_MS) {
+    cleanupGameStreamsCache();
+    lastGameStreamsCacheCleanup = now;
+  }
+}
+
+function cleanupInflightGameFetches() {
+  const now = Date.now();
+  for (const [key, entry] of inflightGameFetches.entries()) {
+    if (now - entry.startedAt > INFLIGHT_GAME_FETCH_TTL_MS) {
+      inflightGameFetches.delete(key);
+    }
+  }
+}
+
+function maybeCleanupInflightGameFetches() {
+  const now = Date.now();
+  if (now - lastInflightFetchCleanup >= INFLIGHT_FETCH_CLEANUP_INTERVAL_MS) {
+    cleanupInflightGameFetches();
+    lastInflightFetchCleanup = now;
+  }
+}
+
+async function waitForInflightSlot(maxWaitMs = 1000): Promise<void> {
+  const start = Date.now();
+  while (inflightGameFetches.size >= INFLIGHT_GAME_FETCH_MAX) {
+    const inflightPromises = Array.from(inflightGameFetches.values()).map(entry => entry.promise);
+    if (inflightPromises.length === 0) {
+      break;
+    }
+    try {
+      await Promise.race(inflightPromises);
+    } catch {
+      // Ignore errors while waiting for a slot to free.
+    }
+    if (Date.now() - start >= maxWaitMs) {
+      break;
+    }
+  }
 }
 
 // ============================================
@@ -201,15 +289,26 @@ async function fetchStreamsForGame(
   const now = Date.now();
   const cacheInstance = options?.cache;
 
+  maybeCleanupGameStreamsCache();
+  maybeCleanupInflightGameFetches();
+
   if (!options?.bustCache) {
     const memoryEntry = gameStreamsMemoryCache.get(gameId);
     if (memoryEntry && memoryEntry.expiresAt > now) {
+      touchGameStreamsCache(gameId, memoryEntry);
       return memoryEntry.streams;
     }
 
-    const inflight = inflightGameFetches.get(gameId);
-    if (inflight) {
-      return inflight;
+    if (memoryEntry && memoryEntry.expiresAt <= now) {
+      gameStreamsMemoryCache.delete(gameId);
+    }
+
+    const inflightEntry = inflightGameFetches.get(gameId);
+    if (inflightEntry) {
+      if (now - inflightEntry.startedAt <= INFLIGHT_GAME_FETCH_TTL_MS) {
+        return inflightEntry.promise;
+      }
+      inflightGameFetches.delete(gameId);
     }
   }
 
@@ -218,14 +317,20 @@ async function fetchStreamsForGame(
     try {
       cachedPayload = await cacheInstance.get<TwitchGameStreamsCachePayload>('twitch_game_streams', gameId);
       if (cachedPayload?.streams && !options?.bustCache) {
-        gameStreamsMemoryCache.set(gameId, {
-          streams: cachedPayload.streams,
-          expiresAt: now + GAME_STREAM_MEMORY_TTL_MS
-        });
-        return cachedPayload.streams;
+        const trimmedStreams = trimStreams(cachedPayload.streams);
+        setGameStreamsCacheEntry(gameId, trimmedStreams, now + GAME_STREAM_MEMORY_TTL_MS);
+        return trimmedStreams;
       }
     } catch (error) {
       console.warn(`[Streams API] Failed to read cached Twitch streams for game ${gameId}:`, error);
+    }
+  }
+
+  let shouldTrackInflight = !options?.bustCache;
+  if (shouldTrackInflight) {
+    await waitForInflightSlot();
+    if (inflightGameFetches.size >= INFLIGHT_GAME_FETCH_MAX) {
+      shouldTrackInflight = false;
     }
   }
 
@@ -267,11 +372,9 @@ async function fetchStreamsForGame(
           console.error(`[Streams API] Rate limit persisted for game ${gameId} after ${rateLimitRetries} attempts.`);
           if (cachedPayload?.streams?.length) {
             console.warn(`[Streams API] Using cached Twitch data for game ${gameId} after rate limit failure`);
-            gameStreamsMemoryCache.set(gameId, {
-              streams: cachedPayload.streams,
-              expiresAt: Date.now() + GAME_STREAM_MEMORY_TTL_MS
-            });
-            return cachedPayload.streams;
+            const trimmedStreams = trimStreams(cachedPayload.streams);
+            setGameStreamsCacheEntry(gameId, trimmedStreams, Date.now() + GAME_STREAM_MEMORY_TTL_MS);
+            return trimmedStreams;
           }
           break;
         }
@@ -280,11 +383,9 @@ async function fetchStreamsForGame(
           console.error(`[Streams API] Twitch API error for game ${gameId}: ${response.status}`);
           if (cachedPayload?.streams?.length) {
             console.warn(`[Streams API] Using cached Twitch data for game ${gameId} after API error`);
-            gameStreamsMemoryCache.set(gameId, {
-              streams: cachedPayload.streams,
-              expiresAt: Date.now() + GAME_STREAM_MEMORY_TTL_MS
-            });
-            return cachedPayload.streams;
+            const trimmedStreams = trimStreams(cachedPayload.streams);
+            setGameStreamsCacheEntry(gameId, trimmedStreams, Date.now() + GAME_STREAM_MEMORY_TTL_MS);
+            return trimmedStreams;
           }
           break;
         }
@@ -303,52 +404,50 @@ async function fetchStreamsForGame(
       console.error(`[Streams API] Error fetching streams for game ${gameId}:`, error);
       if (cachedPayload?.streams?.length) {
         console.warn(`[Streams API] Falling back to cached Twitch data for game ${gameId}`);
-        gameStreamsMemoryCache.set(gameId, {
-          streams: cachedPayload.streams,
-          expiresAt: Date.now() + GAME_STREAM_MEMORY_TTL_MS
-        });
-        return cachedPayload.streams;
+        const trimmedStreams = trimStreams(cachedPayload.streams);
+        setGameStreamsCacheEntry(gameId, trimmedStreams, Date.now() + GAME_STREAM_MEMORY_TTL_MS);
+        return trimmedStreams;
       }
     }
 
     if (fetched.length === 0 && cachedPayload?.streams?.length && options?.bustCache) {
       console.warn(`[Streams API] No fresh Twitch data for game ${gameId}; returning cached copy`);
-      gameStreamsMemoryCache.set(gameId, {
-        streams: cachedPayload.streams,
-        expiresAt: Date.now() + GAME_STREAM_MEMORY_TTL_MS
-      });
-      return cachedPayload.streams;
+      const trimmedStreams = trimStreams(cachedPayload.streams);
+      setGameStreamsCacheEntry(gameId, trimmedStreams, Date.now() + GAME_STREAM_MEMORY_TTL_MS);
+      return trimmedStreams;
     }
 
-    gameStreamsMemoryCache.set(gameId, {
-      streams: fetched,
-      expiresAt: Date.now() + GAME_STREAM_MEMORY_TTL_MS
-    });
+    const trimmedFetched = trimStreams(fetched);
+    setGameStreamsCacheEntry(gameId, trimmedFetched, Date.now() + GAME_STREAM_MEMORY_TTL_MS);
 
     if (cacheInstance) {
       try {
         await cacheInstance.set('twitch_game_streams', gameId, {
           gameId,
           lastUpdated: new Date().toISOString(),
-          streams: fetched
+          streams: trimmedFetched
         });
       } catch (error) {
         console.warn(`[Streams API] Failed to cache Twitch streams for game ${gameId}:`, error);
       }
     }
 
-    return fetched;
+    return trimmedFetched;
   })();
 
-  if (!options?.bustCache) {
-    inflightGameFetches.set(gameId, fetchPromise);
+  if (shouldTrackInflight) {
+    const inflightEntry = { promise: fetchPromise, startedAt: Date.now() };
+    inflightGameFetches.set(gameId, inflightEntry);
   }
 
   try {
     return await fetchPromise;
   } finally {
-    if (!options?.bustCache) {
-      inflightGameFetches.delete(gameId);
+    if (shouldTrackInflight) {
+      const current = inflightGameFetches.get(gameId);
+      if (current?.promise === fetchPromise) {
+        inflightGameFetches.delete(gameId);
+      }
     }
   }
 }

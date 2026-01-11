@@ -44,7 +44,11 @@ interface IpApiResponse {
 // Key: IP address, Value: { data: GeoLocation, timestamp: number }
 const geoCache = new Map<string, { data: GeoLocation; timestamp: number }>();
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-const MAX_CACHE_SIZE = 10000; // Maximum cache entries
+const MAX_CACHE_SIZE = 5000; // Maximum cache entries
+const CACHE_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+const CACHE_CLEANUP_REQUEST_INTERVAL = 100;
+let geoCacheRequestsSinceCleanup = 0;
+let lastGeoCacheCleanup = 0;
 
 /**
  * Clean up old cache entries
@@ -62,18 +66,33 @@ function cleanupCache(): void {
   
   // If still too large, remove oldest entries
   if (geoCache.size > MAX_CACHE_SIZE) {
-    const entries = Array.from(geoCache.entries())
-      .sort((a, b) => a[1].timestamp - b[1].timestamp);
-    
-    const toRemove = entries.slice(0, geoCache.size - MAX_CACHE_SIZE);
-    for (const [key] of toRemove) {
-      geoCache.delete(key);
+    while (geoCache.size > MAX_CACHE_SIZE) {
+      const oldestKey = geoCache.keys().next().value;
+      if (!oldestKey) break;
+      geoCache.delete(oldestKey);
       cleaned++;
     }
   }
   
   if (cleaned > 0) {
     logger.debug(`Geolocation cache cleanup: removed ${cleaned} entries`);
+  }
+}
+
+function touchGeoCacheEntry(ip: string, entry: { data: GeoLocation; timestamp: number }): void {
+  geoCache.delete(ip);
+  geoCache.set(ip, entry);
+}
+
+function maybeCleanupGeoCache(): void {
+  const now = Date.now();
+  if (
+    geoCacheRequestsSinceCleanup >= CACHE_CLEANUP_REQUEST_INTERVAL ||
+    now - lastGeoCacheCleanup >= CACHE_CLEANUP_INTERVAL_MS
+  ) {
+    cleanupCache();
+    geoCacheRequestsSinceCleanup = 0;
+    lastGeoCacheCleanup = now;
   }
 }
 
@@ -247,6 +266,9 @@ export async function getGeoLocation(ip: string | null): Promise<GeoLocation> {
     logger.debug('No IP address provided for geolocation');
     return emptyResult;
   }
+
+  geoCacheRequestsSinceCleanup += 1;
+  maybeCleanupGeoCache();
   
   // Skip private/local IPs
   if (isPrivateIp(ip)) {
@@ -258,6 +280,7 @@ export async function getGeoLocation(ip: string | null): Promise<GeoLocation> {
   const cached = geoCache.get(ip);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     logger.debug('Geolocation cache hit', { ip });
+    touchGeoCacheEntry(ip, cached);
     return cached.data;
   }
   
@@ -309,12 +332,8 @@ export async function getGeoLocation(ip: string | null): Promise<GeoLocation> {
     };
     
     // Cache the result
+    geoCache.delete(ip);
     geoCache.set(ip, { data: result, timestamp: Date.now() });
-    
-    // Periodic cache cleanup
-    if (geoCache.size > MAX_CACHE_SIZE * 0.9) {
-      cleanupCache();
-    }
     
     logger.debug('Geolocation lookup successful', { 
       ip, 

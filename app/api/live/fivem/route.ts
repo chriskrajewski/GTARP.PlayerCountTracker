@@ -42,6 +42,8 @@ const FIVEM_HEADERS = {
 // Cache configuration
 const CACHE_TTL_MS = 15_000; // fresh cache window to reduce upstream calls
 const STALE_FALLBACK_MS = 2 * 60_000; // allow stale data for 2 minutes when upstream fails
+const LIVE_CACHE_MAX_ENTRIES = 100;
+const LIVE_CACHE_CLEANUP_INTERVAL_MS = 5 * 60_000;
 
 type CacheStatus = 'live' | 'cache-hit' | 'cache-fallback';
 
@@ -52,6 +54,7 @@ interface CacheEntry {
 
 const liveCache = new Map<string, CacheEntry>();
 const pendingRequests = new Map<string, Promise<ServerDataResult>>();
+let lastLiveCacheCleanup = 0;
 
 interface FiveMServerData {
   currentPlayers: number;
@@ -76,12 +79,14 @@ interface ServerXref {
  * Get a cached entry if it is within the allowed age
  */
 function getCachedData(serverId: string, maxAgeMs: number): FiveMServerData | null {
+  maybeCleanupLiveCache();
   const entry = liveCache.get(serverId);
   if (!entry) return null;
 
   const age = Date.now() - entry.fetchedAt;
 
   if (age <= maxAgeMs) {
+    touchLiveCacheEntry(serverId, entry);
     return entry.data;
   }
 
@@ -94,7 +99,41 @@ function getCachedData(serverId: string, maxAgeMs: number): FiveMServerData | nu
 }
 
 function setCachedData(serverId: string, data: FiveMServerData) {
-  liveCache.set(serverId, { data, fetchedAt: Date.now() });
+  const entry = { data, fetchedAt: Date.now() };
+  liveCache.delete(serverId);
+  liveCache.set(serverId, entry);
+  enforceLiveCacheLimit();
+}
+
+function touchLiveCacheEntry(serverId: string, entry: CacheEntry) {
+  liveCache.delete(serverId);
+  liveCache.set(serverId, entry);
+}
+
+function enforceLiveCacheLimit() {
+  while (liveCache.size > LIVE_CACHE_MAX_ENTRIES) {
+    const oldestKey = liveCache.keys().next().value;
+    if (!oldestKey) break;
+    liveCache.delete(oldestKey);
+  }
+}
+
+function cleanupLiveCache() {
+  const now = Date.now();
+  for (const [key, entry] of liveCache.entries()) {
+    if (now - entry.fetchedAt > STALE_FALLBACK_MS) {
+      liveCache.delete(key);
+    }
+  }
+  enforceLiveCacheLimit();
+}
+
+function maybeCleanupLiveCache() {
+  const now = Date.now();
+  if (now - lastLiveCacheCleanup >= LIVE_CACHE_CLEANUP_INTERVAL_MS) {
+    cleanupLiveCache();
+    lastLiveCacheCleanup = now;
+  }
 }
 
 /**
