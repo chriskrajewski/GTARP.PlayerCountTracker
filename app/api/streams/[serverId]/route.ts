@@ -80,7 +80,6 @@ interface TwitchGameStreamsCachePayload {
 const TWITCH_TOKEN_REFRESH_BUFFER_MS = 60 * 1000; // refresh 1 minute before expiration
 const GAME_STREAM_MEMORY_TTL_MS = 60 * 1000; // keep per-game results warm for 1 minute
 const GAME_STREAM_MEMORY_MAX_ENTRIES = 50;
-const MAX_STREAMS_PER_GAME = 500;
 const INFLIGHT_GAME_FETCH_MAX = 20;
 const INFLIGHT_GAME_FETCH_TTL_MS = 30 * 1000;
 const GAME_STREAM_CACHE_CLEANUP_INTERVAL_MS = 60 * 1000;
@@ -143,13 +142,6 @@ function getRateLimitDelayMs(headers: Headers): number | null {
   }
 
   return null;
-}
-
-function trimStreams(streams: TwitchApiStream[]): TwitchApiStream[] {
-  if (streams.length <= MAX_STREAMS_PER_GAME) {
-    return streams;
-  }
-  return streams.slice(0, MAX_STREAMS_PER_GAME);
 }
 
 function touchGameStreamsCache(gameId: string, entry: { streams: TwitchApiStream[]; expiresAt: number }) {
@@ -317,9 +309,8 @@ async function fetchStreamsForGame(
     try {
       cachedPayload = await cacheInstance.get<TwitchGameStreamsCachePayload>('twitch_game_streams', gameId);
       if (cachedPayload?.streams && !options?.bustCache) {
-        const trimmedStreams = trimStreams(cachedPayload.streams);
-        setGameStreamsCacheEntry(gameId, trimmedStreams, now + GAME_STREAM_MEMORY_TTL_MS);
-        return trimmedStreams;
+        setGameStreamsCacheEntry(gameId, cachedPayload.streams, now + GAME_STREAM_MEMORY_TTL_MS);
+        return cachedPayload.streams;
       }
     } catch (error) {
       console.warn(`[Streams API] Failed to read cached Twitch streams for game ${gameId}:`, error);
@@ -372,9 +363,8 @@ async function fetchStreamsForGame(
           console.error(`[Streams API] Rate limit persisted for game ${gameId} after ${rateLimitRetries} attempts.`);
           if (cachedPayload?.streams?.length) {
             console.warn(`[Streams API] Using cached Twitch data for game ${gameId} after rate limit failure`);
-            const trimmedStreams = trimStreams(cachedPayload.streams);
-            setGameStreamsCacheEntry(gameId, trimmedStreams, Date.now() + GAME_STREAM_MEMORY_TTL_MS);
-            return trimmedStreams;
+            setGameStreamsCacheEntry(gameId, cachedPayload.streams, Date.now() + GAME_STREAM_MEMORY_TTL_MS);
+            return cachedPayload.streams;
           }
           break;
         }
@@ -383,9 +373,8 @@ async function fetchStreamsForGame(
           console.error(`[Streams API] Twitch API error for game ${gameId}: ${response.status}`);
           if (cachedPayload?.streams?.length) {
             console.warn(`[Streams API] Using cached Twitch data for game ${gameId} after API error`);
-            const trimmedStreams = trimStreams(cachedPayload.streams);
-            setGameStreamsCacheEntry(gameId, trimmedStreams, Date.now() + GAME_STREAM_MEMORY_TTL_MS);
-            return trimmedStreams;
+            setGameStreamsCacheEntry(gameId, cachedPayload.streams, Date.now() + GAME_STREAM_MEMORY_TTL_MS);
+            return cachedPayload.streams;
           }
           break;
         }
@@ -404,35 +393,32 @@ async function fetchStreamsForGame(
       console.error(`[Streams API] Error fetching streams for game ${gameId}:`, error);
       if (cachedPayload?.streams?.length) {
         console.warn(`[Streams API] Falling back to cached Twitch data for game ${gameId}`);
-        const trimmedStreams = trimStreams(cachedPayload.streams);
-        setGameStreamsCacheEntry(gameId, trimmedStreams, Date.now() + GAME_STREAM_MEMORY_TTL_MS);
-        return trimmedStreams;
+        setGameStreamsCacheEntry(gameId, cachedPayload.streams, Date.now() + GAME_STREAM_MEMORY_TTL_MS);
+        return cachedPayload.streams;
       }
     }
 
     if (fetched.length === 0 && cachedPayload?.streams?.length && options?.bustCache) {
       console.warn(`[Streams API] No fresh Twitch data for game ${gameId}; returning cached copy`);
-      const trimmedStreams = trimStreams(cachedPayload.streams);
-      setGameStreamsCacheEntry(gameId, trimmedStreams, Date.now() + GAME_STREAM_MEMORY_TTL_MS);
-      return trimmedStreams;
+      setGameStreamsCacheEntry(gameId, cachedPayload.streams, Date.now() + GAME_STREAM_MEMORY_TTL_MS);
+      return cachedPayload.streams;
     }
 
-    const trimmedFetched = trimStreams(fetched);
-    setGameStreamsCacheEntry(gameId, trimmedFetched, Date.now() + GAME_STREAM_MEMORY_TTL_MS);
+    setGameStreamsCacheEntry(gameId, fetched, Date.now() + GAME_STREAM_MEMORY_TTL_MS);
 
     if (cacheInstance) {
       try {
         await cacheInstance.set('twitch_game_streams', gameId, {
           gameId,
           lastUpdated: new Date().toISOString(),
-          streams: trimmedFetched
+          streams: fetched
         });
       } catch (error) {
         console.warn(`[Streams API] Failed to cache Twitch streams for game ${gameId}:`, error);
       }
     }
 
-    return trimmedFetched;
+    return fetched;
   })();
 
   if (shouldTrackInflight) {
