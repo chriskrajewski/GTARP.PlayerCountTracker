@@ -29,6 +29,21 @@ else
     else
         echo "[$(date +'%Y-%m-%d %H:%M:%S')] WARNING: .next/static directory not found"
     fi
+    if [ -f "/var/app/current/.next/BUILD_ID" ]; then
+        echo "[$(date +'%Y-%m-%d %H:%M:%S')] .next/BUILD_ID exists"
+    else
+        echo "[$(date +'%Y-%m-%d %H:%M:%S')] WARNING: .next/BUILD_ID not found"
+    fi
+    if [ -f "/var/app/current/.next/server/middleware-manifest.json" ]; then
+        echo "[$(date +'%Y-%m-%d %H:%M:%S')] middleware-manifest.json exists"
+    else
+        echo "[$(date +'%Y-%m-%d %H:%M:%S')] WARNING: middleware-manifest.json not found in .next/server"
+    fi
+    if [ -f "/var/app/current/.next/server/app-paths-manifest.json" ]; then
+        echo "[$(date +'%Y-%m-%d %H:%M:%S')] app-paths-manifest.json exists"
+    else
+        echo "[$(date +'%Y-%m-%d %H:%M:%S')] WARNING: app-paths-manifest.json not found in .next/server"
+    fi
 fi
 
 # Check if public directory exists
