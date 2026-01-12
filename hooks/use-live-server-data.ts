@@ -150,46 +150,88 @@ export function useLiveServerData(
   }, [fetchFiveM])
 
   /**
-   * Fetch live Twitch data
+   * Fetch live stream data (Twitch + Kick combined)
+   * Uses the same endpoint as the streams page to ensure consistent stream counts
    */
-  const fetchTwitchData = useCallback(async (ids: string[]): Promise<Record<string, LiveTwitchData>> => {
-    if (ids.length === 0 || !fetchTwitch) return {}
-
-    try {
-      const response = await fetch(`/api/live/twitch?serverIds=${ids.join(',')}`)
-      
-      if (!response.ok) {
-        throw new Error(`Twitch API error: ${response.status}`)
-      }
-
-      const data = await response.json()
-      return data.servers || {}
-    } catch (error) {
-      console.error('Error fetching live Twitch data:', error)
-      return {}
+  const fetchStreamData = useCallback(async (ids: string[]): Promise<{
+    twitch: Record<string, LiveTwitchData>,
+    kick: Record<string, LiveKickData>
+  }> => {
+    if (ids.length === 0 || (!fetchTwitch && !fetchKick)) {
+      return { twitch: {}, kick: {} }
     }
-  }, [fetchTwitch])
 
-  /**
-   * Fetch live Kick data
-   */
-  const fetchKickData = useCallback(async (ids: string[]): Promise<Record<string, LiveKickData>> => {
-    if (ids.length === 0 || !fetchKick) return {}
+    const twitchResult: Record<string, LiveTwitchData> = {}
+    const kickResult: Record<string, LiveKickData> = {}
 
-    try {
-      const response = await fetch(`/api/live/kick?serverIds=${ids.join(',')}`)
-      
-      if (!response.ok) {
-        throw new Error(`Kick API error: ${response.status}`)
+    // Fetch from /api/streams/[serverId] for each server to ensure consistency
+    // with the streams page display
+    await Promise.all(ids.map(async (serverId) => {
+      try {
+        const response = await fetch(`/api/streams/${serverId}`)
+        
+        if (!response.ok) {
+          console.error(`Streams API error for ${serverId}: ${response.status}`)
+          return
+        }
+
+        const streams = await response.json()
+        const now = new Date().toISOString()
+        
+        if (fetchTwitch) {
+          // Filter to only Twitch streams and calculate counts
+          const twitchStreams = Array.isArray(streams) 
+            ? streams.filter((s: any) => s.platform === 'twitch')
+            : []
+          
+          const streamCount = twitchStreams.length
+          const viewerCount = twitchStreams.reduce((sum: number, s: any) => sum + (s.viewer_count || 0), 0)
+          const topStreams = twitchStreams
+            .slice(0, 5)
+            .map((s: any) => ({
+              name: s.user_name,
+              viewers: s.viewer_count,
+              title: s.title
+            }))
+
+          twitchResult[serverId] = {
+            streamCount,
+            viewerCount,
+            topStreams,
+            lastUpdated: now
+          }
+        }
+
+        if (fetchKick) {
+          // Filter to only Kick streams and calculate counts
+          const kickStreams = Array.isArray(streams) 
+            ? streams.filter((s: any) => s.platform === 'kick')
+            : []
+          
+          const streamCount = kickStreams.length
+          const viewerCount = kickStreams.reduce((sum: number, s: any) => sum + (s.viewer_count || 0), 0)
+          const topStreams = kickStreams
+            .slice(0, 5)
+            .map((s: any) => ({
+              name: s.user_name,
+              viewers: s.viewer_count,
+              title: s.title
+            }))
+
+          kickResult[serverId] = {
+            streamCount,
+            viewerCount,
+            topStreams,
+            lastUpdated: now
+          }
+        }
+      } catch (error) {
+        console.error(`Error fetching streams for ${serverId}:`, error)
       }
+    }))
 
-      const data = await response.json()
-      return data.servers || {}
-    } catch (error) {
-      console.error('Error fetching live Kick data:', error)
-      return {}
-    }
-  }, [fetchKick])
+    return { twitch: twitchResult, kick: kickResult }
+  }, [fetchTwitch, fetchKick])
 
   /**
    * Fetch live queue data
@@ -224,11 +266,10 @@ export function useLiveServerData(
     fetchInProgressRef.current = true
 
     try {
-      // Fetch FiveM, Twitch, Kick, and queue data in parallel
-      const [fivemData, twitchData, kickData, queueData] = await Promise.all([
+      // Fetch FiveM, stream (Twitch+Kick combined), and queue data in parallel
+      const [fivemData, streamData, queueData] = await Promise.all([
         fetchFiveMData(serverIds),
-        fetchTwitchData(serverIds),
-        fetchKickData(serverIds),
+        fetchStreamData(serverIds),
         fetchQueueData(serverIds)
       ])
 
@@ -240,8 +281,8 @@ export function useLiveServerData(
       serverIds.forEach(serverId => {
         servers[serverId] = {
           fivem: fivemData[serverId] || null,
-          twitch: twitchData[serverId] || null,
-          kick: kickData[serverId] || null,
+          twitch: streamData.twitch[serverId] || null,
+          kick: streamData.kick[serverId] || null,
           queue: queueData[serverId] || null
         }
       })
@@ -267,7 +308,7 @@ export function useLiveServerData(
     } finally {
       fetchInProgressRef.current = false
     }
-  }, [serverIds, fetchFiveMData, fetchTwitchData, fetchKickData, fetchQueueData])
+  }, [serverIds, fetchFiveMData, fetchStreamData, fetchQueueData])
 
   /**
    * Manual refresh function
