@@ -9,6 +9,7 @@ import {
   Users,
   Bell,
   Database,
+  Gauge,
   Settings,
   Flag,
   LogOut,
@@ -41,6 +42,12 @@ const ADMIN_MENU_ITEMS = [
     href: '/admin/visitors',
     icon: Users,
     description: 'Detailed visitor tracking and analytics'
+  },
+  {
+    label: 'Site Health',
+    href: '/admin/health',
+    icon: Gauge,
+    description: 'System metrics, memory, and diagnostics'
   },
   {
     label: 'Notifications',
@@ -242,4 +249,3 @@ export function AdminSidebarMobile() {
     </>
   );
 }
-

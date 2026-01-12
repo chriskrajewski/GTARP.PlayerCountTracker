@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { rateLimiter } from '@/lib/rateLimiter';
 import { getAPICache } from '@/lib/api-cache';
+import { shouldStreamRecords, streamJsonObjectArray } from '@/lib/response-streaming';
 import type { NextRequest } from 'next/server';
 
 /**
@@ -25,6 +26,9 @@ export interface ClipResponse {
   platform: ClipPlatform;
   channel_slug?: string; // For Kick clips
 }
+
+const STREAM_RESPONSE_THRESHOLD = 1000;
+const STREAM_RESPONSE_MAX_RECORDS = 10000;
 
 /**
  * GET /api/clips/[serverId]
@@ -73,6 +77,13 @@ export async function GET(
     const cached = await cache.get<ClipResponse[]>('clips', cacheKey);
     if (cached) {
       console.log(`[Clips API] ${serverId} - Cache hit (platform: ${platformFilter})`);
+      if (shouldStreamRecords(cached.length, STREAM_RESPONSE_THRESHOLD)) {
+        return streamJsonObjectArray(cached, {
+          prefix: '{"success":true,"data":',
+          suffix: '}',
+          maxRecords: STREAM_RESPONSE_MAX_RECORDS,
+        });
+      }
       return NextResponse.json({
         success: true,
         data: cached,
@@ -218,6 +229,13 @@ export async function GET(
     const kickCount = clipsWithProfiles.filter(c => c.platform === 'kick').length;
     console.log(`[Clips API] ${serverId} - Fetched ${clipsWithProfiles.length} clips (Twitch: ${twitchCount}, Kick: ${kickCount})`);
 
+    if (shouldStreamRecords(clipsWithProfiles.length, STREAM_RESPONSE_THRESHOLD)) {
+      return streamJsonObjectArray(clipsWithProfiles, {
+        prefix: '{"success":true,"data":',
+        suffix: '}',
+        maxRecords: STREAM_RESPONSE_MAX_RECORDS,
+      });
+    }
     return NextResponse.json({
       success: true,
       data: clipsWithProfiles,

@@ -36,6 +36,13 @@ interface DashboardMetrics {
   activeServers: number;
   apiRequests: number;
   systemUptime: string;
+  memoryUsage: {
+    rss_mb: number;
+    heap_total_mb: number;
+    heap_used_mb: number;
+    external_mb: number;
+    array_buffers_mb: number;
+  } | null;
 }
 
 export default function AdminDashboard() {
@@ -43,7 +50,8 @@ export default function AdminDashboard() {
     totalVisitors: 0,
     activeServers: 0,
     apiRequests: 0,
-    systemUptime: '99.9%'
+    systemUptime: '99.9%',
+    memoryUsage: null
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -78,6 +86,17 @@ export default function AdminDashboard() {
           apiRequests: playerCounts.length
         }));
       }
+
+      const healthResponse = await fetch('/api/health', { cache: 'no-store' });
+      if (healthResponse.ok) {
+        const healthData = await healthResponse.json();
+        if (healthData?.memory_mb) {
+          setMetrics(prev => ({
+            ...prev,
+            memoryUsage: healthData.memory_mb
+          }));
+        }
+      }
     } catch (error) {
       console.error('Error fetching metrics:', error);
       toast({
@@ -101,6 +120,18 @@ export default function AdminDashboard() {
     setRefreshing(true);
     await fetchMetrics();
   };
+
+  const memoryUsagePercent = metrics.memoryUsage?.heap_total_mb
+    ? Math.round((metrics.memoryUsage.heap_used_mb / metrics.memoryUsage.heap_total_mb) * 100)
+    : null;
+
+  const memoryUsageColor = memoryUsagePercent === null
+    ? 'text-[#ADADB8]'
+    : memoryUsagePercent >= 80
+      ? 'text-red-400'
+      : memoryUsagePercent >= 60
+        ? 'text-amber-400'
+        : 'text-emerald-400';
 
   return (
     <AdminProtected>
@@ -224,6 +255,21 @@ export default function AdminDashboard() {
                           <span className="text-xs md:text-sm text-white">Data Points (24h)</span>
                         </div>
                         <span className="text-white font-medium text-sm">{metrics.apiRequests.toLocaleString()}</span>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 bg-[#26262c]/30 rounded-lg">
+                        <div className="flex items-center space-x-2">
+                          <Activity className="h-4 w-4 text-[#ADADB8]" />
+                          <span className="text-xs md:text-sm text-white">Memory Usage</span>
+                        </div>
+                        {metrics.memoryUsage ? (
+                          <span className={`font-medium text-xs ${memoryUsageColor}`}>
+                            {metrics.memoryUsage.heap_used_mb.toFixed(1)} / {metrics.memoryUsage.heap_total_mb.toFixed(1)} MB
+                            {memoryUsagePercent !== null ? ` (${memoryUsagePercent}%)` : ''}
+                          </span>
+                        ) : (
+                          <span className="text-[#ADADB8] text-xs">Unknown</span>
+                        )}
                       </div>
 
                       <div className="flex items-center justify-between p-3 bg-[#26262c]/30 rounded-lg">

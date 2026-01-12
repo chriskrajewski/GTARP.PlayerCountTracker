@@ -10,6 +10,7 @@ import {
 import { getAPICache } from '@/lib/api-cache';
 import { getTwitchGameIds } from '@/lib/twitch-game-ids';
 import { DEFAULT_TWITCH_STREAM_PAGE_LIMIT, getTwitchStreamPageLimit } from '@/lib/system-settings';
+import { shouldStreamRecords, streamJsonArray } from '@/lib/response-streaming';
 
 /**
  * Streams API - Fetches live streams from BOTH Twitch and Kick for a server
@@ -86,6 +87,8 @@ const GAME_STREAM_CACHE_CLEANUP_INTERVAL_MS = 60 * 1000;
 const INFLIGHT_FETCH_CLEANUP_INTERVAL_MS = 10 * 1000;
 const TWITCH_RATE_LIMIT_MAX_RETRIES = 3;
 const RATE_LIMIT_DEFAULT_DELAY_MS = 2000;
+const STREAM_RESPONSE_THRESHOLD = 1000;
+const STREAM_RESPONSE_MAX_RECORDS = 10000;
 
 let cachedTwitchToken: { token: string; expiresAt: number } | null = null;
 const gameStreamsMemoryCache = new Map<string, { streams: TwitchApiStream[]; expiresAt: number }>();
@@ -702,12 +705,17 @@ export async function GET(
         const cached = await cache.get<StreamsCachePayload>('server_streams', cacheKey);
         if (cached?.streams) {
           console.log(`[Streams API] ${serverId} - Returning cached server streams (${cached.streams.length})`);
-          return NextResponse.json(cached.streams, {
-            headers: {
-              'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
-              'X-Cache': 'HIT'
-            }
-          });
+          const headers = {
+            'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+            'X-Cache': 'HIT'
+          };
+          if (shouldStreamRecords(cached.streams.length, STREAM_RESPONSE_THRESHOLD)) {
+            return streamJsonArray(cached.streams, {
+              headers,
+              maxRecords: STREAM_RESPONSE_MAX_RECORDS,
+            });
+          }
+          return NextResponse.json(cached.streams, { headers });
         }
       } catch (error) {
         console.warn(`[Streams API] Cache lookup failed for ${serverId}:`, error);
@@ -876,12 +884,17 @@ export async function GET(
       console.warn(`[Streams API] Failed to cache data for ${serverId}:`, error);
     }
 
-    return NextResponse.json(allStreams, {
-      headers: {
-        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
-        'X-Cache': 'MISS'
-      }
-    });
+    const responseHeaders = {
+      'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+      'X-Cache': 'MISS'
+    };
+    if (shouldStreamRecords(allStreams.length, STREAM_RESPONSE_THRESHOLD)) {
+      return streamJsonArray(allStreams, {
+        headers: responseHeaders,
+        maxRecords: STREAM_RESPONSE_MAX_RECORDS,
+      });
+    }
+    return NextResponse.json(allStreams, { headers: responseHeaders });
   } catch (error) {
     console.error('[Streams API] Error:', error);
     return NextResponse.json(

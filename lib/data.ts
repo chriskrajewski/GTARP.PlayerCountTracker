@@ -329,54 +329,50 @@ export async function getPlayerCountsWithTimeBasedSampling(serverIds: string[], 
       return []
     }
     
-    // Group data by timestamp to ensure all servers are represented at each time point
-    const timestampGroups: Record<string, PlayerCountData[]> = {}
-    
-    recordMap.forEach(item => {
-      const timestampKey = item.timestamp
-      if (!timestampGroups[timestampKey]) {
-        timestampGroups[timestampKey] = []
-      }
-      timestampGroups[timestampKey].push(item)
-    })
-    
-    // Get all unique timestamps and sort them
-    const sortedTimestamps = Object.keys(timestampGroups)
-      .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
-    
-    // Calculate how many timestamps we want to keep for optimal performance
-    const minTargetPoints = Math.max(MIN_POINTS_PER_SERVER, targetDataPoints)
-    const step = Math.max(1, Math.floor(sortedTimestamps.length / minTargetPoints))
-    
-    // Sample timestamps at regular intervals to maintain even distribution
-    const sampledData: PlayerCountData[] = []
-    const includedTimestamps = new Set<string>()
-    for (let i = 0; i < sortedTimestamps.length; i += step) {
-      const timestamp = sortedTimestamps[i]
-      const dataAtTimestamp = timestampGroups[timestamp]
-      
-      // Add all servers' data for this timestamp
-      sampledData.push(...dataAtTimestamp)
-      includedTimestamps.add(timestamp)
-    }
-    
-    // Always include the last timestamp if it wasn't included
-    if (sortedTimestamps.length > 0) {
-      const lastTimestamp = sortedTimestamps[sortedTimestamps.length - 1]
-      if (!includedTimestamps.has(lastTimestamp)) {
-        sampledData.push(...timestampGroups[lastTimestamp])
-        includedTimestamps.add(lastTimestamp)
+    const records = Array.from(recordMap.values())
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+
+    let uniqueTimestampCount = 0
+    let lastTimestamp = ""
+    for (const record of records) {
+      if (record.timestamp !== lastTimestamp) {
+        uniqueTimestampCount += 1
+        lastTimestamp = record.timestamp
       }
     }
 
-    anchorTimestamps.forEach((timestamp) => {
-      if (!includedTimestamps.has(timestamp) && timestampGroups[timestamp]) {
-        sampledData.push(...timestampGroups[timestamp])
-        includedTimestamps.add(timestamp)
+    const minTargetPoints = Math.max(MIN_POINTS_PER_SERVER, targetDataPoints)
+    const step = Math.max(1, Math.floor(uniqueTimestampCount / minTargetPoints))
+
+    const sampledData: PlayerCountData[] = []
+    let currentTimestamp = ""
+    let currentGroup: PlayerCountData[] = []
+    let timestampIndex = -1
+
+    const flushGroup = () => {
+      if (currentGroup.length === 0) return
+      const shouldInclude = timestampIndex % step === 0
+        || timestampIndex === uniqueTimestampCount - 1
+        || anchorTimestamps.has(currentTimestamp)
+      if (shouldInclude) {
+        sampledData.push(...currentGroup)
       }
-    })
-    
-    return sampledData.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+    }
+
+    for (const record of records) {
+      if (record.timestamp !== currentTimestamp) {
+        flushGroup()
+        currentTimestamp = record.timestamp
+        currentGroup = [record]
+        timestampIndex += 1
+      } else {
+        currentGroup.push(record)
+      }
+    }
+
+    flushGroup()
+
+    return sampledData
     
   } catch (error) {
     console.warn('Time-based sampling failed, falling back to regular method:', error)

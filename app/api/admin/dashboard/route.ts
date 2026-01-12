@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateAdminRequest } from '@/lib/admin-auth-server';
 import { createServiceRoleClient } from '@/lib/supabase-service-role';
 import { AdminDashboardData, SystemMetrics, AuditLog, SystemAlert } from '@/lib/admin-types';
+import { getMemoryUsageSnapshot } from '@/lib/memory-usage';
 
 export async function GET(request: NextRequest) {
   try {
@@ -94,6 +95,7 @@ async function getSystemMetrics(supabase: any): Promise<SystemMetrics> {
       database_size: databaseSize,
       api_requests_today: apiRequestsToday,
       error_rate: Math.round(errorRate * 100) / 100,
+      memory_usage_mb: getMemoryUsageSnapshot(),
     };
   } catch (error) {
     console.error('Error fetching system metrics:', error);
@@ -107,6 +109,7 @@ async function getSystemMetrics(supabase: any): Promise<SystemMetrics> {
       database_size: 'Unknown',
       api_requests_today: 0,
       error_rate: 0,
+      memory_usage_mb: getMemoryUsageSnapshot(),
     };
   }
 }
@@ -186,27 +189,32 @@ async function getSystemHealth(supabase: any) {
 }
 
 async function getSystemAlerts(supabase: any): Promise<SystemAlert[]> {
-  // Mock system alerts (in real implementation, these would come from monitoring systems)
-  const mockAlerts: SystemAlert[] = [
-    {
-      id: '1',
-      type: 'warning',
-      title: 'High Memory Usage',
-      message: 'Database memory usage is at 85%. Consider optimization.',
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      resolved: false,
-      severity: 'medium',
-    },
-    {
-      id: '2', 
-      type: 'info',
-      title: 'Scheduled Maintenance',
-      message: 'System maintenance is scheduled for tomorrow at 2 AM UTC.',
-      timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-      resolved: false,
-      severity: 'low',
-    },
-  ];
+  const alerts: SystemAlert[] = [];
+  const memoryUsage = getMemoryUsageSnapshot();
+  if (memoryUsage && memoryUsage.heap_total_mb > 0) {
+    const usagePercent = Math.round((memoryUsage.heap_used_mb / memoryUsage.heap_total_mb) * 100);
+    if (usagePercent >= 80) {
+      alerts.push({
+        id: 'memory-usage',
+        type: 'warning',
+        title: 'High Memory Usage',
+        message: `Heap usage is at ${usagePercent}% (${memoryUsage.heap_used_mb.toFixed(1)} MB / ${memoryUsage.heap_total_mb.toFixed(1)} MB).`,
+        timestamp: new Date().toISOString(),
+        resolved: false,
+        severity: 'medium',
+      });
+    }
+  }
 
-  return mockAlerts;
+  alerts.push({
+    id: 'maintenance',
+    type: 'info',
+    title: 'Scheduled Maintenance',
+    message: 'System maintenance is scheduled for tomorrow at 2 AM UTC.',
+    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    resolved: false,
+    severity: 'low',
+  });
+
+  return alerts;
 }
