@@ -50,6 +50,7 @@ type CacheStatus = 'live' | 'cache-hit' | 'cache-fallback';
 interface CacheEntry {
   data: FiveMServerData;
   fetchedAt: number;
+  lastNonZeroPlayers?: number; // Track last non-zero player count
 }
 
 const liveCache = new Map<string, CacheEntry>();
@@ -99,7 +100,17 @@ function getCachedData(serverId: string, maxAgeMs: number): FiveMServerData | nu
 }
 
 function setCachedData(serverId: string, data: FiveMServerData) {
-  const entry = { data, fetchedAt: Date.now() };
+  // Preserve last non-zero player count for fallback when API returns 0
+  const existingEntry = liveCache.get(serverId);
+  const lastNonZeroPlayers = data.currentPlayers > 0 
+    ? data.currentPlayers 
+    : existingEntry?.lastNonZeroPlayers;
+  
+  const entry = { 
+    data, 
+    fetchedAt: Date.now(),
+    lastNonZeroPlayers
+  };
   liveCache.delete(serverId);
   liveCache.set(serverId, entry);
   enforceLiveCacheLimit();
@@ -219,6 +230,14 @@ async function getServerDataWithCache(serverId: string): Promise<ServerDataResul
 
   const requestPromise: Promise<ServerDataResult> = (async () => {
     const liveData = await fetchServerData(serverId);
+
+    // Mitigation for FiveM API bug: if API returns 0 players but we have a cached non-zero value,
+    // use the cached value instead to prevent UI from showing incorrect zero counts
+    const existingEntry = liveCache.get(serverId);
+    if (liveData.online && liveData.currentPlayers === 0 && existingEntry?.lastNonZeroPlayers) {
+      console.log(`[FiveM Live API] Server ${serverId}: API returned 0 players, using cached value: ${existingEntry.lastNonZeroPlayers}`);
+      liveData.currentPlayers = existingEntry.lastNonZeroPlayers;
+    }
 
     if (liveData.online) {
       setCachedData(serverId, liveData);
