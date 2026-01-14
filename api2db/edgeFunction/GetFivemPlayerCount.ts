@@ -167,8 +167,29 @@ serve(async (req) => {
           throw new Error(errorMessage);
         }
         const data = await response.json();
-        const current_players = data?.Data?.selfReportedClients || 0;
+        let current_players = data?.Data?.selfReportedClients || 0;
         console.log(`[FiveM ETL] Server ${server_id}: Fetched player count: ${current_players}`);
+        
+        // Mitigation for FiveM API bug: if API returns 0, fetch last non-zero value from database
+        if (current_players === 0) {
+          try {
+            const { data: lastData, error: lastError } = await supabase
+              .from("player_counts")
+              .select("player_count")
+              .eq("server_id", server_id)
+              .gt("player_count", 0)
+              .order("timestamp", { ascending: false })
+              .limit(1);
+            
+            if (!lastError && lastData && lastData.length > 0) {
+              const lastNonZeroCount = lastData[0].player_count;
+              console.log(`[FiveM ETL] Server ${server_id}: API returned 0, using last non-zero value: ${lastNonZeroCount}`);
+              current_players = lastNonZeroCount;
+            }
+          } catch (fallbackError) {
+            console.error(`[FiveM ETL] Server ${server_id}: Error fetching fallback player count: ${fallbackError}`);
+          }
+        }
         
         // Extract max capacity from multiple possible sources for robustness
         // Priority: vars.sv_maxClients (string) -> svMaxclients (number) -> sv_maxclients (number)
