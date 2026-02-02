@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
 import { type QueueSegment, type QueueServerData, type ServerQueueConfig, filterQueueEnabledServers, getQueueConfig } from "@/lib/server-queues"
+import { getAPICache } from "@/lib/api-cache"
+
+const API_CACHE_NAME = "queue"
 
 interface LiveQueueServerData extends QueueServerData {
   lastUpdated: string
   error?: string
 }
 
-// In-memory cache for queue data
-const queueCache = new Map<string, { data: LiveQueueServerData; timestamp: number }>()
-const CACHE_TTL_MS = 15000 // 15 seconds
+// In-memory cache as fallback
+const memoryCache = new Map<string, { data: LiveQueueServerData; timestamp: number }>()
+const MEMORY_CACHE_TTL_MS = 30000 // 30 seconds
 
 const DEFAULT_HEADERS = {
   Accept: "application/json",
@@ -107,16 +110,59 @@ function parseFree2RPQueue(payload: unknown): QueueServerData {
 }
 
 async function fetchQueueForServer(config: ServerQueueConfig): Promise<LiveQueueServerData> {
-  // Check cache first
-  const cached = queueCache.get(config.serverId)
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-    return cached.data
+  const cacheKey = `queue_${config.serverId}`
+  const apiCache = getAPICache()
+
+  // Check DB cache first - return even if slightly stale, refresh in background
+  let dbCached: LiveQueueServerData | null = null
+  try {
+    dbCached = await apiCache.get<LiveQueueServerData>(API_CACHE_NAME, cacheKey)
+    if (dbCached) {
+      // Update memory cache
+      memoryCache.set(config.serverId, { data: dbCached, timestamp: Date.now() })
+      
+      // Return cached data immediately, refresh in background
+      refreshQueueInBackground(config, cacheKey, apiCache)
+      return dbCached
+    }
+  } catch (e) {
+    // DB cache failed, continue to memory cache
   }
 
+  // Check memory cache as fallback
+  const memoryCached = memoryCache.get(config.serverId)
+  if (memoryCached && Date.now() - memoryCached.timestamp < MEMORY_CACHE_TTL_MS) {
+    return memoryCached.data
+  }
+
+  // No cache available, fetch synchronously
+  return fetchQueueFromAPI(config, cacheKey, apiCache, memoryCached || null)
+}
+
+// Background refresh - doesn't block response
+function refreshQueueInBackground(config: ServerQueueConfig, cacheKey: string, apiCache: ReturnType<typeof getAPICache>) {
+  // Don't refresh too frequently
+  const lastRefresh = backgroundRefreshTimestamps.get(config.serverId) || 0
+  if (Date.now() - lastRefresh < 15000) return // 15 second minimum between refreshes
+  
+  backgroundRefreshTimestamps.set(config.serverId, Date.now())
+  
+  fetchQueueFromAPI(config, cacheKey, apiCache, null).catch(() => {})
+}
+
+const backgroundRefreshTimestamps = new Map<string, number>()
+
+async function fetchQueueFromAPI(
+  config: ServerQueueConfig, 
+  cacheKey: string, 
+  apiCache: ReturnType<typeof getAPICache>,
+  fallbackCache: { data: LiveQueueServerData; timestamp: number } | null
+): Promise<LiveQueueServerData> {
   try {
     const response = await fetch(config.apiUrl, {
       headers: DEFAULT_HEADERS,
-      signal: AbortSignal.timeout(10000)
+      signal: AbortSignal.timeout(5000),
+      next: { revalidate: 15 }
     })
 
     if (!response.ok) {
@@ -131,8 +177,9 @@ async function fetchQueueForServer(config: ServerQueueConfig): Promise<LiveQueue
       lastUpdated: new Date().toISOString()
     }
 
-    // Update cache
-    queueCache.set(config.serverId, { data, timestamp: Date.now() })
+    // Update both caches
+    memoryCache.set(config.serverId, { data, timestamp: Date.now() })
+    apiCache.set(API_CACHE_NAME, cacheKey, data as unknown as Record<string, unknown>).catch(() => {})
 
     return data
   } catch (error) {
@@ -140,8 +187,8 @@ async function fetchQueueForServer(config: ServerQueueConfig): Promise<LiveQueue
     console.error(`Error fetching queue data for ${config.serverId}:`, message)
 
     // Return cached data if available, even if stale
-    if (cached) {
-      return { ...cached.data, error: message }
+    if (fallbackCache) {
+      return { ...fallbackCache.data, error: message }
     }
 
     return {
