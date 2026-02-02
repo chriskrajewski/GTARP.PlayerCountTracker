@@ -23,7 +23,7 @@ export async function logApiRequest(entry: Omit<ApiLogEntry, 'timestamp'>) {
     
     // Log to console
     const level = logEntry.level || 'info';
-    const prefix = `[GROK API] ${level.toUpperCase()}:`;
+    const prefix = `[VISITOR API] ${level.toUpperCase()}:`;
     const logData = {
       endpoint: logEntry.endpoint,
       method: logEntry.method,
