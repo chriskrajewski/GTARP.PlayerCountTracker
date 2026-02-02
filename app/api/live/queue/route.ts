@@ -6,6 +6,10 @@ interface LiveQueueServerData extends QueueServerData {
   error?: string
 }
 
+// In-memory cache for queue data
+const queueCache = new Map<string, { data: LiveQueueServerData; timestamp: number }>()
+const CACHE_TTL_MS = 15000 // 15 seconds
+
 const DEFAULT_HEADERS = {
   Accept: "application/json",
   "User-Agent": "RPStats.com Queue Monitor/1.0"
@@ -22,6 +26,8 @@ function parseQueueResponse(type: ServerQueueConfig["parser"], payload: unknown)
   switch (type) {
     case "chaseroleplay":
       return parseChaseRoleplayQueue(payload)
+    case "free2rp":
+      return parseFree2RPQueue(payload)
     default:
       throw new Error(`Unsupported queue parser: ${type}`)
   }
@@ -53,8 +59,10 @@ function parseChaseRoleplayQueue(payload: unknown): QueueServerData {
 
   // Fallback if API only returns a single object
   if (segments.length === 0) {
-    const players = typeof (queueData as Record<string, unknown>).players === "number" ? (queueData as Record<string, unknown>).players : 0
-    const cap = typeof (queueData as Record<string, unknown>).cap === "number" ? (queueData as Record<string, unknown>).cap : undefined
+    const playersVal = (queueData as Record<string, unknown>).players
+    const capVal = (queueData as Record<string, unknown>).cap
+    const players = typeof playersVal === "number" ? playersVal : 0
+    const cap = typeof capVal === "number" ? capVal : undefined
 
     segments.push({
       type: "queue",
@@ -72,7 +80,39 @@ function parseChaseRoleplayQueue(payload: unknown): QueueServerData {
   }
 }
 
+function parseFree2RPQueue(payload: unknown): QueueServerData {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("Invalid queue response")
+  }
+
+  const data = payload as Record<string, unknown>
+  
+  if (data.ok !== true) {
+    throw new Error("Free2RP API returned error")
+  }
+
+  const inQueue = typeof data.in_queue === "number" ? data.in_queue : 0
+
+  // Always show in_queue segment, even when 0
+  const segments: QueueSegment[] = [{
+    type: "in_queue",
+    label: "Whitelist",
+    players: inQueue
+  }]
+
+  return {
+    totalPlayers: inQueue,
+    segments
+  }
+}
+
 async function fetchQueueForServer(config: ServerQueueConfig): Promise<LiveQueueServerData> {
+  // Check cache first
+  const cached = queueCache.get(config.serverId)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.data
+  }
+
   try {
     const response = await fetch(config.apiUrl, {
       headers: DEFAULT_HEADERS,
@@ -86,13 +126,23 @@ async function fetchQueueForServer(config: ServerQueueConfig): Promise<LiveQueue
     const payload = await response.json()
     const parsed = parseQueueResponse(config.parser, payload)
 
-    return {
+    const data: LiveQueueServerData = {
       ...parsed,
       lastUpdated: new Date().toISOString()
     }
+
+    // Update cache
+    queueCache.set(config.serverId, { data, timestamp: Date.now() })
+
+    return data
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown queue error"
     console.error(`Error fetching queue data for ${config.serverId}:`, message)
+
+    // Return cached data if available, even if stale
+    if (cached) {
+      return { ...cached.data, error: message }
+    }
 
     return {
       totalPlayers: 0,

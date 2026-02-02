@@ -1,4 +1,4 @@
-export type QueueParserType = "chaseroleplay"
+export type QueueParserType = "chaseroleplay" | "free2rp"
 
 export interface ServerQueueConfig {
   serverId: string
@@ -25,6 +25,12 @@ const SERVER_QUEUE_CONFIGS: Record<string, ServerQueueConfig> = {
     displayName: "ChaseRP",
     apiUrl: "https://chaseroleplay.com/api/queue/",
     parser: "chaseroleplay"
+  },
+  "ak44p9": {
+    serverId: "ak44p9",
+    displayName: "Free2RP",
+    apiUrl: "https://free2rp.com/api/queue/info",
+    parser: "free2rp"
   }
 }
 

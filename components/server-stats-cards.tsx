@@ -233,8 +233,9 @@ export default function ServerStatsCards({
   const queuePrimarySegment = queueSegments.find(segment => segment.type === "public") || queueSegments[0]
   const queuePrimaryPlayers = queuePrimarySegment ? queuePrimarySegment.players : queueData?.totalPlayers ?? 0
   const queuePrimaryLabel = queuePrimarySegment?.label ?? "Queue"
+  // For Free2RP, only show in_queue. For ChaseRP, show public/allowlist
   const prioritizedQueueSegments = queueSegments.filter(segment => 
-    segment.type === "public" || segment.type === "allowlist"
+    segment.type === "public" || segment.type === "allowlist" || segment.type === "in_queue"
   )
   let queueSegmentsToDisplay = (prioritizedQueueSegments.length > 0 ? prioritizedQueueSegments : queueSegments).slice(0, 2)
   if (queueSegmentsToDisplay.length === 0 && queuePrimarySegment) {

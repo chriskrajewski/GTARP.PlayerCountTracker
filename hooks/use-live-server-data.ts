@@ -275,15 +275,20 @@ export function useLiveServerData(
 
       if (!mountedRef.current) return
 
-      // Merge data into server records
+      // Merge data into server records, preserving previous queue data if new fetch failed
       const servers: Record<string, LiveServerData> = {}
       
       serverIds.forEach(serverId => {
+        const prevQueue = state.servers[serverId]?.queue
+        const newQueue = queueData[serverId]
+        // Keep previous queue data if new data has error or is empty
+        const shouldKeepPrevQueue = prevQueue && (!newQueue || newQueue.error)
+        
         servers[serverId] = {
           fivem: fivemData[serverId] || null,
           twitch: streamData.twitch[serverId] || null,
           kick: streamData.kick[serverId] || null,
-          queue: queueData[serverId] || null
+          queue: shouldKeepPrevQueue ? prevQueue : (newQueue || null)
         }
       })
 
