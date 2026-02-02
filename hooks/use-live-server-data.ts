@@ -281,7 +281,7 @@ export function useLiveServerData(
       serverIds.forEach(serverId => {
         const prevQueue = state.servers[serverId]?.queue
         const newQueue = queueData[serverId]
-        // Keep previous queue data if new data has error or is empty
+        // Keep previous queue data if new data is missing or has error
         const shouldKeepPrevQueue = prevQueue && (!newQueue || newQueue.error)
         
         servers[serverId] = {

@@ -113,30 +113,38 @@ async function fetchQueueForServer(config: ServerQueueConfig): Promise<LiveQueue
   const cacheKey = `queue_${config.serverId}`
   const apiCache = getAPICache()
 
-  // Check DB cache first - return even if slightly stale, refresh in background
-  let dbCached: LiveQueueServerData | null = null
+  // Check memory cache first (fastest)
+  const memoryCached = memoryCache.get(config.serverId)
+  if (memoryCached && Date.now() - memoryCached.timestamp < MEMORY_CACHE_TTL_MS) {
+    // Trigger background refresh if data is getting stale (>15s old)
+    if (Date.now() - memoryCached.timestamp > 15000) {
+      refreshQueueInBackground(config, cacheKey, apiCache)
+    }
+    return memoryCached.data
+  }
+
+  // Check DB cache
   try {
-    dbCached = await apiCache.get<LiveQueueServerData>(API_CACHE_NAME, cacheKey)
+    const dbCached = await apiCache.get<LiveQueueServerData>(API_CACHE_NAME, cacheKey)
     if (dbCached) {
       // Update memory cache
       memoryCache.set(config.serverId, { data: dbCached, timestamp: Date.now() })
-      
-      // Return cached data immediately, refresh in background
+      // Trigger background refresh
       refreshQueueInBackground(config, cacheKey, apiCache)
       return dbCached
     }
   } catch (e) {
-    // DB cache failed, continue to memory cache
+    console.error(`DB cache error for ${config.serverId}:`, e)
   }
 
-  // Check memory cache as fallback
-  const memoryCached = memoryCache.get(config.serverId)
-  if (memoryCached && Date.now() - memoryCached.timestamp < MEMORY_CACHE_TTL_MS) {
+  // Use stale memory cache if available
+  if (memoryCached) {
+    refreshQueueInBackground(config, cacheKey, apiCache)
     return memoryCached.data
   }
 
   // No cache available, fetch synchronously
-  return fetchQueueFromAPI(config, cacheKey, apiCache, memoryCached || null)
+  return fetchQueueFromAPI(config, cacheKey, apiCache, null)
 }
 
 // Background refresh - doesn't block response
