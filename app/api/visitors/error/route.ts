@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase-server';
 import { apiLogger } from '@/lib/apiLogger';
+import { isFeatureFlagEnabled } from '@/lib/feature-flags-server';
 
 /**
  * POST /api/visitors/error
@@ -8,6 +9,10 @@ import { apiLogger } from '@/lib/apiLogger';
  */
 export async function POST(request: NextRequest) {
   try {
+    if (!await isFeatureFlagEnabled('visitor_tracking')) {
+      return NextResponse.json({ success: false, error: 'Visitor tracking is disabled' }, { status: 403 });
+    }
+
     const body = await request.json();
     const {
       session_id,

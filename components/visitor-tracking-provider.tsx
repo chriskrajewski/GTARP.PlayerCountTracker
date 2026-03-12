@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { logger } from '@/lib/logger';
+import { useFeatureFlag, FEATURE_FLAGS } from '@/lib/feature-flags';
 
 /**
  * Visitor Tracking Provider Component
@@ -171,6 +172,7 @@ function getUTMParameters(): Record<string, string | null> {
 }
 
 export function VisitorTrackingProvider() {
+  const trackingEnabled = useFeatureFlag(FEATURE_FLAGS.VISITOR_TRACKING);
   const sessionRef = useRef<VisitorSession | null>(null);
   const pageViewStartTimeRef = useRef<number>(0);
   const scrollDepthRef = useRef<number>(0);
@@ -194,6 +196,7 @@ export function VisitorTrackingProvider() {
    */
   useEffect(() => {
     if (!isMounted || initializationRef.current) return;
+    if (!trackingEnabled) return;
 
     // Mark as initializing to prevent duplicate calls
     initializationRef.current = true;
@@ -591,6 +594,7 @@ export function VisitorTrackingProvider() {
    */
   useEffect(() => {
     if (!isMounted || !sessionRef.current) return;
+    if (!trackingEnabled) return;
 
     // Skip first page view (already tracked in initialization)
     if (isFirstPageView.current) {
