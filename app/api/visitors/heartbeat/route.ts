@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase-server';
 import { logApiRequest } from '@/lib/apiLogger';
+import { isFeatureFlagEnabled } from '@/lib/feature-flags-server';
 
 /**
  * POST /api/visitors/heartbeat
@@ -20,6 +21,10 @@ export async function POST(request: NextRequest) {
   const requestId = crypto.randomUUID();
 
   try {
+    if (!await isFeatureFlagEnabled('visitor_tracking')) {
+      return NextResponse.json({ success: false, error: 'Visitor tracking is disabled' }, { status: 403 });
+    }
+
 
     // Parse request body
     const body = await request.json();
