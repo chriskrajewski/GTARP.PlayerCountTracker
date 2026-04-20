@@ -165,219 +165,104 @@ function getPaginationBounds(recordLimit: number, options?: PaginationOptions) {
   return { start, end, isEmpty: false }
 }
 
-// Time-based sampling with proper timestamp alignment for multiple servers
+// Fetch pre-computed daily averages from the player_counts_daily materialized view.
+// This is a single fast query instead of dozens of sampling queries.
+// Falls back to a direct full-range query if the materialized view doesn't exist yet.
 export async function getPlayerCountsWithTimeBasedSampling(serverIds: string[], timeRange: TimeRange): Promise<PlayerCountData[]> {
   const isClient = typeof window !== "undefined"
   const client = isClient ? supabase : createServerClient()
   
   const now = new Date()
   let startDate: Date
-  let daysDifference: number
-  const anchorTimestamps = new Set<string>()
-  const recordMap = new Map<string, PlayerCountData>()
   
-  // Calculate start date and days
   switch (timeRange) {
     case "7d":
       startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-      daysDifference = 7
       break
     case "30d":
       startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-      daysDifference = 30
       break
     case "90d":
       startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
-      daysDifference = 90
       break
     case "180d":
       startDate = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000)
-      daysDifference = 180
       break
     case "365d":
       startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
-      daysDifference = 365
       break
     default:
       return getPlayerCounts(serverIds, timeRange)
   }
   
   try {
-    let samplePeriods: number
-    let daysPerPeriod: number
-    let targetDataPoints: number
-
-    if (timeRange === "7d") {
-      samplePeriods = 14
-      daysPerPeriod = 0.5
-      targetDataPoints = 100
-    } else if (timeRange === "30d") {
-      samplePeriods = 20
-      daysPerPeriod = 1.5
-      targetDataPoints = 150
-    } else if (timeRange === "90d") {
-      samplePeriods = 25
-      daysPerPeriod = daysDifference / samplePeriods
-      targetDataPoints = 200
-    } else if (timeRange === "180d") {
-      samplePeriods = 30
-      daysPerPeriod = daysDifference / samplePeriods
-      targetDataPoints = 250
-    } else {
-      samplePeriods = 20
-      daysPerPeriod = daysDifference / samplePeriods
-      targetDataPoints = 250
-    }
-
-    const perPeriodLimit = Math.max(1, Math.min(MAX_PERIOD_LIMIT, Math.ceil(targetDataPoints / samplePeriods)))
-    const startIso = startDate.toISOString()
-    const endIso = now.toISOString()
-
-    const addRecords = (records: PlayerCountData[] | null | undefined) => {
-      if (!records || records.length === 0) return
-      records.forEach(record => {
-        const key = `${record.server_id}|${record.timestamp}`
-        if (!recordMap.has(key)) {
-          recordMap.set(key, record)
-        }
-      })
-    }
-
-    const fetchPeriodWindow = async (periodStart: Date, periodEnd: Date, ascending: boolean) => {
-      let query = client
-        .from('player_counts')
-        .select('server_id, timestamp, player_count')
-        .gte('timestamp', periodStart.toISOString())
-        .lt('timestamp', periodEnd.toISOString())
-        .order('timestamp', { ascending })
-        .limit(perPeriodLimit)
-
-      if (serverIds.length > 0) {
-        query = query.in('server_id', serverIds)
-      }
-
-      const { data, error } = await query
-      if (error) {
-        console.warn('Time-based sampling period fetch failed:', error)
-        return
-      }
-
-      addRecords(data)
-    }
-
-    for (let i = 0; i < samplePeriods; i++) {
-      const periodStart = new Date(startDate.getTime() + (i * daysPerPeriod * 24 * 60 * 60 * 1000))
-      const periodEnd = new Date(Math.min(
-        periodStart.getTime() + (daysPerPeriod * 24 * 60 * 60 * 1000),
-        now.getTime()
-      ))
-
-      if (periodEnd <= periodStart) {
-        continue
-      }
-
-      await fetchPeriodWindow(periodStart, periodEnd, true)
-      await fetchPeriodWindow(periodStart, periodEnd, false)
-    }
+    // Query the materialized view — one row per server per day, already averaged
+    let query = client
+      .from('player_counts_daily')
+      .select('server_id, day, avg_player_count')
+      .gte('day', startDate.toISOString().split('T')[0])
+      .lte('day', now.toISOString().split('T')[0])
+      .order('day', { ascending: true })
 
     if (serverIds.length > 0) {
-      for (const serverId of serverIds) {
-        const [firstResult, lastResult, peakResult] = await Promise.all([
-          client
-            .from('player_counts')
-            .select('server_id, timestamp, player_count')
-            .eq('server_id', serverId)
-            .gte('timestamp', startIso)
-            .lte('timestamp', endIso)
-            .order('timestamp', { ascending: true })
-            .limit(1),
-          client
-            .from('player_counts')
-            .select('server_id, timestamp, player_count')
-            .eq('server_id', serverId)
-            .gte('timestamp', startIso)
-            .lte('timestamp', endIso)
-            .order('timestamp', { ascending: false })
-            .limit(1),
-          client
-            .from('player_counts')
-            .select('server_id, timestamp, player_count')
-            .eq('server_id', serverId)
-            .gte('timestamp', startIso)
-            .lte('timestamp', endIso)
-            .order('player_count', { ascending: false })
-            .limit(1),
-        ])
-
-        addRecords(firstResult.data)
-        addRecords(lastResult.data)
-        addRecords(peakResult.data)
-
-        if (firstResult.data?.[0]) {
-          anchorTimestamps.add(firstResult.data[0].timestamp)
-        }
-        if (lastResult.data?.[0]) {
-          anchorTimestamps.add(lastResult.data[0].timestamp)
-        }
-        if (peakResult.data?.[0]) {
-          anchorTimestamps.add(peakResult.data[0].timestamp)
-        }
-      }
+      query = query.in('server_id', serverIds)
     }
 
-    if (recordMap.size === 0) {
+    const { data, error } = await query
+
+    if (error) {
+      // Materialized view likely doesn't exist yet — fall back to direct query
+      console.warn('player_counts_daily query failed, falling back to direct query:', error.message)
+      return await getPlayerCountsFallback(client, serverIds, startDate, now, timeRange)
+    }
+
+    if (!data || data.length === 0) {
       return []
     }
-    
-    const records = Array.from(recordMap.values())
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
 
-    let uniqueTimestampCount = 0
-    let lastTimestamp = ""
-    for (const record of records) {
-      if (record.timestamp !== lastTimestamp) {
-        uniqueTimestampCount += 1
-        lastTimestamp = record.timestamp
-      }
-    }
-
-    const minTargetPoints = Math.max(MIN_POINTS_PER_SERVER, targetDataPoints)
-    const step = Math.max(1, Math.floor(uniqueTimestampCount / minTargetPoints))
-
-    const sampledData: PlayerCountData[] = []
-    let currentTimestamp = ""
-    let currentGroup: PlayerCountData[] = []
-    let timestampIndex = -1
-
-    const flushGroup = () => {
-      if (currentGroup.length === 0) return
-      const shouldInclude = timestampIndex % step === 0
-        || timestampIndex === uniqueTimestampCount - 1
-        || anchorTimestamps.has(currentTimestamp)
-      if (shouldInclude) {
-        sampledData.push(...currentGroup)
-      }
-    }
-
-    for (const record of records) {
-      if (record.timestamp !== currentTimestamp) {
-        flushGroup()
-        currentTimestamp = record.timestamp
-        currentGroup = [record]
-        timestampIndex += 1
-      } else {
-        currentGroup.push(record)
-      }
-    }
-
-    flushGroup()
-
-    return sampledData
+    // Convert materialized view rows to PlayerCountData format
+    // The aggregation step downstream will see one point per day per server
+    // and pass it through as-is (since it's already daily)
+    return data.map((row: { server_id: string; day: string; avg_player_count: number }) => ({
+      server_id: row.server_id,
+      timestamp: `${row.day}T12:00:00.000Z`, // Noon UTC as the representative timestamp for the day
+      player_count: row.avg_player_count,
+    }))
     
   } catch (error) {
-    console.warn('Time-based sampling failed, falling back to regular method:', error)
-    return getPlayerCounts(serverIds, timeRange)
+    console.warn('Materialized view fetch failed, falling back:', error)
+    return await getPlayerCounts(serverIds, timeRange)
   }
+}
+
+// Fallback: single direct query when the materialized view isn't available
+async function getPlayerCountsFallback(
+  client: ReturnType<typeof createServerClient>,
+  serverIds: string[],
+  startDate: Date,
+  endDate: Date,
+  timeRange: TimeRange,
+): Promise<PlayerCountData[]> {
+  const limit = timeRange === "7d" ? 20000 : 10000
+
+  let query = client
+    .from('player_counts')
+    .select('server_id, timestamp, player_count')
+    .gte('timestamp', startDate.toISOString())
+    .lte('timestamp', endDate.toISOString())
+    .order('timestamp', { ascending: true })
+    .limit(limit)
+
+  if (serverIds.length > 0) {
+    query = query.in('server_id', serverIds)
+  }
+
+  const { data, error } = await query
+  if (error) {
+    console.error('Fallback query also failed:', error)
+    return []
+  }
+  return data || []
 }
 
 // Get appropriate time aggregation based on time range
@@ -396,7 +281,7 @@ export function getTimeAggregation(timeRange: TimeRange): TimeAggregation {
     case "24h":
       return "hour"
     case "7d":
-      return "hour"
+      return "day"
     case "30d":
       return "day"
     case "90d":
