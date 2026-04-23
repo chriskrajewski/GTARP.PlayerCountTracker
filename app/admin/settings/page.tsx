@@ -54,8 +54,12 @@ export default function SettingsPage() {
   const [twitchPageLimit, setTwitchPageLimit] = useState<number>(DEFAULT_TWITCH_PAGE_LIMIT);
   const [loadingTwitchSetting, setLoadingTwitchSetting] = useState(true);
   const [savingTwitchSetting, setSavingTwitchSetting] = useState(false);
+  const [liveChartInterval, setLiveChartInterval] = useState<number>(60);
+  const [loadingLiveChartSetting, setLoadingLiveChartSetting] = useState(true);
+  const [savingLiveChartSetting, setSavingLiveChartSetting] = useState(false);
   const { toast } = useToast();
   const isTwitchLimitValid = Number.isFinite(twitchPageLimit) && twitchPageLimit >= 1 && twitchPageLimit <= 75;
+  const isLiveChartIntervalValid = Number.isFinite(liveChartInterval) && liveChartInterval >= 10 && liveChartInterval <= 300;
 
   const handleSettingChange = (key: keyof SystemSettings, value: any) => {
     setSettings(prev => ({
@@ -127,8 +131,67 @@ export default function SettingsPage() {
     }
   };
 
+  const loadLiveChartSetting = async () => {
+    try {
+      setLoadingLiveChartSetting(true);
+      const response = await adminAPI.getSystemSettings();
+      const setting = response.data?.find((item) => item.key === 'live_chart_polling_interval');
+      if (setting) {
+        const parsed = Number(setting.value);
+        if (Number.isFinite(parsed)) {
+          setLiveChartInterval(Math.min(300, Math.max(10, parsed)));
+        } else {
+          setLiveChartInterval(60);
+        }
+      } else {
+        setLiveChartInterval(60);
+      }
+    } catch (error) {
+      console.error('Error loading live chart setting:', error);
+    } finally {
+      setLoadingLiveChartSetting(false);
+    }
+  };
+
+  const handleSaveLiveChartSetting = async () => {
+    if (!isLiveChartIntervalValid) {
+      toast({
+        title: 'Invalid value',
+        description: 'Polling interval must be between 10 and 300 seconds.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setSavingLiveChartSetting(true);
+      await adminAPI.updateSystemSetting({
+        key: 'live_chart_polling_interval',
+        value: liveChartInterval,
+        data_type: 'number',
+        description: 'Live chart FiveM polling interval in seconds',
+        category: 'chart',
+      });
+
+      toast({
+        title: 'Saved',
+        description: 'Live chart polling interval updated.',
+      });
+    } catch (error) {
+      console.error('Error saving live chart setting:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update live chart polling interval.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingLiveChartSetting(false);
+    }
+  };
+
   useEffect(() => {
     loadTwitchStreamSetting();
+    loadLiveChartSetting();
   }, []);
 
   const handleSaveSettings = async () => {
@@ -376,6 +439,56 @@ export default function SettingsPage() {
                         {!isTwitchLimitValid && (
                           <p className="text-sm text-red-400">
                             Enter a value between 1 and 75.
+                          </p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-[#1a1a1e] border-[#26262c]">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-white">
+                        <Clock className="h-5 w-5" />
+                        Live Chart Settings
+                      </CardTitle>
+                      <CardDescription className="text-[#ADADB8]">
+                        Configure the real-time live chart polling interval
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Label className="text-white">Live Chart Polling Interval (seconds)</Label>
+                        <div className="flex flex-col md:flex-row gap-3">
+                          <Input
+                            type="number"
+                            min={10}
+                            max={300}
+                            value={liveChartInterval}
+                            onChange={(e) => setLiveChartInterval(Number(e.target.value))}
+                            disabled={loadingLiveChartSetting || savingLiveChartSetting}
+                            className="bg-[#26262c] border-[#40404a] text-white md:w-48"
+                          />
+                          <Button
+                            onClick={handleSaveLiveChartSetting}
+                            disabled={loadingLiveChartSetting || savingLiveChartSetting || !isLiveChartIntervalValid}
+                            className="bg-[#9147ff] hover:bg-[#772ce8] text-white w-full md:w-auto"
+                          >
+                            {savingLiveChartSetting ? (
+                              <>
+                                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              'Save Interval'
+                            )}
+                          </Button>
+                        </div>
+                        <p className="text-sm text-[#ADADB8]">
+                          How often the live chart fetches new data from FiveM (10-300 seconds). Default: 60 seconds.
+                        </p>
+                        {!isLiveChartIntervalValid && (
+                          <p className="text-sm text-red-400">
+                            Enter a value between 10 and 300.
                           </p>
                         )}
                       </div>

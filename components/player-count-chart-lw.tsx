@@ -23,6 +23,14 @@ interface PlayerCountChartProps {
   loading: boolean
   timeRange: TimeRange
   showCapacity: boolean
+  /** When true, enables TradingView-style live updates */
+  isLiveMode?: boolean
+  /** Current live player counts per server (for the price-line display) */
+  currentCounts?: Record<string, number>
+  /** Timestamp of the last live update */
+  lastUpdate?: Date | null
+  /** Polling interval in ms (for countdown) */
+  pollingIntervalMs?: number
 }
 
 interface LineDataPoint {
@@ -45,7 +53,11 @@ export default function PlayerCountChartLW({
   serverNames,
   loading,
   timeRange,
-  showCapacity
+  showCapacity,
+  isLiveMode = false,
+  currentCounts = {},
+  lastUpdate = null,
+  pollingIntervalMs = 60000
 }: PlayerCountChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
@@ -53,27 +65,30 @@ export default function PlayerCountChartLW({
   const tooltipRef = useRef<HTMLDivElement>(null)
   const legendRef = useRef<HTMLDivElement>(null)
 
-  // Initialize color cache
+  // Color state
   const [randomColorCache, setRandomColorCache] = useState<Record<string, string>>({})
   const [dbColors, setDbColors] = useState<Record<string, string>>({})
   const [isLoadingColors, setIsLoadingColors] = useState(true)
   const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set())
 
-  // Predefined palette of highly distinct colors
+  // Countdown state for live mode
+  const [countdown, setCountdown] = useState<number>(0)
+  // Refs for custom price lines that show count + countdown on the price scale
+  const priceLinesRef = useRef<Map<string, ReturnType<ISeriesApi<"Line">["createPriceLine"]>>>(new Map())
+
   const distinctColors = [
-    "hsl(0, 80%, 50%)",      // Red
-    "hsl(210, 80%, 50%)",    // Blue
-    "hsl(48, 80%, 50%)",     // Gold
-    "hsl(180, 80%, 50%)",    // Cyan
-    "hsl(30, 80%, 50%)",     // Orange
-    "hsl(240, 80%, 50%)",    // Indigo
-    "hsl(15, 80%, 50%)",     // Vermilion
-    "hsl(195, 80%, 50%)",    // Sky Blue
-    "hsl(135, 80%, 50%)",    // Emerald
-    "hsl(345, 80%, 50%)",    // Crimson
+    "hsl(0, 80%, 50%)",
+    "hsl(210, 80%, 50%)",
+    "hsl(48, 80%, 50%)",
+    "hsl(180, 80%, 50%)",
+    "hsl(30, 80%, 50%)",
+    "hsl(240, 80%, 50%)",
+    "hsl(15, 80%, 50%)",
+    "hsl(195, 80%, 50%)",
+    "hsl(135, 80%, 50%)",
+    "hsl(345, 80%, 50%)",
   ]
 
-  // Additional colors with different saturation/lightness for more variety
   const extendedPalette = useMemo(() => [
     ...distinctColors,
     ...distinctColors.map(color => {
@@ -86,7 +101,6 @@ export default function PlayerCountChartLW({
     })
   ], [])
 
-  // Keep track of used colors from the palette
   const [usedColorIndices, setUsedColorIndices] = useState<number[]>([])
 
   // Fetch colors from the database
@@ -108,128 +122,98 @@ export default function PlayerCountChartLW({
     loadColors()
   }, [])
 
-  // Generate static random colors but consistent for each server
   const getRandomColor = (id: string) => {
-    if (randomColorCache[id]) {
-      return randomColorCache[id]
-    }
-
-    // Use the server ID to generate a hash
+    if (randomColorCache[id]) return randomColorCache[id]
     let hash = 0
     for (let i = 0; i < id.length; i++) {
       hash = ((hash << 5) - hash) + id.charCodeAt(i)
-      hash = hash & hash // Convert to 32bit integer
+      hash = hash & hash
     }
     hash = Math.abs(hash)
-
-    // Find an unused color from the palette
-    let colorIndex
-    const availableIndices = Array.from(
-      { length: extendedPalette.length },
-      (_, i) => i
-    ).filter(i => !usedColorIndices.includes(i))
-
-    if (availableIndices.length > 0) {
-      colorIndex = availableIndices[hash % availableIndices.length]
-    } else {
-      colorIndex = hash % extendedPalette.length
-    }
-
+    const availableIndices = Array.from({ length: extendedPalette.length }, (_, i) => i)
+      .filter(i => !usedColorIndices.includes(i))
+    const colorIndex = availableIndices.length > 0
+      ? availableIndices[hash % availableIndices.length]
+      : hash % extendedPalette.length
     const color = extendedPalette[colorIndex]
-
     setUsedColorIndices(prev => [...prev, colorIndex])
-    setRandomColorCache(prev => ({
-      ...prev,
-      [id]: color
-    }))
-
+    setRandomColorCache(prev => ({ ...prev, [id]: color }))
     return color
   }
 
-  // Get color for a server, prioritizing database colors
   const getServerColor = (serverId: string) => {
-    const matchingKey = Object.keys(dbColors).find(key =>
-      key.toLowerCase() === serverId.toLowerCase()
-    )
-
-    if (dbColors[serverId]) {
-      return dbColors[serverId]
-    }
+    if (dbColors[serverId]) return dbColors[serverId]
+    const matchingKey = Object.keys(dbColors).find(key => key.toLowerCase() === serverId.toLowerCase())
+    if (matchingKey) return dbColors[matchingKey]
     return getRandomColor(serverId)
   }
 
-  // Convert HSL to RGB for Lightweight Charts
   const hslToRgb = (hsl: string): string => {
-    const hslMatch = hsl.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/)
-    if (!hslMatch) return hsl
-
-    const h = parseInt(hslMatch[1]) / 360
-    const s = parseInt(hslMatch[2]) / 100
-    const l = parseInt(hslMatch[3]) / 100
-
+    const m = hsl.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/)
+    if (!m) return hsl
+    const h = parseInt(m[1]) / 360, s = parseInt(m[2]) / 100, l = parseInt(m[3]) / 100
     let r, g, b
-    if (s === 0) {
-      r = g = b = l
-    } else {
+    if (s === 0) { r = g = b = l } else {
       const hue2rgb = (p: number, q: number, t: number) => {
-        if (t < 0) t += 1
-        if (t > 1) t -= 1
-        if (t < 1 / 6) return p + (q - p) * 6 * t
-        if (t < 1 / 2) return q
-        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6
+        if (t < 0) t += 1; if (t > 1) t -= 1
+        if (t < 1/6) return p + (q-p)*6*t
+        if (t < 1/2) return q
+        if (t < 2/3) return p + (q-p)*(2/3-t)*6
         return p
       }
-      const q = l < 0.5 ? l * (1 + s) : l + s - l * s
-      const p = 2 * l - q
-      r = hue2rgb(p, q, h + 1 / 3)
-      g = hue2rgb(p, q, h)
-      b = hue2rgb(p, q, h - 1 / 3)
+      const q = l < 0.5 ? l*(1+s) : l+s-l*s, p = 2*l-q
+      r = hue2rgb(p, q, h+1/3); g = hue2rgb(p, q, h); b = hue2rgb(p, q, h-1/3)
     }
-
-    return `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`
+    return `rgb(${Math.round(r*255)}, ${Math.round(g*255)}, ${Math.round(b*255)})`
   }
 
-  // Get lighter color for capacity lines
   const getLighterColor = (hsl: string): string => {
-    const hslMatch = hsl.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/)
-    if (hslMatch) {
-      const [, h, s, l] = hslMatch
-      const newL = Math.min(100, parseInt(l) + 15)
-      return `hsl(${h}, ${s}%, ${newL}%)`
-    }
+    const m = hsl.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/)
+    if (m) { const newL = Math.min(100, parseInt(m[3]) + 15); return `hsl(${m[1]}, ${m[2]}%, ${newL}%)` }
     return hsl
   }
 
-  // Format time based on time range
   const formatTime = (timestamp: number): string => {
     const date = new Date(timestamp * 1000)
-
-    if (timeRange === '1h' || timeRange === '2h' || timeRange === '4h' || 
+    if (timeRange === 'live' || timeRange === '1h' || timeRange === '2h' || timeRange === '4h' ||
         timeRange === '6h' || timeRange === '8h' || timeRange === '24h') {
-      return date.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-      })
+      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
     } else if (timeRange === '7d' || timeRange === '30d' || timeRange === '90d') {
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric'
-      })
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     } else {
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        year: 'numeric'
-      })
+      return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
     }
   }
 
+  // ── Countdown timer for live mode — also updates price-line labels ──
+  useEffect(() => {
+    if (!isLiveMode || !lastUpdate) { setCountdown(0); return }
+    const tick = () => {
+      const elapsed = Date.now() - lastUpdate.getTime()
+      const remaining = Math.max(0, Math.ceil((pollingIntervalMs - elapsed) / 1000))
+      setCountdown(remaining)
 
-  // Initialize chart
+      // Update price-line titles with current count + countdown
+      priceLinesRef.current.forEach((priceLine, serverId) => {
+        const count = currentCounts[serverId]
+        if (count === undefined) return
+        const label = remaining > 0 ? `${count}  ⏱${remaining}s` : `${count}  ⏱…`
+        priceLine.applyOptions({ title: label })
+      })
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [isLiveMode, lastUpdate, pollingIntervalMs, currentCounts])
+
+  // ── Track previous data fingerprint for incremental updates ──
+  const prevDataLengthRef = useRef(0)
+  const prevServerIdsRef = useRef<string>('')
+
+  // ── Initialize chart ──
   useEffect(() => {
     if (!chartContainerRef.current || isLoadingColors) return
 
-    // Create chart
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
       height: 400,
@@ -238,27 +222,13 @@ export default function PlayerCountChartLW({
         textColor: '#EFEFF1',
       },
       grid: {
-        vertLines: {
-          color: 'rgba(75, 85, 99, 0.1)',
-          style: LineStyle.Dashed,
-        },
-        horzLines: {
-          color: 'rgba(75, 85, 99, 0.1)',
-          style: LineStyle.Dashed,
-        },
+        vertLines: { color: 'rgba(75, 85, 99, 0.1)', style: LineStyle.Dashed },
+        horzLines: { color: 'rgba(75, 85, 99, 0.1)', style: LineStyle.Dashed },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
-        vertLine: {
-          color: 'rgba(239, 239, 241, 0.3)',
-          width: 1,
-          style: LineStyle.Dashed,
-        },
-        horzLine: {
-          color: 'rgba(239, 239, 241, 0.3)',
-          width: 1,
-          style: LineStyle.Dashed,
-        },
+        vertLine: { color: 'rgba(239, 239, 241, 0.3)', width: 1, style: LineStyle.Dashed },
+        horzLine: { color: 'rgba(239, 239, 241, 0.3)', width: 1, style: LineStyle.Dashed },
       },
       rightPriceScale: {
         borderColor: 'rgba(75, 85, 99, 0.3)',
@@ -271,13 +241,11 @@ export default function PlayerCountChartLW({
         borderColor: 'rgba(75, 85, 99, 0.3)',
         timeVisible: true,
         secondsVisible: false,
-        tickMarkFormatter: (time: Time) => {
-          return formatTime(time as number)
-        },
-        rightOffset: 0,
-        barSpacing: 6,
-        fixLeftEdge: true,
-        fixRightEdge: true,
+        tickMarkFormatter: (time: Time) => formatTime(time as number),
+        rightOffset: isLiveMode ? 5 : 0,
+        barSpacing: isLiveMode ? 8 : 6,
+        fixLeftEdge: !isLiveMode,
+        fixRightEdge: !isLiveMode,
         lockVisibleTimeRangeOnResize: true,
         rightBarStaysOnScroll: true,
       },
@@ -285,81 +253,46 @@ export default function PlayerCountChartLW({
 
     chartRef.current = chart
 
-    // Handle resize
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-        })
+        chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth })
       }
     }
-
     window.addEventListener('resize', handleResize)
 
-    // Setup crosshair move handler for tooltip
+    // Tooltip on crosshair
     chart.subscribeCrosshairMove((param) => {
       if (!tooltipRef.current || !legendRef.current) return
-
       if (!param.time || param.point === undefined || param.point.x < 0 || param.point.y < 0) {
-        tooltipRef.current.style.display = 'none'
-        return
+        tooltipRef.current.style.display = 'none'; return
       }
-
       const timestamp = param.time as number
       const date = new Date(timestamp * 1000)
       const formattedDate = date.toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
+        month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true
       })
-
-      let tooltipHtml = `<div style="font-weight: 600; margin-bottom: 8px; color: #EFEFF1;">${formattedDate}</div>`
-
-      // Get values for all series at this timestamp (excluding capacity lines)
-      seriesMapRef.current.forEach((seriesInfo) => {
-        // Skip capacity lines in tooltip
-        if (seriesInfo.isCapacity) {
-          return
-        }
-        
-        if (hiddenSeries.has(seriesInfo.serverId + (seriesInfo.isCapacity ? '_capacity' : ''))) {
-          return
-        }
-
-        const value = param.seriesData.get(seriesInfo.series)
+      let html = `<div style="font-weight:600;margin-bottom:8px;color:#EFEFF1;">${formattedDate}</div>`
+      seriesMapRef.current.forEach((si) => {
+        if (si.isCapacity) return
+        if (hiddenSeries.has(si.serverId + (si.isCapacity ? '_capacity' : ''))) return
+        const value = param.seriesData.get(si.series)
         if (value) {
-          const dataValue = (value as any).value
-          tooltipHtml += `
-            <div style="display: flex; align-items: center; margin-bottom: 4px;">
-              <div style="width: 12px; height: 12px; border-radius: 2px; background-color: ${seriesInfo.color}; margin-right: 8px;"></div>
-              <span style="color: #9CA3AF; flex: 1;">${seriesInfo.name}:</span>
-              <span style="color: #EFEFF1; font-weight: 600; margin-left: 8px;">${Math.round(dataValue)} players</span>
-            </div>
-          `
+          const v = (value as any).value
+          html += `<div style="display:flex;align-items:center;margin-bottom:4px;">
+            <div style="width:12px;height:12px;border-radius:2px;background:${si.color};margin-right:8px;"></div>
+            <span style="color:#9CA3AF;flex:1;">${si.name}:</span>
+            <span style="color:#EFEFF1;font-weight:600;margin-left:8px;">${Math.round(v)} players</span>
+          </div>`
         }
       })
-
-      tooltipRef.current.innerHTML = tooltipHtml
+      tooltipRef.current.innerHTML = html
       tooltipRef.current.style.display = 'block'
-
-      const tooltipWidth = 280
-      const tooltipHeight = tooltipRef.current.offsetHeight
-      const chartWidth = chartContainerRef.current?.clientWidth || 0
-
+      const tw = 280, th = tooltipRef.current.offsetHeight, cw = chartContainerRef.current?.clientWidth || 0
       let left = param.point.x + 20
-      if (left + tooltipWidth > chartWidth) {
-        left = param.point.x - tooltipWidth - 20
-      }
-
+      if (left + tw > cw) left = param.point.x - tw - 20
       let top = param.point.y - 20
       if (top < 0) top = 20
-      if (top + tooltipHeight > 400) {
-        top = 400 - tooltipHeight - 20
-      }
-
+      if (top + th > 400) top = 400 - th - 20
       tooltipRef.current.style.left = left + 'px'
       tooltipRef.current.style.top = top + 'px'
     })
@@ -369,138 +302,204 @@ export default function PlayerCountChartLW({
       chart.remove()
       chartRef.current = null
       seriesMapRef.current.clear()
+      priceLinesRef.current.clear()
+      prevDataLengthRef.current = 0
+      prevServerIdsRef.current = ''
     }
   }, [isLoadingColors, hiddenSeries])
 
-  // Update series data
+  // ── Update series data ──
   useEffect(() => {
     if (!chartRef.current || isLoadingColors) return
 
-    // Clear existing series
-    seriesMapRef.current.forEach((seriesInfo) => {
-      chartRef.current?.removeSeries(seriesInfo.series)
-    })
-    seriesMapRef.current.clear()
+    const serverKey = serverIds.join(',')
+    const isIncrementalUpdate = isLiveMode
+      && seriesMapRef.current.size > 0
+      && data.length > prevDataLengthRef.current
+      && serverKey === prevServerIdsRef.current
 
-    // Create player count series
+    if (isIncrementalUpdate) {
+      // Append only new points via update() — smooth, no flicker
+      const newPoints = data.slice(prevDataLengthRef.current)
+
+      serverIds.forEach(serverId => {
+        const si = seriesMapRef.current.get(`${serverId}_player`)
+        if (!si) return
+        newPoints.forEach(d => {
+          const v = d[serverId]
+          if (v === null || v === undefined) return
+          si.series.update({
+            time: Math.floor(new Date(d.timestamp).getTime() / 1000) as Time,
+            value: typeof v === 'number' ? v : 0
+          })
+        })
+      })
+
+      if (showCapacity) {
+        const newCap = capacityData.slice(prevDataLengthRef.current)
+        serverIds.forEach(serverId => {
+          const si = seriesMapRef.current.get(`${serverId}_capacity`)
+          if (!si) return
+          newCap.forEach(d => {
+            const v = d[`${serverId}_capacity`]
+            if (v === null || v === undefined) return
+            si.series.update({
+              time: Math.floor(new Date(d.timestamp).getTime() / 1000) as Time,
+              value: typeof v === 'number' ? v : 0
+            })
+          })
+        })
+      }
+
+      chartRef.current.timeScale().scrollToRealTime()
+      prevDataLengthRef.current = data.length
+      prevServerIdsRef.current = serverKey
+
+      // Update price-line positions to match latest values
+      serverIds.forEach(serverId => {
+        const count = currentCounts[serverId]
+        const priceLine = priceLinesRef.current.get(serverId)
+        if (priceLine && count !== undefined) {
+          priceLine.applyOptions({ price: count })
+        }
+      })
+
+      return
+    }
+
+    // ── Full rebuild ──
+    prevDataLengthRef.current = data.length
+    prevServerIdsRef.current = serverKey
+
+    seriesMapRef.current.forEach(si => chartRef.current?.removeSeries(si.series))
+    seriesMapRef.current.clear()
+    priceLinesRef.current.clear()
+
+    // Player count series
     serverIds.forEach(serverId => {
       const hslColor = getServerColor(serverId)
       const color = hslToRgb(hslColor)
       const name = serverNames[serverId] || `Server ${serverId}`
 
       const lineSeries = chartRef.current!.addSeries(LineSeries, {
-        color: color,
-        lineWidth: 3,
+        color,
+        lineWidth: isLiveMode ? 2 : 3,
         lineStyle: LineStyle.Solid,
-        priceLineVisible: false,
-        lastValueVisible: false,
+        // TradingView-style: show current value on the price scale + horizontal line
+        priceLineVisible: false, // We use custom price lines instead
+        lastValueVisible: isLiveMode,
+        ...(isLiveMode ? { priceLineWidth: 1 as const, priceLineStyle: LineStyle.Dotted, priceLineColor: color } : {}),
+        crosshairMarkerVisible: true,
+        crosshairMarkerRadius: 4,
       })
 
-      // Transform data
       const seriesData: LineDataPoint[] = data
-        .filter(d => {
-          const value = d[serverId]
-          const numericValue = value === null || value === undefined ? null : (typeof value === 'number' ? value : 0)
-          return numericValue !== null
-        })
-        .map(d => {
-          const value = d[serverId]
-          const numericValue = (typeof value === 'number' ? value : 0)
-
-          return {
-            time: Math.floor(new Date(d.timestamp).getTime() / 1000) as Time,
-            value: numericValue
-          }
-        })
+        .filter(d => d[serverId] !== null && d[serverId] !== undefined)
+        .map(d => ({
+          time: Math.floor(new Date(d.timestamp).getTime() / 1000) as Time,
+          value: typeof d[serverId] === 'number' ? d[serverId] : 0
+        }))
         .sort((a, b) => (a.time as number) - (b.time as number))
 
       lineSeries.setData(seriesData)
 
       seriesMapRef.current.set(`${serverId}_player`, {
-        series: lineSeries,
-        serverId,
-        isCapacity: false,
-        color,
-        name
+        series: lineSeries, serverId, isCapacity: false, color, name
       })
+
+      // In live mode, add a custom price line that shows count + countdown on the price scale
+      if (isLiveMode) {
+        const count = currentCounts[serverId]
+        const lastValue = seriesData.length > 0 ? seriesData[seriesData.length - 1].value : 0
+        const displayValue = count !== undefined ? count : lastValue
+        const label = count !== undefined ? `${count}  ⏱--` : `${lastValue}`
+
+        const priceLine = lineSeries.createPriceLine({
+          price: displayValue,
+          color: color,
+          lineWidth: 1 as const,
+          lineStyle: LineStyle.Dotted,
+          axisLabelVisible: true,
+          title: label,
+          axisLabelColor: color,
+          axisLabelTextColor: '#0e0e10',
+        })
+        priceLinesRef.current.set(serverId, priceLine)
+      }
     })
 
-    // Create capacity series if enabled
+    // Capacity series
     if (showCapacity) {
       serverIds.forEach(serverId => {
         const hslColor = getServerColor(serverId)
-        const lighterHslColor = getLighterColor(hslColor)
-        const color = hslToRgb(lighterHslColor)
+        const lighterHsl = getLighterColor(hslColor)
+        const color = hslToRgb(lighterHsl)
         const name = `${serverNames[serverId] || `Server ${serverId}`} - Max Capacity`
 
         const lineSeries = chartRef.current!.addSeries(LineSeries, {
-          color: color,
+          color,
           lineWidth: 2,
           lineStyle: LineStyle.Dashed,
           priceLineVisible: false,
           lastValueVisible: false,
         })
 
-        // Transform capacity data
         const seriesData: LineDataPoint[] = capacityData
-          .filter(d => {
-            const value = d[`${serverId}_capacity`]
-            const numericValue = value === null || value === undefined ? null : (typeof value === 'number' ? value : 0)
-            return numericValue !== null
-          })
-          .map(d => {
-            const value = d[`${serverId}_capacity`]
-            const numericValue = (typeof value === 'number' ? value : 0)
-
-            return {
-              time: Math.floor(new Date(d.timestamp).getTime() / 1000) as Time,
-              value: numericValue
-            }
-          })
+          .filter(d => d[`${serverId}_capacity`] !== null && d[`${serverId}_capacity`] !== undefined)
+          .map(d => ({
+            time: Math.floor(new Date(d.timestamp).getTime() / 1000) as Time,
+            value: typeof d[`${serverId}_capacity`] === 'number' ? d[`${serverId}_capacity`] : 0
+          }))
           .sort((a, b) => (a.time as number) - (b.time as number))
 
         lineSeries.setData(seriesData)
 
         seriesMapRef.current.set(`${serverId}_capacity`, {
-          series: lineSeries,
-          serverId,
-          isCapacity: true,
-          color,
-          name
+          series: lineSeries, serverId, isCapacity: true, color, name
         })
       })
     }
 
-    // Fit content to viewport
-    chartRef.current.timeScale().fitContent()
+    if (isLiveMode) {
+      // Default zoom: show the last 30 minutes so the chart feels populated
+      // Only works when there's actual data; fall back to scrollToRealTime otherwise
+      const hasData = data.length > 0
+      if (hasData) {
+        try {
+          const nowSec = Math.floor(Date.now() / 1000)
+          const thirtyMinAgo = nowSec - 30 * 60
+          chartRef.current.timeScale().setVisibleRange({
+            from: thirtyMinAgo as Time,
+            to: (nowSec + 120) as Time,
+          })
+        } catch {
+          // setVisibleRange can throw if the range doesn't overlap with data
+          chartRef.current.timeScale().scrollToRealTime()
+        }
+      } else {
+        chartRef.current.timeScale().scrollToRealTime()
+      }
+    } else {
+      chartRef.current.timeScale().fitContent()
+    }
+  }, [data, capacityData, serverIds, serverNames, showCapacity, isLoadingColors, isLiveMode, dbColors, randomColorCache])
 
-  }, [data, capacityData, serverIds, serverNames, showCapacity, isLoadingColors, dbColors, randomColorCache])
-
-  // Update series visibility when hiddenSeries changes
+  // Visibility toggle
   useEffect(() => {
     if (!chartRef.current) return
-
-    seriesMapRef.current.forEach((seriesInfo, key) => {
-      const isHidden = hiddenSeries.has(key)
-      seriesInfo.series.applyOptions({
-        visible: !isHidden
-      })
+    seriesMapRef.current.forEach((si, key) => {
+      si.series.applyOptions({ visible: !hiddenSeries.has(key) })
     })
   }, [hiddenSeries])
 
   const toggleSeriesVisibility = (key: string) => {
     setHiddenSeries(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(key)) {
-        newSet.delete(key)
-      } else {
-        newSet.add(key)
-      }
-      return newSet
+      const s = new Set(prev)
+      s.has(key) ? s.delete(key) : s.add(key)
+      return s
     })
   }
 
-  // Wait for colors to load before rendering the chart
   if (isLoadingColors && typeof window !== 'undefined') {
     return <div className="h-[400px] w-full flex items-center justify-center">Loading chart colors...</div>
   }
@@ -508,10 +507,7 @@ export default function PlayerCountChartLW({
   return (
     <div className="w-full">
       {/* Legend */}
-      <div
-        ref={legendRef}
-        className="flex flex-wrap gap-3 mb-3 px-2"
-      >
+      <div ref={legendRef} className="flex flex-wrap gap-3 mb-3 px-2">
         {serverIds.map(serverId => {
           const hslColor = getServerColor(serverId)
           const color = hslToRgb(hslColor)
@@ -528,15 +524,17 @@ export default function PlayerCountChartLW({
                 className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
                 style={{ opacity: isPlayerHidden ? 0.5 : 1 }}
               >
-                <div
-                  style={{
-                    width: '12px',
-                    height: '12px',
-                    borderRadius: '2px',
-                    backgroundColor: color,
-                  }}
-                />
+                <div style={{ width: '12px', height: '12px', borderRadius: '2px', backgroundColor: color }} />
                 <span style={{ color: '#EFEFF1', fontSize: '13px' }}>{name}</span>
+                {/* Live current count badge */}
+                {isLiveMode && currentCounts[serverId] !== undefined && (
+                  <span
+                    className="ml-1 px-1.5 py-0.5 rounded text-xs font-mono font-bold"
+                    style={{ backgroundColor: color, color: '#0e0e10' }}
+                  >
+                    {currentCounts[serverId]}
+                  </span>
+                )}
               </button>
               {showCapacity && (
                 <button
@@ -544,15 +542,11 @@ export default function PlayerCountChartLW({
                   className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity ml-4"
                   style={{ opacity: isCapacityHidden ? 0.5 : 1 }}
                 >
-                  <div
-                    style={{
-                      width: '12px',
-                      height: '2px',
-                      backgroundColor: hslToRgb(getLighterColor(hslColor)),
-                      borderTop: '1px dashed',
-                      borderBottom: '1px dashed',
-                    }}
-                  />
+                  <div style={{
+                    width: '12px', height: '2px',
+                    backgroundColor: hslToRgb(getLighterColor(hslColor)),
+                    borderTop: '1px dashed', borderBottom: '1px dashed',
+                  }} />
                   <span style={{ color: '#9CA3AF', fontSize: '12px' }}>Max Capacity</span>
                 </button>
               )}
@@ -564,7 +558,7 @@ export default function PlayerCountChartLW({
       {/* Chart Container */}
       <div style={{ position: 'relative' }}>
         <div ref={chartContainerRef} className="h-[400px] w-full" />
-        
+
         {/* Tooltip */}
         <div
           ref={tooltipRef}

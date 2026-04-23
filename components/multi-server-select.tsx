@@ -74,17 +74,25 @@ export function MultiServerSelect({ servers, selectedServers, onChange, disabled
                       >
                         <Badge variant="default" className="mr-1 gap-1">
                           {getServerNameById(serverId)}
-                          <button
-                            className="ml-0.5 rounded-full outline-none hover:bg-cyan-400/20 p-0.5 transition-colors"
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            className="ml-0.5 rounded-full outline-none hover:bg-cyan-400/20 p-0.5 transition-colors cursor-pointer"
                             onMouseDown={(e) => {
                               e.preventDefault()
                               e.stopPropagation()
                             }}
                             onClick={(e) => removeServer(serverId, e)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                removeServer(serverId, e as unknown as React.MouseEvent)
+                              }
+                            }}
                           >
                             <X className="h-3 w-3" />
                             <span className="sr-only">Remove {getServerNameById(serverId)}</span>
-                          </button>
+                          </span>
                         </Badge>
                       </motion.div>
                     ))

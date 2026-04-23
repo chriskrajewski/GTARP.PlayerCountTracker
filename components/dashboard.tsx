@@ -28,6 +28,8 @@ import {
   type ServerCapacityData
 } from "@/lib/data"
 import { useLiveServerData } from "@/hooks/use-live-server-data"
+import { useLiveChartData } from "@/hooks/use-live-chart-data"
+import { useLiveChartSettings } from "@/hooks/use-live-chart-settings"
 import { useRestartPrediction } from "@/hooks/use-restart-prediction"
 import PlayerCountChart from "./player-count-chart-lw"
 import ServerStatsCards from "./server-stats-cards"
@@ -51,6 +53,7 @@ import {
 const SELECTED_SERVERS_KEY = "selectedServers"
 const DEFAULT_TIME_RANGE: TimeRange = "8h"
 const VALID_TIME_RANGES: TimeRange[] = [
+  "live",
   "1h",
   "2h",
   "4h",
@@ -70,6 +73,7 @@ const SHORT_LINK_PARAM = "s"
 type ShareStatus = "copied" | "shared" | "error" | null
 
 const TIME_RANGE_CODES: Record<TimeRange, string> = {
+  "live": "live",
   "1h": "1h",
   "2h": "2h",
   "4h": "4h",
@@ -208,6 +212,27 @@ export default function Dashboard() {
     daysBack: 14
   })
 
+  // Live chart settings - loads polling interval from admin config
+  const { pollingInterval: liveChartPollingInterval } = useLiveChartSettings()
+
+  // Live chart data hook - accumulates real-time data points for the live timeframe
+  const {
+    playerData: livePlayerData,
+    capacityData: liveCapacityData,
+    loading: liveChartLoading,
+    lastUpdate: liveLastUpdate,
+    dataPointCount: liveDataPointCount,
+    isPolling: liveIsPolling,
+    currentCounts: liveCurrentCounts,
+    clear: clearLiveData
+  } = useLiveChartData(selectedServers, {
+    pollingInterval: liveChartPollingInterval,
+    maxDataPoints: 120,
+    enabled: timeRange === 'live' && selectedServers.length > 0
+  })
+
+  const isLiveMode = timeRange === 'live'
+
   const slugMaps = useMemo(() => buildServerSlugMaps(servers), [servers])
   const slugLookup = useMemo(() => buildSlugLookup(servers, slugMaps), [servers, slugMaps])
   const serverPrefixes = useMemo(() => buildServerPrefixes(servers, slugLookup), [servers, slugLookup])
@@ -324,6 +349,8 @@ export default function Dashboard() {
   // Load player data and capacity data - affected by time range
   const loadPlayerData = async () => {
     if (selectedServers.length === 0) return
+    // In live mode, data comes from the live chart hook, not from the database
+    if (timeRange === 'live') return
 
     try {
       setChartLoading(true);
@@ -506,7 +533,11 @@ export default function Dashboard() {
   }
 
   const handleRefresh = () => {
-    loadPlayerData()
+    if (isLiveMode) {
+      clearLiveData()
+    } else {
+      loadPlayerData()
+    }
     loadStreamAndViewData()
     refreshLiveData() // Also refresh live data
   }
@@ -581,18 +612,21 @@ export default function Dashboard() {
     }
   }
 
-  const chartData = aggregateDataForChart(playerData, selectedServers, timeRange)
+  const chartData = isLiveMode
+    ? aggregateDataForChart(livePlayerData, selectedServers, 'live')
+    : aggregateDataForChart(playerData, selectedServers, timeRange)
   
   // Aggregate capacity data with forward-filling (use last known capacity)
   const capacityChartData = useMemo(() => {
-    if (capacityData.length === 0 || chartData.length === 0) return []
+    const sourceCapacityData = isLiveMode ? liveCapacityData : capacityData
+    if (sourceCapacityData.length === 0 || chartData.length === 0) return []
     
     // Create a map of last known capacity for each server
     const lastKnownCapacity: Record<string, number> = {}
     
     // Initialize with the most recent capacity before the chart time range
     selectedServers.forEach(serverId => {
-      const serverCapacities = capacityData
+      const serverCapacities = sourceCapacityData
         .filter(d => d.server_id === serverId)
         .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
       
@@ -609,7 +643,7 @@ export default function Dashboard() {
       
       selectedServers.forEach(serverId => {
         // Find capacity data at this timestamp
-        const capacityAtTimestamp = capacityData.find(
+        const capacityAtTimestamp = sourceCapacityData.find(
           c => c.server_id === serverId && c.timestamp === chartPoint.timestamp
         )
         
@@ -625,7 +659,7 @@ export default function Dashboard() {
       
       return result
     })
-  }, [capacityData, chartData, selectedServers])
+  }, [capacityData, liveCapacityData, isLiveMode, chartData, selectedServers])
 
   const singleServerId = selectedServers.length === 1 ? selectedServers[0] : null
   const singleServerName = singleServerId ? getServerNameById(singleServerId) : ""
@@ -782,8 +816,8 @@ export default function Dashboard() {
                 }}
               >
                 <ServerStatsCards 
-                  playerData={playerData}
-                  capacityData={capacityData}
+                  playerData={isLiveMode ? livePlayerData : playerData}
+                  capacityData={isLiveMode ? liveCapacityData : capacityData}
                   serverId={serverId} 
                   serverName={getServerNameById(serverId)}
                   loading={loading} 
@@ -829,6 +863,7 @@ export default function Dashboard() {
               }}
             >
               {[
+                { value: "live", label: "Live" },
                 { value: "1h", label: "1h" },
                 { value: "2h", label: "2h" },
                 { value: "4h", label: "4h" },
@@ -847,16 +882,24 @@ export default function Dashboard() {
                   onClick={() => handleTimeRangeChange(item.value)}
                   className={`px-4 py-2.5 rounded-lg min-w-[56px] text-center text-sm font-medium transition-all duration-200 ${
                     timeRange === item.value 
-                      ? "text-cyan-400 border-cyan-500/40" 
+                      ? item.value === 'live'
+                        ? "text-red-400 border-red-500/40"
+                        : "text-cyan-400 border-cyan-500/40" 
                       : "text-gray-400 border-[#26262c] hover:text-white hover:border-cyan-500/20"
                   }`}
                   style={{
                     background: timeRange === item.value 
-                      ? 'linear-gradient(135deg, rgba(0, 217, 255, 0.15) 0%, rgba(20, 184, 166, 0.1) 100%)' 
+                      ? item.value === 'live'
+                        ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.1) 100%)'
+                        : 'linear-gradient(135deg, rgba(0, 217, 255, 0.15) 0%, rgba(20, 184, 166, 0.1) 100%)' 
                       : 'linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(18, 18, 21, 0.9) 100%)',
                     border: '1px solid',
-                    borderColor: timeRange === item.value ? 'rgba(0, 217, 255, 0.3)' : 'rgba(38, 38, 44, 1)',
-                    boxShadow: timeRange === item.value ? '0 0 15px rgba(0, 217, 255, 0.1)' : 'none',
+                    borderColor: timeRange === item.value 
+                      ? item.value === 'live' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(0, 217, 255, 0.3)' 
+                      : 'rgba(38, 38, 44, 1)',
+                    boxShadow: timeRange === item.value 
+                      ? item.value === 'live' ? '0 0 15px rgba(239, 68, 68, 0.1)' : '0 0 15px rgba(0, 217, 255, 0.1)' 
+                      : 'none',
                   }}
                   variants={{
                     hidden: { opacity: 0, y: 10 },
@@ -866,14 +909,29 @@ export default function Dashboard() {
                   whileTap={{ scale: 0.98 }}
                   transition={springs.stiff}
                 >
-                  {item.label}
+                  {item.value === 'live' ? (
+                    <span className="flex items-center gap-1.5">
+                      <span className="relative flex h-2 w-2">
+                        {timeRange === 'live' && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>}
+                        <span className={`relative inline-flex rounded-full h-2 w-2 ${timeRange === 'live' ? 'bg-red-500' : 'bg-gray-500'}`}></span>
+                      </span>
+                      {item.label}
+                    </span>
+                  ) : item.label}
                 </motion.button>
               ))}
             </motion.div>
           </div>
           
           {/* Desktop - TabsList */}
-          <TabsList className="hidden md:grid grid-cols-11 p-1 rounded-lg">
+          <TabsList className="hidden md:grid grid-cols-12 p-1 rounded-lg">
+            <TabsTrigger value="live" className="data-[state=active]:bg-red-500/20 data-[state=active]:text-red-400 transition-all duration-200 flex items-center gap-1.5">
+              <span className="relative flex h-2 w-2">
+                {timeRange === 'live' && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>}
+                <span className={`relative inline-flex rounded-full h-2 w-2 ${timeRange === 'live' ? 'bg-red-500' : 'bg-gray-500'}`}></span>
+              </span>
+              Live
+            </TabsTrigger>
             <TabsTrigger value="1h" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400 transition-all duration-200">1h</TabsTrigger>
             <TabsTrigger value="2h" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400 transition-all duration-200">2h</TabsTrigger>
             <TabsTrigger value="4h" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400 transition-all duration-200">4h</TabsTrigger>
@@ -899,7 +957,18 @@ export default function Dashboard() {
         <Card className="bg-[#0e0e10] border-[#26262c] rounded-md shadow-md overflow-hidden">
           <CardHeader className="border-b border-[#26262c]">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-[#EFEFF1]">Player Count Over Time</CardTitle>
+              <div className="flex items-center gap-3">
+                <CardTitle className="text-[#EFEFF1]">Player Count Over Time</CardTitle>
+                {isLiveMode && liveIsPolling && (
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                    </span>
+                    <span className="text-xs text-red-400 font-medium tracking-wide">LIVE</span>
+                  </div>
+                )}
+              </div>
               <motion.div 
                 className="flex items-center gap-2"
                 whileHover={{ scale: 1.02 }}
@@ -918,7 +987,7 @@ export default function Dashboard() {
             </div>
             {/* Data availability warnings - only show when not loading */}
             <AnimatePresence>
-              {!chartLoading && playerData.length === 0 && (
+              {!isLiveMode && !chartLoading && playerData.length === 0 && (
                 <motion.div 
                   className="text-sm text-yellow-400 bg-yellow-900/20 p-2 rounded mt-2"
                   initial={{ opacity: 0, height: 0 }}
@@ -931,7 +1000,7 @@ export default function Dashboard() {
               )}
             </AnimatePresence>
             <AnimatePresence>
-              {!chartLoading && playerData.length > 0 && chartData.length < 7 && timeRange !== "1h" && timeRange !== "2h" && (
+              {!isLiveMode && !chartLoading && playerData.length > 0 && chartData.length < 7 && timeRange !== "1h" && timeRange !== "2h" && (
                 <motion.div 
                   className="text-sm text-blue-400 bg-blue-900/20 p-2 rounded mt-2"
                   initial={{ opacity: 0, height: 0 }}
@@ -947,7 +1016,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <AnimatePresence mode="wait">
-              {chartLoading ? (
+              {(isLiveMode ? (liveChartLoading && liveDataPointCount === 0) : chartLoading) ? (
                 <motion.div 
                   key="loading"
                   className="h-[400px] w-full flex flex-col items-center justify-center space-y-4"
@@ -968,7 +1037,9 @@ export default function Dashboard() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
                   >
-                    <p className="text-[#EFEFF1] font-medium">Loading chart data...</p>
+                    <p className="text-[#EFEFF1] font-medium">
+                      {isLiveMode ? 'Waiting for first data point...' : 'Loading chart data...'}
+                    </p>
                     {["7d", "30d", "90d", "180d", "365d", "all"].includes(timeRange) && (
                       <motion.p 
                         className="text-sm text-[#9CA3AF]"
@@ -997,6 +1068,10 @@ export default function Dashboard() {
                     loading={loading} 
                     timeRange={timeRange}
                     showCapacity={showCapacity}
+                    isLiveMode={isLiveMode}
+                    currentCounts={isLiveMode ? liveCurrentCounts : undefined}
+                    lastUpdate={isLiveMode ? liveLastUpdate : undefined}
+                    pollingIntervalMs={isLiveMode ? liveChartPollingInterval : undefined}
                   />
                 </motion.div>
               )}
