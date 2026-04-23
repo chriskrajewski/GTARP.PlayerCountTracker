@@ -2,6 +2,7 @@ import { supabase } from "./supabase"
 import { createServerClient } from "./supabase-server"
 
 export type TimeRange =
+  | "live" // Real-time live data
   | "1h" // Last hour
   | "6h" // Last 6 hours
   | "24h" // Last 24 hours
@@ -268,6 +269,8 @@ async function getPlayerCountsFallback(
 // Get appropriate time aggregation based on time range
 export function getTimeAggregation(timeRange: TimeRange): TimeAggregation {
   switch (timeRange) {
+    case "live":
+      return "minute"
     case "1h":
       return "minute"
     case "6h":
@@ -1021,6 +1024,9 @@ export function aggregateDataForChart(
 
 // Smart data fetching that chooses the best strategy based on time range
 export async function getPlayerCountsSmart(serverIds: string[], timeRange: TimeRange): Promise<PlayerCountData[]> {
+  // Live mode doesn't fetch historical data - it uses the live chart hook
+  if (timeRange === "live") return []
+  
   // For time ranges with potentially dense data, use time-based sampling
   if (["7d", "30d", "90d", "180d", "365d", "all"].includes(timeRange)) {
     try {
