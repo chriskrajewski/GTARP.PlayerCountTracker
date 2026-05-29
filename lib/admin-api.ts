@@ -185,6 +185,10 @@ class AdminAPI {
     return this.put('/servers/management', data);
   }
 
+  async migrateServerId(oldServerId: string, newServerId: string): Promise<AdminAPIResponse<any>> {
+    return this.post('/servers/migrate', { old_server_id: oldServerId, new_server_id: newServerId });
+  }
+
   // ==================== DATA MANAGEMENT ====================
   async getDataCollectionStatus(): Promise<AdminAPIResponse<DataCollectionStatus[]>> {
     return this.get<DataCollectionStatus[]>('/data/collection-status');

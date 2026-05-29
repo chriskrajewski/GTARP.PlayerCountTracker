@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CacheSettingsCard } from '@/components/admin/cache-settings-card';
+import { ServerIdMigrateCard } from '@/components/admin/server-id-migrate-card';
 import { 
   Settings, 
   RefreshCw,
@@ -498,6 +499,8 @@ export default function SettingsPage() {
 
                 {/* System Settings */}
                 <TabsContent value="system" className="space-y-6">
+                  <ServerIdMigrateCard />
+
                   <Card className="bg-[#1a1a1e] border-[#26262c]">
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2 text-white">
