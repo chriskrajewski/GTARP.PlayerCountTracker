@@ -207,6 +207,34 @@ class AdminAPI {
     return this.get('/data/gaps');
   }
 
+  // ==================== MONITORING ====================
+  async runMonitoringChecks(): Promise<AdminAPIResponse<any>> {
+    return this.post('/monitoring/run');
+  }
+
+  async getAlertHistory(params?: { limit?: number; unresolved?: boolean }): Promise<AdminAPIResponse<any[]>> {
+    const queryParams: Record<string, string> = {};
+    if (params?.limit) queryParams.limit = String(params.limit);
+    if (params?.unresolved) queryParams.unresolved = 'true';
+    return this.get('/monitoring/alerts', queryParams);
+  }
+
+  async resolveAlert(id: number): Promise<AdminAPIResponse<void>> {
+    return this.patch('/monitoring/alerts', { id, resolved: true });
+  }
+
+  async getMonitoringConfig(): Promise<AdminAPIResponse<any>> {
+    return this.get('/monitoring/config');
+  }
+
+  async updateMonitoringConfig(config: { discord_webhook_url?: string; monitoring_enabled?: boolean; monitoring_config?: any }): Promise<AdminAPIResponse<void>> {
+    return this.put('/monitoring/config', config);
+  }
+
+  async testDiscordWebhook(webhookUrl: string): Promise<AdminAPIResponse<void>> {
+    return this.post('/monitoring/config', { webhook_url: webhookUrl });
+  }
+
   async triggerDataCollection(serverId?: string): Promise<AdminAPIResponse<void>> {
     return this.post('/data/collect', serverId ? { server_id: serverId } : undefined);
   }

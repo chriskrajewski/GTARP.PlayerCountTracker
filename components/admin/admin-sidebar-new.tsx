@@ -15,7 +15,8 @@ import {
   LogOut,
   ChevronRight,
   History,
-  Map
+  Map,
+  Activity
 } from 'lucide-react';
 import { AdminLogoutButton } from '@/components/admin-login-supabase';
 
@@ -44,6 +45,12 @@ const ADMIN_MENU_ITEMS = [
     href: '/admin/health',
     icon: Gauge,
     description: 'System metrics, memory, and diagnostics'
+  },
+  {
+    label: 'Monitoring',
+    href: '/admin/monitoring',
+    icon: Activity,
+    description: 'Data health alerts and notifications'
   },
   {
     label: 'Notifications',
