@@ -100,7 +100,12 @@ export default function MonitoringPage() {
       if (response.data) {
         setMonitoringEnabled(response.data.monitoring_enabled);
         if (response.data.monitoring_config) {
-          setMonitoringConfig(prev => ({ ...prev, ...response.data.monitoring_config }));
+          setMonitoringConfig(prev => ({
+            ...prev,
+            ...response.data.monitoring_config,
+            excluded_servers: response.data.monitoring_config.excluded_servers || [],
+            checks_enabled: { ...prev.checks_enabled, ...response.data.monitoring_config.checks_enabled },
+          }));
         }
       }
     } catch (error) {
