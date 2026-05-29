@@ -10,7 +10,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # FiveM API endpoint
-API_URL = "https://servers-frontend.fivem.net/api/servers/single/o3re8y" # Replace with the serverid you want to query
+API_URL = "https://frontend.cfx-services.net/api/servers/single/o3re8y" # Replace with the serverid you want to query
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):

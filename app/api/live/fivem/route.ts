@@ -28,7 +28,7 @@ export const revalidate = 0;
  * }
  */
 
-const FIVEM_API_BASE = 'https://servers-frontend.fivem.net/api/servers/single/';
+const FIVEM_API_BASE = 'https://frontend.cfx-services.net/api/servers/single/';
 
 // Request headers to mimic browser requests
 const FIVEM_HEADERS = {

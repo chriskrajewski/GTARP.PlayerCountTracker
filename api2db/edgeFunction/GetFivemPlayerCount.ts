@@ -51,7 +51,7 @@ async function getActiveServerIds(): Promise<string[]> {
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-const BASE_API_URL = "https://servers-frontend.fivem.net/api/servers/single/";
+const BASE_API_URL = "https://frontend.cfx-services.net/api/servers/single/";
 
 /**
  * Normalize resources array by removing duplicates and sorting
