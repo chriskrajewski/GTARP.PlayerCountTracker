@@ -194,6 +194,19 @@ class AdminAPI {
     return this.get<DataCollectionStatus[]>('/data/collection-status');
   }
 
+  async backfillPlayerCounts(params: {
+    gap_start?: string;
+    gap_end?: string;
+    interval_seconds?: number;
+    lookback_days?: number;
+  }): Promise<AdminAPIResponse<any>> {
+    return this.post('/data/backfill', params);
+  }
+
+  async detectDataGaps(): Promise<AdminAPIResponse<any>> {
+    return this.get('/data/gaps');
+  }
+
   async triggerDataCollection(serverId?: string): Promise<AdminAPIResponse<void>> {
     return this.post('/data/collect', serverId ? { server_id: serverId } : undefined);
   }
