@@ -56,11 +56,11 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * PATCH /api/admin/monitoring/alerts
+ * PUT /api/admin/monitoring/alerts
  * 
  * Resolve an alert by ID.
  */
-export async function PATCH(request: NextRequest) {
+export async function PUT(request: NextRequest) {
   try {
     if (!validateAdminRequest(request)) {
       return NextResponse.json(

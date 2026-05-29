@@ -220,7 +220,7 @@ class AdminAPI {
   }
 
   async resolveAlert(id: number): Promise<AdminAPIResponse<void>> {
-    return this.patch('/monitoring/alerts', { id, resolved: true });
+    return this.put('/monitoring/alerts', { id, resolved: true });
   }
 
   async getMonitoringConfig(): Promise<AdminAPIResponse<any>> {
@@ -454,10 +454,6 @@ class AdminAPI {
   async getSystemAlerts(resolved?: boolean): Promise<AdminAPIResponse<SystemAlert[]>> {
     const params = resolved !== undefined ? { resolved: resolved.toString() } : undefined;
     return this.get<SystemAlert[]>('/alerts', params);
-  }
-
-  async resolveAlert(alertId: string): Promise<AdminAPIResponse<SystemAlert>> {
-    return this.put<SystemAlert>(`/alerts/${alertId}/resolve`);
   }
 
   async dismissAlert(alertId: string): Promise<AdminAPIResponse<void>> {
