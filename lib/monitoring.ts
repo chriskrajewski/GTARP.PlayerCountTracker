@@ -27,6 +27,7 @@ export interface MonitoringConfig {
     api_reachability: boolean;
   };
   dedup_window_minutes: number;
+  excluded_servers: string[];
 }
 
 export const DEFAULT_MONITORING_CONFIG: MonitoringConfig = {
@@ -40,6 +41,7 @@ export const DEFAULT_MONITORING_CONFIG: MonitoringConfig = {
     api_reachability: true,
   },
   dedup_window_minutes: 30,
+  excluded_servers: [],
 };
 
 export async function loadMonitoringConfig(): Promise<MonitoringConfig> {
@@ -79,10 +81,11 @@ export async function runMonitoringChecks(): Promise<MonitoringResult> {
         .select('server_id, server_name');
 
       if (servers) {
+        const monitoredServers = servers.filter(s => !config.excluded_servers.includes(s.server_id));
         const staleServers: string[] = [];
         const now = Date.now();
 
-        for (const server of servers) {
+        for (const server of monitoredServers) {
           const { data: latest } = await supabase
             .from('player_counts')
             .select('created_at')
@@ -99,7 +102,7 @@ export async function runMonitoringChecks(): Promise<MonitoringResult> {
           }
         }
 
-        if (staleServers.length === servers.length && servers.length > 0) {
+        if (staleServers.length === monitoredServers.length && monitoredServers.length > 0) {
           alerts.push({
             alert_type: 'all_servers_down',
             severity: 'critical',
@@ -164,7 +167,8 @@ export async function runMonitoringChecks(): Promise<MonitoringResult> {
         .select('server_id, server_name');
 
       if (servers) {
-        for (const server of servers) {
+        const monitoredServers = servers.filter(s => !config.excluded_servers.includes(s.server_id));
+        for (const server of monitoredServers) {
           const { data: recent } = await supabase
             .from('player_counts')
             .select('player_count, created_at')
@@ -237,24 +241,140 @@ export async function sendDiscordAlert(alert: MonitoringAlert, webhookUrl: strin
     critical: 0xFF0040,
   };
 
+  const severityEmoji = alert.severity === 'critical' ? '🚨' : alert.severity === 'warning' ? '⚠️' : 'ℹ️';
+  const typeLabels: Record<string, string> = {
+    all_servers_down: 'Collection Outage',
+    collection_stale: 'Stale Data',
+    data_gap: 'Data Gap',
+    api_failure: 'API Down',
+    anomaly_spike: 'Player Spike',
+    anomaly_drop: 'Player Drop',
+    database_error: 'Database Error',
+    server_down: 'Server Down',
+  };
+
+  const fields: Array<{ name: string; value: string; inline: boolean }> = [];
+
+  // Add type-specific detailed fields
+  if (alert.alert_type === 'all_servers_down' || alert.alert_type === 'collection_stale') {
+    if (alert.details?.stale_servers) {
+      fields.push({
+        name: '🖥️ Affected Servers',
+        value: alert.details.stale_servers.join('\n') || 'Unknown',
+        inline: false,
+      });
+    }
+    if (alert.details?.threshold_minutes) {
+      fields.push({
+        name: '⏱️ Threshold',
+        value: `${alert.details.threshold_minutes} minutes`,
+        inline: true,
+      });
+    }
+    fields.push({
+      name: '🔧 Likely Cause',
+      value: alert.alert_type === 'all_servers_down'
+        ? 'FiveM API changed/down, Edge Function crashed, or Supabase cron stopped'
+        : 'Individual server may be offline or ID changed',
+      inline: false,
+    });
+    fields.push({
+      name: '🛠️ Action',
+      value: '1. Check [FiveM API](https://frontend.cfx-services.net/api/servers/single/6j7je6)\n2. Check Supabase Edge Function logs\n3. Run monitoring from admin panel',
+      inline: false,
+    });
+  }
+
+  if (alert.alert_type === 'data_gap') {
+    if (alert.details?.gap_minutes) {
+      fields.push({ name: '⏱️ Gap Duration', value: `${alert.details.gap_minutes} minutes`, inline: true });
+    }
+    if (alert.details?.gap_start) {
+      fields.push({ name: '📅 Gap Start', value: new Date(alert.details.gap_start).toLocaleString('en-US', { timeZone: 'America/New_York' }), inline: true });
+    }
+    if (alert.details?.gap_end) {
+      fields.push({ name: '📅 Gap End', value: new Date(alert.details.gap_end).toLocaleString('en-US', { timeZone: 'America/New_York' }), inline: true });
+    }
+    fields.push({
+      name: '🛠️ Action',
+      value: 'Use Admin → Settings → System → Backfill to fill the gap with estimated data',
+      inline: false,
+    });
+  }
+
+  if (alert.alert_type === 'api_failure') {
+    if (alert.details?.status_code) {
+      fields.push({ name: '📡 HTTP Status', value: String(alert.details.status_code), inline: true });
+    }
+    if (alert.details?.error) {
+      fields.push({ name: '❌ Error', value: alert.details.error, inline: true });
+    }
+    fields.push({
+      name: '🔧 Likely Cause',
+      value: 'FiveM/Cfx.re may have changed their API endpoint again, or their servers are down',
+      inline: false,
+    });
+    fields.push({
+      name: '🛠️ Action',
+      value: '1. Test: `curl https://frontend.cfx-services.net/api/servers/single/6j7je6`\n2. Check https://status.cfx.re\n3. If 404, find new endpoint from https://servers.fivem.net JS bundle',
+      inline: false,
+    });
+  }
+
+  if (alert.alert_type === 'anomaly_spike' || alert.alert_type === 'anomaly_drop') {
+    if (alert.details?.previous !== undefined) {
+      fields.push({ name: '📊 Previous Count', value: String(alert.details.previous), inline: true });
+    }
+    if (alert.details?.current !== undefined) {
+      fields.push({ name: '📊 Current Count', value: String(alert.details.current), inline: true });
+    }
+    if (alert.details?.change_percent) {
+      fields.push({ name: '📈 Change', value: `${alert.details.change_percent}%`, inline: true });
+    }
+    if (alert.server_id) {
+      fields.push({ name: '🖥️ Server ID', value: alert.server_id, inline: true });
+    }
+    fields.push({
+      name: '🔧 Likely Cause',
+      value: alert.alert_type === 'anomaly_drop'
+        ? 'Server restart, crash, or API returning stale/zero data'
+        : 'Server came back online, event started, or data correction',
+      inline: false,
+    });
+  }
+
+  if (alert.alert_type === 'database_error') {
+    fields.push({
+      name: '🛠️ Action',
+      value: '1. Check Supabase dashboard for outages\n2. Verify service role key is valid\n3. Check connection limits',
+      inline: false,
+    });
+  }
+
+  // Always add timestamp
+  fields.push({
+    name: '🕐 Detected At',
+    value: new Date().toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'short', timeStyle: 'long' }),
+    inline: true,
+  });
+
   const embed = {
-    title: `${alert.severity === 'critical' ? '🚨' : alert.severity === 'warning' ? '⚠️' : 'ℹ️'} ${alert.title}`,
+    title: `${severityEmoji} ${alert.title}`,
     description: alert.message,
     color: colorMap[alert.severity] || 0x808080,
     timestamp: new Date().toISOString(),
-    footer: { text: 'RPStats Monitoring' },
-    fields: alert.details ? Object.entries(alert.details).slice(0, 5).map(([key, value]) => ({
-      name: key.replace(/_/g, ' '),
-      value: String(Array.isArray(value) ? value.join(', ') : value).slice(0, 100),
-      inline: true,
-    })) : [],
+    footer: { text: `RPStats Monitoring • ${typeLabels[alert.alert_type] || alert.alert_type} • ${alert.severity.toUpperCase()}` },
+    fields,
   };
 
   try {
     const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ embeds: [embed] }),
+      body: JSON.stringify({
+        username: 'RPStats Monitor',
+        embeds: [embed],
+      }),
     });
     return response.ok;
   } catch (error) {

@@ -49,6 +49,12 @@ interface MonitoringConfig {
   anomaly_min_change: number;
   checks_enabled: ChecksEnabled;
   dedup_window_minutes: number;
+  excluded_servers: string[];
+}
+
+interface ServerInfo {
+  server_id: string;
+  server_name: string;
 }
 
 export default function MonitoringPage() {
@@ -68,7 +74,9 @@ export default function MonitoringPage() {
       api_reachability: true,
     },
     dedup_window_minutes: 30,
+    excluded_servers: [],
   });
+  const [servers, setServers] = useState<ServerInfo[]>([]);
   const [testingSend, setTestingSend] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
   const [showResolved, setShowResolved] = useState(false);
@@ -92,11 +100,28 @@ export default function MonitoringPage() {
       if (response.data) {
         setMonitoringEnabled(response.data.monitoring_enabled);
         if (response.data.monitoring_config) {
-          setMonitoringConfig(response.data.monitoring_config);
+          setMonitoringConfig(prev => ({ ...prev, ...response.data.monitoring_config }));
         }
       }
     } catch (error) {
       console.error('Failed to load config:', error);
+    }
+    // Load servers list
+    try {
+      const response = await adminAPI.getServers();
+      if (response.data?.items) {
+        setServers(response.data.items.map((s: any) => ({ server_id: s.server_id, server_name: s.server_name })));
+      }
+    } catch {
+      // Try management endpoint as fallback
+      try {
+        const response = await adminAPI.getServerManagementData();
+        if (response.data) {
+          setServers(response.data.map((s: any) => ({ server_id: s.server_id, server_name: s.server_name })));
+        }
+      } catch {
+        // Servers won't show
+      }
     }
   };
 
@@ -381,6 +406,51 @@ export default function MonitoringPage() {
                   </Button>
                 </CardContent>
               </Card>
+
+              {/* Server Exclusions */}
+              {servers.length > 0 && (
+              <Card className="bg-[#1a1a1e] border-[#26262c]">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-white">
+                    <Shield className="h-5 w-5" />
+                    Monitored Servers
+                  </CardTitle>
+                  <CardDescription className="text-[#ADADB8]">
+                    Toggle which servers are included in monitoring checks
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {servers.map((server) => {
+                    const isExcluded = monitoringConfig.excluded_servers.includes(server.server_id);
+                    return (
+                      <div
+                        key={server.server_id}
+                        className="flex items-center justify-between p-3 bg-[#26262c]/30 rounded-lg border border-[#40404a]/30"
+                      >
+                        <div>
+                          <span className="text-white text-sm font-medium">{server.server_name}</span>
+                          <span className="text-xs text-[#ADADB8] ml-2">{server.server_id}</span>
+                        </div>
+                        <Switch
+                          checked={!isExcluded}
+                          onCheckedChange={(checked) => {
+                            setMonitoringConfig(c => ({
+                              ...c,
+                              excluded_servers: checked
+                                ? c.excluded_servers.filter(id => id !== server.server_id)
+                                : [...c.excluded_servers, server.server_id],
+                            }));
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
+                  <p className="text-xs text-[#ADADB8] pt-2">
+                    Excluded servers won&apos;t trigger staleness or anomaly alerts. Save config above to apply.
+                  </p>
+                </CardContent>
+              </Card>
+              )}
 
               {/* Alert History */}
               <Card className="bg-[#1a1a1e] border-[#26262c]">
