@@ -14,10 +14,18 @@ import {
   Check,
   X,
   ListChecks,
+  Sparkles,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { adminAPI } from '@/lib/admin-api';
 import type { ReviewQueueItem } from '@/lib/streamer-characters';
+
+/** Shape of the backfill `result` returned by `{ kind: 'backfill' }` (R9.1). */
+interface BackfillResult {
+  processed: number;
+  reused: number;
+  aiCalls: number;
+}
 
 /**
  * Admin review queue for low-confidence character extractions (R6.1).
@@ -49,6 +57,10 @@ export function CharacterReviewQueue() {
   const [overrideDrafts, setOverrideDrafts] = useState<Record<number, string>>({});
   // The extraction id whose inline override input is open, or null.
   const [editingId, setEditingId] = useState<number | null>(null);
+  // Backfill control: target username, in-flight flag, and last run's counts.
+  const [backfillUsername, setBackfillUsername] = useState('');
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<BackfillResult | null>(null);
   const { toast } = useToast();
 
   const loadQueue = async () => {
@@ -83,6 +95,57 @@ export function CharacterReviewQueue() {
       delete next[extractionId];
       return next;
     });
+  };
+
+  /**
+   * Trigger a character-extraction backfill for a single streamer (R9.1). POSTs
+   * `{ kind: 'backfill', username }` to `/api/admin/characters`, which reads the
+   * streamer's recent stream titles, runs extraction, and upserts rows into
+   * `character_extractions`. On success it reports the run counts and refreshes
+   * the review queue so any new low-confidence extractions appear immediately.
+   */
+  const handleBackfill = async () => {
+    const username = backfillUsername.trim();
+    if (!username) {
+      toast({
+        title: 'Username required',
+        description: 'Enter a streamer username to backfill.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setBackfilling(true);
+    setBackfillResult(null);
+    try {
+      const response = await adminAPI.postCharacterAction({ kind: 'backfill', username });
+      if (response?.success) {
+        const result = (response.result ?? null) as BackfillResult | null;
+        setBackfillResult(result);
+        toast({
+          title: 'Backfill complete',
+          description: result
+            ? `${result.processed} processed, ${result.reused} reused, ${result.aiCalls} AI calls for ${username}`
+            : `Backfill finished for ${username}`,
+        });
+        // Surface any newly created pending extractions.
+        loadQueue();
+      } else {
+        toast({
+          title: 'Backfill failed',
+          description: 'The backfill could not be started. Please try again.',
+          variant: 'destructive',
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Backfill failed';
+      toast({
+        title: 'Backfill failed',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setBackfilling(false);
+    }
   };
 
   /**
@@ -182,6 +245,59 @@ export function CharacterReviewQueue() {
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        {/*
+          Backfill control (R9.1): kicks off character extraction for one
+          streamer. There is no automatic processor, so this is how an admin
+          starts/refreshes a streamer's character data. Mirrors the
+          backfill-data-card styling.
+        */}
+        <div className="p-3 bg-[#26262c]/30 rounded-lg border border-[#40404a]/30 space-y-2">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-cyan-400" />
+            <span className="text-sm font-medium text-white">Run character backfill</span>
+          </div>
+          <p className="text-xs text-[#ADADB8]">
+            Extract characters from a streamer&apos;s recent stream titles. New low-confidence
+            results appear in the queue below for review.
+          </p>
+          <div className="flex items-center gap-2">
+            <Input
+              value={backfillUsername}
+              onChange={(e) => setBackfillUsername(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !backfilling) handleBackfill();
+              }}
+              placeholder="Streamer username (e.g. penta)"
+              disabled={backfilling}
+              className="bg-[#26262c] border-[#40404a] text-white h-8 text-sm"
+            />
+            <Button
+              size="sm"
+              onClick={handleBackfill}
+              disabled={backfilling || backfillUsername.trim().length === 0}
+              className="bg-[#9147ff] hover:bg-[#772ce8] text-white h-8 px-3 text-xs flex-shrink-0"
+            >
+              {backfilling ? (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
+                  Running...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-3.5 w-3.5 mr-1" />
+                  Run backfill
+                </>
+              )}
+            </Button>
+          </div>
+          {backfillResult && (
+            <p className="text-xs text-emerald-300">
+              ✓ {backfillResult.processed} processed, {backfillResult.reused} reused,{' '}
+              {backfillResult.aiCalls} AI calls
+            </p>
+          )}
+        </div>
+
         {loading ? (
           <div className="p-3 bg-[#26262c]/30 rounded-lg border border-[#40404a]/30 text-sm text-[#ADADB8]">
             Loading review queue...
