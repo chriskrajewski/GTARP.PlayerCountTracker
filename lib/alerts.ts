@@ -625,8 +625,13 @@ export async function deleteSubscriptionForUser(
 
 /** Table names read/written by the evaluation engine. */
 const PLAYER_COUNTS_TABLE = 'player_counts';
-const TWITCH_STREAMS_TABLE = 'twitch_streams';
-const KICK_STREAMS_TABLE = 'kick_streams';
+/**
+ * Single stream table for BOTH platforms. The stream ETL writes every matched
+ * live stream — Twitch AND Kick — into `twitch_streams`; there is no separate
+ * `kick_streams` table in the database and no platform discriminator column, so
+ * the streamer-live read targets this one table regardless of platform.
+ */
+const STREAMS_TABLE = 'twitch_streams';
 
 /**
  * How recently a streamer must have been observed (a row in
@@ -863,14 +868,17 @@ function createDefaultReadLatestPlayerCount(client: MinimalAlertClient): ReadLat
 /**
  * Default streamer-live read (R3.6, best-effort — see
  * {@link STREAMER_LIVE_FRESHNESS_MS}). A streamer counts as currently live when
- * a row exists in the platform's stream table (`twitch_streams` / `kick_streams`)
- * whose `streamer_name` matches (case-insensitively, via `ilike`) and whose
- * `created_at` is within the freshness window ending at `now`. Returns `false`
- * on error or when no recent row exists.
+ * a row exists in the stream table (`twitch_streams`, which holds both Twitch
+ * AND Kick rows) whose `streamer_name` matches (case-insensitively, via `ilike`)
+ * and whose `created_at` is within the freshness window ending at `now`. Returns
+ * `false` on error or when no recent row exists.
  */
 function createDefaultReadStreamerLive(client: MinimalAlertClient): ReadStreamerLive {
   return async (username: string, platform: StreamerPlatform, now: Date) => {
-    const table = platform === 'kick' ? KICK_STREAMS_TABLE : TWITCH_STREAMS_TABLE;
+    // Both platforms live in `twitch_streams`; there is no `kick_streams` table.
+    // `platform` is retained for the read signature but does not select a table.
+    void platform;
+    const table = STREAMS_TABLE;
     const since = new Date(now.getTime() - STREAMER_LIVE_FRESHNESS_MS).toISOString();
     const { data, error } = await client
       .from<{ id: number }>(table)

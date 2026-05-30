@@ -145,7 +145,16 @@ export function LiveDataStatusProvider({ children }: { children: ReactNode }) {
 export function useLiveDataStatus() {
   const context = useContext(LiveDataStatusContext);
   if (context === undefined) {
-    throw new Error("useLiveDataStatus must be used within a LiveDataStatusProvider");
+    // No provider in the tree (e.g. a server-component page renders a client
+    // component that reads this during SSR before the provider context is
+    // reachable). Rather than throwing — which would crash the whole page —
+    // return a safe, read-only default. Consumers like `CommonLayout` already
+    // treat this value as optional, so the UI degrades gracefully and the real
+    // status takes over once the provider-backed client tree hydrates.
+    return {
+      liveDataStatus: DEFAULT_LIVE_DATA_STATUS,
+      setLiveDataStatus: () => {},
+    };
   }
   return context;
 }

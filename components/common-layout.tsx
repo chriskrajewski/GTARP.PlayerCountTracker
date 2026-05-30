@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect, memo } from 'react';
-import { ArrowLeft, Download, ClipboardList, MessageSquare, Menu, X, Heart, Bot, Video, History, Sparkles, Film, LogIn, LogOut, UserCircle, BarChart3, Bell, Trophy } from 'lucide-react';
+import { ArrowLeft, Download, ClipboardList, MessageSquare, Menu, X, Heart, Bot, Video, History, Sparkles, Film, LogIn, LogOut, UserCircle, BarChart3, Bell, Trophy, Radio } from 'lucide-react';
 import FeedbackForm from '@/components/feedback-form';
 import { CSVExport } from '@/components/csv-export';
 import ServerResourceChanges from '@/components/server-resource-changes';
@@ -217,6 +217,7 @@ export function CommonLayout({
   const isComparisonEnabled = useFailClosedFeatureFlag(FEATURE_FLAGS.COMPARISON_VIEW);
   const isAlertsEnabled = useFailClosedFeatureFlag(FEATURE_FLAGS.ALERTS);
   const isWrappedEnabled = useFailClosedFeatureFlag(FEATURE_FLAGS.INSIGHTS_WRAPPED);
+  const isStreamerPagesEnabled = useFailClosedFeatureFlag(FEATURE_FLAGS.STREAMER_PAGES);
 
   const displayName = authUser?.user_metadata?.name
     || authUser?.user_metadata?.full_name
@@ -517,6 +518,15 @@ export function CommonLayout({
             </motion.div>
           )}
 
+          {isStreamerPagesEnabled && (
+            <motion.div variants={fadeInUp} initial={false}>
+              <HeaderButton href="/streamers">
+                <Radio className="h-3.5 w-3.5 text-purple-400" />
+                Streamers
+              </HeaderButton>
+            </motion.div>
+          )}
+
           {isWrappedEnabled && (
             <motion.div variants={fadeInUp} initial={false}>
               <HeaderButton href="/wrapped">
@@ -715,6 +725,19 @@ export function CommonLayout({
                     >
                       <BarChart3 className="h-4 w-4 text-cyan-400" />
                       Compare
+                    </Link>
+                  </MobileMenuItem>
+                )}
+
+                {isStreamerPagesEnabled && (
+                  <MobileMenuItem>
+                    <Link
+                      href="/streamers"
+                      className="flex w-full items-center gap-2 px-4 py-2.5 bg-[#18181b]/80 text-white rounded-lg border border-[#26262c] hover:border-purple-500/30 transition-all text-sm font-medium backdrop-blur-sm"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <Radio className="h-4 w-4 text-purple-400" />
+                      Streamers
                     </Link>
                   </MobileMenuItem>
                 )}

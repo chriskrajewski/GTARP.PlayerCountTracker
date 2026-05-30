@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateMonthlyReport, previousMonth } from '@/lib/insights';
+import { generateMonthlyReport, previousMonth, isValidMonth } from '@/lib/insights';
 
 /**
  * GET /api/cron/insights
@@ -8,12 +8,12 @@ import { generateMonthlyReport, previousMonth } from '@/lib/insights';
  * (R5.1, R5.6). Call this on a schedule (cron-job.org, Checkly, Vercel Cron,
  * etc.) from an external scheduler — a daily cadence is sufficient.
  *
- * Once a calendar month has completed, this generates that month's report
- * (the month BEFORE the current one). All real work is delegated to
- * `generateMonthlyReport` in `lib/insights.ts` (R9.1), which is IDEMPOTENT:
- * if the previous month's report already exists it is returned unchanged rather
- * than regenerated (R5.6), so running this daily only generates a report once
- * per month and is safe to re-run.
+ * By default it generates the just-completed calendar month (the month BEFORE
+ * the current one). Pass `?month=YYYY-MM` to generate a SPECIFIC month on
+ * demand (useful for backfilling / a one-off preview). All real work is
+ * delegated to `generateMonthlyReport` in `lib/insights.ts` (R9.1), which is
+ * IDEMPOTENT: an already-generated month is returned unchanged rather than
+ * regenerated (R5.6), so this is safe to re-run.
  *
  * Requires the `CRON_SECRET` env var to match the `?secret=` query param,
  * exactly like `/api/cron/monitoring` and `/api/cron/record-predictions`.
@@ -28,14 +28,28 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const now = new Date();
-    // The just-completed calendar month = the month before the current one.
-    const currentMonthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
-    const targetMonth = previousMonth(currentMonthKey);
+    // Optional explicit month override (?month=YYYY-MM) for one-off generation.
+    const monthParam = searchParams.get('month');
+    let targetMonth: string | null;
+
+    if (monthParam) {
+      if (!isValidMonth(monthParam)) {
+        return NextResponse.json(
+          { success: false, error: "Invalid 'month' (expected YYYY-MM)" },
+          { status: 400 }
+        );
+      }
+      targetMonth = monthParam;
+    } else {
+      const now = new Date();
+      // The just-completed calendar month = the month before the current one.
+      const currentMonthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+      targetMonth = previousMonth(currentMonthKey);
+    }
 
     if (!targetMonth) {
       return NextResponse.json(
-        { success: false, error: 'Could not resolve the previous month' },
+        { success: false, error: 'Could not resolve the target month' },
         { status: 500 }
       );
     }
@@ -48,7 +62,7 @@ export async function GET(request: NextRequest) {
       month: report.month,
       shareSlug: report.shareSlug,
       generatedAt: report.generatedAt,
-      timestamp: now.toISOString(),
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     console.error('[Cron Insights] Error:', error);

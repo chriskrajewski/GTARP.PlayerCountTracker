@@ -87,8 +87,15 @@ export type { StreamerPlatform };
 const STREAMER_SERVER_HISTORY_TABLE = 'streamer_server_history';
 const TWITCH_CLIPS_TABLE = 'twitch_clips';
 const KICK_CLIPS_TABLE = 'kick_clips';
-const TWITCH_STREAMS_TABLE = 'twitch_streams';
-const KICK_STREAMS_TABLE = 'kick_streams';
+/**
+ * Single stream table for BOTH platforms. The stream ETL writes every matched
+ * live stream — Twitch AND Kick — into `twitch_streams`; there is no separate
+ * `kick_streams` table in the database and no platform discriminator column, so
+ * all live-status / viewer-trend reads target this one table regardless of the
+ * requested platform. (Reading a `kick_streams` table previously produced a
+ * PGRST205 "table not found" error.)
+ */
+const STREAMS_TABLE = 'twitch_streams';
 
 /** All platform literals, in a stable display order (Twitch first). */
 const ALL_PLATFORMS: readonly StreamerPlatform[] = ['twitch', 'kick'];
@@ -361,8 +368,7 @@ async function streamerHasClipsOrStreams(
   const sources: Array<{ table: string; column: string }> = [
     { table: TWITCH_CLIPS_TABLE, column: 'streamer_username' },
     { table: KICK_CLIPS_TABLE, column: 'streamer_username' },
-    { table: TWITCH_STREAMS_TABLE, column: 'streamer_name' },
-    { table: KICK_STREAMS_TABLE, column: 'streamer_name' },
+    { table: STREAMS_TABLE, column: 'streamer_name' },
   ];
 
   for (const { table, column } of sources) {
@@ -529,7 +535,7 @@ export async function getStreamerLiveStatus(
   if (normalized.length === 0) return { isLive: false, platform };
 
   const c = client ?? defaultClient();
-  const table = platform === 'kick' ? KICK_STREAMS_TABLE : TWITCH_STREAMS_TABLE;
+  const table = STREAMS_TABLE;
   const since = new Date(now.getTime() - STREAMER_LIVE_FRESHNESS_MS).toISOString();
 
   const { data, error } = await c
@@ -584,36 +590,37 @@ export async function getStreamerViewerTrend(
   const since = rangeStartDate(timeRange, now);
   const sinceMs = since ? since.getTime() : null;
   const nowMs = now.getTime();
-  const platforms = platform ? [platform] : ALL_PLATFORMS;
 
   const points: ViewerTrendPoint[] = [];
 
-  for (const p of platforms) {
-    const table = p === 'kick' ? KICK_STREAMS_TABLE : TWITCH_STREAMS_TABLE;
-    let chain = c
-      .from<StreamTrendRow>(table)
-      .select('streamer_name, viewer_count, created_at')
-      .ilike('streamer_name', escaped);
-    if (since) {
-      chain = chain.gte('created_at', since.toISOString());
-    }
-    chain = chain.lte('created_at', now.toISOString()).order('created_at', { ascending: true });
+  // Both platforms live in the single `twitch_streams` table with no platform
+  // discriminator column, so the trend is read ONCE here. The `platform`
+  // argument no longer selects a table (a separate `kick_streams` table does
+  // not exist); it is retained for API compatibility. Querying per-platform
+  // would re-read the same rows and double-count every point.
+  let chain = c
+    .from<StreamTrendRow>(STREAMS_TABLE)
+    .select('streamer_name, viewer_count, created_at')
+    .ilike('streamer_name', escaped);
+  if (since) {
+    chain = chain.gte('created_at', since.toISOString());
+  }
+  chain = chain.lte('created_at', now.toISOString()).order('created_at', { ascending: true });
 
-    const { data, error } = await chain;
-    if (error) {
-      console.error(`Error fetching ${p} viewer trend for streamer:`, error);
-      continue;
-    }
+  const { data, error } = await chain;
+  if (error) {
+    console.error('Error fetching viewer trend for streamer:', error);
+    return [];
+  }
 
-    for (const row of data ?? []) {
-      if (!row.created_at) continue;
-      if (!namesEqual(row.streamer_name, normalized)) continue;
-      const ts = new Date(row.created_at).getTime();
-      if (Number.isNaN(ts)) continue;
-      if (sinceMs !== null && ts < sinceMs) continue;
-      if (ts > nowMs) continue;
-      points.push({ timestamp: row.created_at, viewerCount: row.viewer_count });
-    }
+  for (const row of data ?? []) {
+    if (!row.created_at) continue;
+    if (!namesEqual(row.streamer_name, normalized)) continue;
+    const ts = new Date(row.created_at).getTime();
+    if (Number.isNaN(ts)) continue;
+    if (sinceMs !== null && ts < sinceMs) continue;
+    if (ts > nowMs) continue;
+    points.push({ timestamp: row.created_at, viewerCount: row.viewer_count });
   }
 
   points.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
@@ -736,4 +743,100 @@ export async function getStreamerProfile(
     identities,
     profileImageUrl,
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* listTrackedStreamers (streamers index)                                     */
+/* -------------------------------------------------------------------------- */
+
+/** A streamer entry for the index/listing page. */
+export interface StreamerSummary {
+  username: string;
+  /** The platform(s) this streamer is recorded on. */
+  platforms: StreamerPlatform[];
+  /** Distinct number of servers the streamer has been observed on. */
+  serverCount: number;
+  /** Most recent `last_seen` across the streamer's history rows (ISO). */
+  lastSeen: string | null;
+  /** Profile image, when recorded. */
+  profileImageUrl?: string;
+}
+
+interface StreamerHistoryListRow {
+  serverId: string;
+  platform: string;
+  streamer_username: string;
+  last_seen: string | null;
+  profile_image_url?: string | null;
+}
+
+/**
+ * List the distinct streamers recorded in `streamer_server_history`, most
+ * recently seen first, for the streamers index page. Aggregates each
+ * streamer's platforms, distinct server count, and latest `last_seen` across
+ * their history rows. Reads via the service-role client (same access style as
+ * the rest of this module). Returns `[]` on error.
+ *
+ * @param options.limit cap the number of streamers returned (default 60).
+ */
+export async function listTrackedStreamers(
+  options?: { limit?: number; client?: MinimalStreamerClient },
+): Promise<StreamerSummary[]> {
+  const c = options?.client ?? defaultClient();
+  const limit = options?.limit ?? 60;
+
+  const { data, error } = await c
+    .from<StreamerHistoryListRow>(STREAMER_SERVER_HISTORY_TABLE)
+    .select('serverId, platform, streamer_username, last_seen, profile_image_url')
+    .order('last_seen', { ascending: false })
+    .limit(1000);
+  if (error) {
+    console.error('Error listing tracked streamers:', error);
+    return [];
+  }
+
+  // Aggregate rows by case-insensitive username.
+  const byUser = new Map<string, StreamerSummary & { _servers: Set<string>; _lastMs: number }>();
+  for (const row of data ?? []) {
+    const username = (row.streamer_username ?? '').trim();
+    if (!username) continue;
+    const key = username.toLowerCase();
+    const platform: StreamerPlatform | null =
+      row.platform === 'twitch' || row.platform === 'kick' ? row.platform : null;
+    const lastMs = row.last_seen ? Date.parse(row.last_seen) : NaN;
+
+    let entry = byUser.get(key);
+    if (!entry) {
+      entry = {
+        username,
+        platforms: [],
+        serverCount: 0,
+        lastSeen: row.last_seen ?? null,
+        profileImageUrl: row.profile_image_url ?? undefined,
+        _servers: new Set<string>(),
+        _lastMs: Number.isNaN(lastMs) ? Number.NEGATIVE_INFINITY : lastMs,
+      };
+      byUser.set(key, entry);
+    }
+    if (platform && !entry.platforms.includes(platform)) entry.platforms.push(platform);
+    if (row.serverId) entry._servers.add(row.serverId);
+    if (!entry.profileImageUrl && row.profile_image_url) entry.profileImageUrl = row.profile_image_url;
+    if (!Number.isNaN(lastMs) && lastMs > entry._lastMs) {
+      entry._lastMs = lastMs;
+      entry.lastSeen = row.last_seen ?? entry.lastSeen;
+    }
+  }
+
+  const summaries = Array.from(byUser.values())
+    .map((e) => {
+      e.serverCount = e._servers.size;
+      // Twitch first for stable display order.
+      e.platforms.sort((a, b) => (a === b ? 0 : a === 'twitch' ? -1 : 1));
+      return e;
+    })
+    .sort((a, b) => b._lastMs - a._lastMs)
+    .slice(0, limit)
+    .map(({ _servers, _lastMs, ...summary }) => summary);
+
+  return summaries;
 }
