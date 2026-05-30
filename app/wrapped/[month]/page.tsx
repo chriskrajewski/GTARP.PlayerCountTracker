@@ -16,6 +16,11 @@ import {
   formatNumber,
 } from '@/lib/insights-format';
 
+// Evaluate the feature flag and report per request (not at build time), so
+// toggling `insights_wrapped` takes effect without a redeploy and the page
+// isn't statically prerendered as a 404 while the flag was off.
+export const dynamic = 'force-dynamic';
+
 interface WrappedReportPageProps {
   params: Promise<{ month: string }>;
 }

@@ -15,6 +15,11 @@ import {
 } from '@/lib/streamers';
 import { StreamerProfileView } from '@/components/streamers/streamer-profile-view';
 
+// Evaluate the feature flag and streamer data per request (not at build time),
+// so toggling `streamer_pages` takes effect without a redeploy and the page
+// isn't statically prerendered as a 404 while the flag was off.
+export const dynamic = 'force-dynamic';
+
 /** The range the server pre-fetches the viewer trend for; the chart can change it. */
 const INITIAL_TREND_RANGE = '7d';
 

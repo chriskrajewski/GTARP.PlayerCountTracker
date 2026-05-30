@@ -3,7 +3,7 @@
 import { Suspense, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { CommonLayout } from '@/components/common-layout';
-import { useFailClosedFeatureFlag, FEATURE_FLAGS } from '@/lib/feature-flags';
+import { useFailClosedFeatureFlagState, FEATURE_FLAGS } from '@/lib/feature-flags';
 import { motion } from '@/components/ui/motion';
 import { BarChart3, Sparkles } from 'lucide-react';
 import { ComparisonView } from '@/components/comparison/comparison-view';
@@ -57,17 +57,21 @@ function PageHeader() {
  */
 export default function ComparePage() {
   const router = useRouter();
-  const isComparisonEnabled = useFailClosedFeatureFlag(FEATURE_FLAGS.COMPARISON_VIEW);
+  const { enabled: isComparisonEnabled, loading: flagsLoading } = useFailClosedFeatureFlagState(
+    FEATURE_FLAGS.COMPARISON_VIEW,
+  );
 
   useEffect(() => {
-    if (!isComparisonEnabled) {
+    // Only redirect once flags have resolved — redirecting during load would
+    // bounce away on the fail-closed default before the real value arrives.
+    if (!flagsLoading && !isComparisonEnabled) {
       router.replace('/');
     }
-  }, [isComparisonEnabled, router]);
+  }, [flagsLoading, isComparisonEnabled, router]);
 
-  // Render nothing while disabled to avoid flashing gated content before the
-  // redirect completes.
-  if (!isComparisonEnabled) {
+  // While flags load, or when disabled, render nothing (avoids flashing gated
+  // content and avoids a premature redirect).
+  if (flagsLoading || !isComparisonEnabled) {
     return null;
   }
 

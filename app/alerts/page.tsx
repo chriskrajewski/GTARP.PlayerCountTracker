@@ -17,7 +17,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, Sparkles, LogIn } from 'lucide-react';
 import { CommonLayout } from '@/components/common-layout';
-import { useFailClosedFeatureFlag, FEATURE_FLAGS } from '@/lib/feature-flags';
+import { useFailClosedFeatureFlagState, FEATURE_FLAGS } from '@/lib/feature-flags';
 import { motion } from '@/components/ui/motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -97,19 +97,23 @@ function SignInPrompt({ onSignIn }: { onSignIn: () => void }) {
 
 export default function AlertsPage() {
   const router = useRouter();
-  const isAlertsEnabled = useFailClosedFeatureFlag(FEATURE_FLAGS.ALERTS);
+  const { enabled: isAlertsEnabled, loading: flagsLoading } = useFailClosedFeatureFlagState(
+    FEATURE_FLAGS.ALERTS,
+  );
 
   const [authChecked, setAuthChecked] = useState(false);
   const [isAuthed, setIsAuthed] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Redirect away when the feature is disabled (fail-closed).
+  // Redirect away when the feature is disabled (fail-closed), but only once the
+  // flags have resolved — redirecting during load would bounce away on the
+  // fail-closed default before the real value arrives.
   useEffect(() => {
-    if (!isAlertsEnabled) {
+    if (!flagsLoading && !isAlertsEnabled) {
       router.replace('/');
     }
-  }, [isAlertsEnabled, router]);
+  }, [flagsLoading, isAlertsEnabled, router]);
 
   // Resolve the current auth state and keep it in sync with sign-in/out.
   useEffect(() => {
@@ -147,8 +151,9 @@ export default function AlertsPage() {
     setLoginOpen(true);
   }, []);
 
-  // Render nothing while disabled to avoid flashing gated content.
-  if (!isAlertsEnabled) {
+  // Render nothing while flags load or when disabled, to avoid flashing gated
+  // content and to avoid a premature redirect.
+  if (flagsLoading || !isAlertsEnabled) {
     return null;
   }
 

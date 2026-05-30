@@ -264,6 +264,39 @@ export function useFailClosedFeatureFlag(key: string): boolean {
   return isGatedFeatureEnabled(context.flags, key, context.loading);
 }
 
+/**
+ * Fail-closed feature gating that also exposes the provider's `loading` state.
+ *
+ * Use this on full-page surfaces that REDIRECT when a feature is disabled
+ * (e.g. `/compare`, `/alerts`). Those pages must NOT redirect while the flags
+ * are still loading — otherwise the initial `enabled === false` (which is the
+ * correct fail-closed default during load) would bounce the user away before
+ * the real flag value arrives. Gate the redirect on `!loading`:
+ *
+ *   const { enabled, loading } = useFailClosedFeatureFlagState(key);
+ *   useEffect(() => { if (!loading && !enabled) router.replace('/'); }, [...]);
+ *
+ * Components that simply render nothing while disabled can keep using
+ * {@link useFailClosedFeatureFlag}.
+ *
+ * Must be used within a {@link FeatureFlagProvider}.
+ */
+export function useFailClosedFeatureFlagState(key: string): {
+  enabled: boolean;
+  loading: boolean;
+} {
+  const context = useContext(FeatureFlagContext);
+
+  if (context === undefined) {
+    throw new Error('useFailClosedFeatureFlagState must be used within a FeatureFlagProvider');
+  }
+
+  return {
+    enabled: isGatedFeatureEnabled(context.flags, key, context.loading),
+    loading: context.loading,
+  };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // UTILITY FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════

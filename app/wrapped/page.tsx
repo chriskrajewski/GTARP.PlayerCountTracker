@@ -11,6 +11,11 @@ import { getServers } from '@/lib/data';
 import { listReports, type InsightsReportSummary } from '@/lib/insights';
 import { formatMonthLabel, formatNumber } from '@/lib/insights-format';
 
+// Evaluate the feature flag and reports list per request (not at build time),
+// so toggling `insights_wrapped` takes effect without a redeploy and the page
+// isn't statically prerendered as a 404 while the flag was off.
+export const dynamic = 'force-dynamic';
+
 /** Wrapped is gated; keep the route out of search indexes regardless. */
 export const metadata: Metadata = {
   title: 'Wrapped | RPStats',

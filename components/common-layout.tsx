@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect, memo } from 'react';
-import { ArrowLeft, Download, ClipboardList, MessageSquare, Menu, X, Heart, Bot, Video, History, Sparkles, Film, LogIn, LogOut, UserCircle } from 'lucide-react';
+import { ArrowLeft, Download, ClipboardList, MessageSquare, Menu, X, Heart, Bot, Video, History, Sparkles, Film, LogIn, LogOut, UserCircle, BarChart3, Bell, Trophy } from 'lucide-react';
 import FeedbackForm from '@/components/feedback-form';
 import { CSVExport } from '@/components/csv-export';
 import ServerResourceChanges from '@/components/server-resource-changes';
@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { DataStartPopup } from '@/components/data-start-popup';
 import { DataRefreshPopup } from '@/components/data-refresh-popup';
 import { DataStatusIndicator } from '@/components/data-status-indicator';
-import { useFeatureFlag, FEATURE_FLAGS } from '@/lib/feature-flags';
+import { useFeatureFlag, useFailClosedFeatureFlag, FEATURE_FLAGS } from '@/lib/feature-flags';
 import Image from 'next/image';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { NotificationBannerList, useNotificationBanners } from '@/components/notification-banner';
@@ -213,6 +213,10 @@ export function CommonLayout({
   const isMultiStreamEnabled = useFeatureFlag(FEATURE_FLAGS.MULTI_STREAM);
   const isClipsPageEnabled = useFeatureFlag(FEATURE_FLAGS.CLIPS_PAGE);
   const isFavoritesEnabled = useFeatureFlag(FEATURE_FLAGS.FAVORITES);
+  // Site feature enhancements (fail-closed: only shown when explicitly enabled)
+  const isComparisonEnabled = useFailClosedFeatureFlag(FEATURE_FLAGS.COMPARISON_VIEW);
+  const isAlertsEnabled = useFailClosedFeatureFlag(FEATURE_FLAGS.ALERTS);
+  const isWrappedEnabled = useFailClosedFeatureFlag(FEATURE_FLAGS.INSIGHTS_WRAPPED);
 
   const displayName = authUser?.user_metadata?.name
     || authUser?.user_metadata?.full_name
@@ -504,6 +508,33 @@ export function CommonLayout({
             </motion.div>
           )}
 
+          {isComparisonEnabled && (
+            <motion.div variants={fadeInUp} initial={false}>
+              <HeaderButton href="/compare">
+                <BarChart3 className="h-3.5 w-3.5 text-cyan-400" />
+                Compare
+              </HeaderButton>
+            </motion.div>
+          )}
+
+          {isWrappedEnabled && (
+            <motion.div variants={fadeInUp} initial={false}>
+              <HeaderButton href="/wrapped">
+                <Trophy className="h-3.5 w-3.5 text-yellow-400" />
+                Wrapped
+              </HeaderButton>
+            </motion.div>
+          )}
+
+          {isAlertsEnabled && (
+            <motion.div variants={fadeInUp} initial={false}>
+              <HeaderButton href="/alerts">
+                <Bell className="h-3.5 w-3.5 text-cyan-400" />
+                Alerts
+              </HeaderButton>
+            </motion.div>
+          )}
+
           {!authLoading && authUser ? (
             <>
               {isFavoritesEnabled && (
@@ -671,6 +702,45 @@ export function CommonLayout({
                     >
                       <Film className="h-4 w-4 text-purple-400" />
                       Clips
+                    </Link>
+                  </MobileMenuItem>
+                )}
+
+                {isComparisonEnabled && (
+                  <MobileMenuItem>
+                    <Link
+                      href="/compare"
+                      className="flex w-full items-center gap-2 px-4 py-2.5 bg-[#18181b]/80 text-white rounded-lg border border-[#26262c] hover:border-cyan-500/30 transition-all text-sm font-medium backdrop-blur-sm"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <BarChart3 className="h-4 w-4 text-cyan-400" />
+                      Compare
+                    </Link>
+                  </MobileMenuItem>
+                )}
+
+                {isWrappedEnabled && (
+                  <MobileMenuItem>
+                    <Link
+                      href="/wrapped"
+                      className="flex w-full items-center gap-2 px-4 py-2.5 bg-[#18181b]/80 text-white rounded-lg border border-[#26262c] hover:border-yellow-500/30 transition-all text-sm font-medium backdrop-blur-sm"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <Trophy className="h-4 w-4 text-yellow-400" />
+                      Wrapped
+                    </Link>
+                  </MobileMenuItem>
+                )}
+
+                {isAlertsEnabled && (
+                  <MobileMenuItem>
+                    <Link
+                      href="/alerts"
+                      className="flex w-full items-center gap-2 px-4 py-2.5 bg-[#18181b]/80 text-white rounded-lg border border-[#26262c] hover:border-cyan-500/30 transition-all text-sm font-medium backdrop-blur-sm"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <Bell className="h-4 w-4 text-cyan-400" />
+                      Alerts
                     </Link>
                   </MobileMenuItem>
                 )}
