@@ -89,14 +89,14 @@ function parseFree2RPQueue(payload: unknown): QueueServerData {
   }
 
   const data = payload as Record<string, unknown>
-  
-  if (data.ok !== true) {
-    throw new Error("Free2RP API returned error")
+
+  if (data.serverOnline === false) {
+    throw new Error("Free2RP server is offline")
   }
 
-  const inQueue = typeof data.in_queue === "number" ? data.in_queue : 0
+  const inQueue = typeof data.totalWaiting === "number" ? data.totalWaiting : 0
 
-  // Always show in_queue segment, even when 0
+  // Always show queue segment, even when 0
   const segments: QueueSegment[] = [{
     type: "in_queue",
     label: "Whitelist",
