@@ -1,10 +1,16 @@
-export type QueueParserType = "chaseroleplay" | "free2rp"
+export type QueueParserType = "chaseroleplay" | "free2rp" | "nopixel"
 
 export interface ServerQueueConfig {
   serverId: string
   displayName: string
   apiUrl: string
   parser: QueueParserType
+  /** For multi-server responses (e.g. NoPixel), which key under `data` to read. */
+  dataKey?: string
+  /** Min ms between background refreshes. Raise for rate-limited APIs. */
+  minRefreshMs?: number
+  /** How long an in-memory entry stays fresh. Raise for rate-limited APIs. */
+  memoryTtlMs?: number
 }
 
 export interface QueueSegment {
@@ -31,6 +37,18 @@ const SERVER_QUEUE_CONFIGS: Record<string, ServerQueueConfig> = {
     displayName: "Free2RP",
     apiUrl: "https://free2rp.com/api/queue/info",
     parser: "free2rp"
+  },
+  // NoPixel (server_id "kekbkv" per server_xref). `dataKey` selects which server
+  // to read from the multi-server response — "cc" is NoPixel's internal id for it.
+  // play.nopixel.net is heavily rate limited, so refresh far less aggressively.
+  "kekbkv": {
+    serverId: "kekbkv",
+    displayName: "NoPixel",
+    apiUrl: "https://play.nopixel.net/api/servers/live",
+    parser: "nopixel",
+    dataKey: "cc",
+    minRefreshMs: 120000, // 2 min between background refreshes
+    memoryTtlMs: 120000   // serve in-memory data as fresh for 2 min
   }
 }
 

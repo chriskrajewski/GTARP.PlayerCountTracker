@@ -25,12 +25,14 @@ function formatSegmentLabel(segmentType: string) {
   return formatted || "Queue"
 }
 
-function parseQueueResponse(type: ServerQueueConfig["parser"], payload: unknown): QueueServerData {
+function parseQueueResponse(type: ServerQueueConfig["parser"], payload: unknown, config: ServerQueueConfig): QueueServerData {
   switch (type) {
     case "chaseroleplay":
       return parseChaseRoleplayQueue(payload)
     case "free2rp":
       return parseFree2RPQueue(payload)
+    case "nopixel":
+      return parseNoPixelQueue(payload, config)
     default:
       throw new Error(`Unsupported queue parser: ${type}`)
   }
@@ -109,15 +111,63 @@ function parseFree2RPQueue(payload: unknown): QueueServerData {
   }
 }
 
+function parseNoPixelQueue(payload: unknown, config: ServerQueueConfig): QueueServerData {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("Invalid queue response")
+  }
+
+  const root = payload as Record<string, unknown>
+
+  if (root.ok !== true) {
+    throw new Error("NoPixel API returned error")
+  }
+
+  const data = root.data
+  if (!data || typeof data !== "object") {
+    throw new Error("NoPixel API returned no data")
+  }
+
+  // Response is a map of servers; pick the configured one (e.g. "cc")
+  const dataKey = config.dataKey ?? "cc"
+  const serverEntry = (data as Record<string, unknown>)[dataKey]
+  if (!serverEntry || typeof serverEntry !== "object") {
+    throw new Error(`NoPixel server "${dataKey}" not found in response`)
+  }
+
+  const server = serverEntry as Record<string, unknown>
+
+  if (server.status === "offline") {
+    throw new Error("NoPixel server is offline")
+  }
+
+  const queue = typeof server.queue === "number" ? server.queue : 0
+  const cap = typeof server.max === "number" ? server.max : undefined
+
+  // Always show the queue segment, even when 0
+  const segments: QueueSegment[] = [{
+    type: "queue",
+    label: "Queue",
+    players: queue,
+    cap
+  }]
+
+  return {
+    totalPlayers: queue,
+    segments
+  }
+}
+
 async function fetchQueueForServer(config: ServerQueueConfig): Promise<LiveQueueServerData> {
   const cacheKey = `queue_${config.serverId}`
   const apiCache = getAPICache()
+  const memoryTtl = config.memoryTtlMs ?? MEMORY_CACHE_TTL_MS
+  const staleAfter = Math.floor(memoryTtl / 2)
 
   // Check memory cache first (fastest)
   const memoryCached = memoryCache.get(config.serverId)
-  if (memoryCached && Date.now() - memoryCached.timestamp < MEMORY_CACHE_TTL_MS) {
-    // Trigger background refresh if data is getting stale (>15s old)
-    if (Date.now() - memoryCached.timestamp > 15000) {
+  if (memoryCached && Date.now() - memoryCached.timestamp < memoryTtl) {
+    // Trigger background refresh if data is getting stale (past half its TTL)
+    if (Date.now() - memoryCached.timestamp > staleAfter) {
       refreshQueueInBackground(config, cacheKey, apiCache)
     }
     return memoryCached.data
@@ -149,12 +199,13 @@ async function fetchQueueForServer(config: ServerQueueConfig): Promise<LiveQueue
 
 // Background refresh - doesn't block response
 function refreshQueueInBackground(config: ServerQueueConfig, cacheKey: string, apiCache: ReturnType<typeof getAPICache>) {
-  // Don't refresh too frequently
+  // Don't refresh too frequently (rate-limited APIs can raise this via minRefreshMs)
+  const minRefresh = config.minRefreshMs ?? 15000
   const lastRefresh = backgroundRefreshTimestamps.get(config.serverId) || 0
-  if (Date.now() - lastRefresh < 15000) return // 15 second minimum between refreshes
-  
+  if (Date.now() - lastRefresh < minRefresh) return
+
   backgroundRefreshTimestamps.set(config.serverId, Date.now())
-  
+
   fetchQueueFromAPI(config, cacheKey, apiCache, null).catch(() => {})
 }
 
@@ -178,7 +229,7 @@ async function fetchQueueFromAPI(
     }
 
     const payload = await response.json()
-    const parsed = parseQueueResponse(config.parser, payload)
+    const parsed = parseQueueResponse(config.parser, payload, config)
 
     const data: LiveQueueServerData = {
       ...parsed,
