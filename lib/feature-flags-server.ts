@@ -18,6 +18,15 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
  */
 export async function isFeatureFlagEnabled(key: string): Promise<boolean> {
   try {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error(
+        `[feature-flags-server] MISSING ENV: NEXT_PUBLIC_SUPABASE_URL=${Boolean(
+          supabaseUrl,
+        )} NEXT_PUBLIC_SUPABASE_ANON_KEY=${Boolean(supabaseAnonKey)} (key="${key}")`,
+      );
+      return false;
+    }
+
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       auth: { persistSession: false },
       global: {
@@ -35,9 +44,16 @@ export async function isFeatureFlagEnabled(key: string): Promise<boolean> {
       .eq('key', key)
       .limit(1);
 
+    // TEMP DEBUG: surfaces exactly what the server resolves for a flag.
+    console.log(
+      `[feature-flags-server] key="${key}" rows=${data?.length ?? 0} ` +
+        `is_enabled=${data?.[0]?.is_enabled ?? 'n/a'} error=${error?.message ?? 'none'}`,
+    );
+
     if (error || !data || data.length === 0) return false;
     return data[0].is_enabled === true;
-  } catch {
+  } catch (err) {
+    console.error(`[feature-flags-server] threw for key="${key}":`, err);
     return false;
   }
 }

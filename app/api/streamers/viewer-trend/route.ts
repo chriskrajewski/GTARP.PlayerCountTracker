@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStreamerViewerTrend, type StreamerPlatform } from '@/lib/streamers';
 import { isFeatureFlagEnabled } from '@/lib/feature-flags-server';
-import { FEATURE_FLAGS } from '@/lib/feature-flags';
+import { FEATURE_FLAGS } from '@/lib/feature-flags-constants';
 import type { TimeRange } from '@/lib/data';
 
 /**

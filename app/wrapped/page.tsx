@@ -6,7 +6,7 @@ import { CommonLayout } from '@/components/common-layout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { isFeatureFlagEnabled } from '@/lib/feature-flags-server';
-import { FEATURE_FLAGS } from '@/lib/feature-flags';
+import { FEATURE_FLAGS } from '@/lib/feature-flags-constants';
 import { getServers } from '@/lib/data';
 import { listReports, type InsightsReportSummary } from '@/lib/insights';
 import { formatMonthLabel, formatNumber } from '@/lib/insights-format';

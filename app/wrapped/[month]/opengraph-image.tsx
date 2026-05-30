@@ -1,5 +1,5 @@
 import { ImageResponse } from 'next/og';
-import { FEATURE_FLAGS } from '@/lib/feature-flags';
+import { FEATURE_FLAGS } from '@/lib/feature-flags-constants';
 import { isFeatureFlagEnabled } from '@/lib/feature-flags-server';
 import { getReportByMonth, isValidMonth, type InsightsReport } from '@/lib/insights';
 import { formatGrowth, formatMonthLabel, formatNumber } from '@/lib/insights-format';

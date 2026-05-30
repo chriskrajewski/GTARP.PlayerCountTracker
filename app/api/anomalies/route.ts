@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAnomaliesForServer, type AnomalyRecord } from '@/lib/anomaly'
 import { isFeatureFlagEnabled } from '@/lib/feature-flags-server'
-import { FEATURE_FLAGS } from '@/lib/feature-flags'
+import { FEATURE_FLAGS } from '@/lib/feature-flags-constants'
 
 /**
  * GET /api/anomalies

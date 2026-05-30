@@ -4,7 +4,7 @@ import { Frown } from 'lucide-react';
 import { CommonLayout } from '@/components/common-layout';
 import { Card, CardContent } from '@/components/ui/card';
 import { isFeatureFlagEnabled } from '@/lib/feature-flags-server';
-import { FEATURE_FLAGS } from '@/lib/feature-flags';
+import { FEATURE_FLAGS } from '@/lib/feature-flags-constants';
 import {
   getStreamerProfile,
   getStreamerServers,

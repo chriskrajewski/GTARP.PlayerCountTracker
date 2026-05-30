@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ShareLink } from '@/components/wrapped/share-link';
 import { isFeatureFlagEnabled } from '@/lib/feature-flags-server';
-import { FEATURE_FLAGS } from '@/lib/feature-flags';
+import { FEATURE_FLAGS } from '@/lib/feature-flags-constants';
 import { getServers } from '@/lib/data';
 import { getReportByMonth, isValidMonth, type InsightsReport } from '@/lib/insights';
 import {
