@@ -13,6 +13,10 @@ import {
   linkPlatformIdentities,
   type StreamerPlatform,
 } from '@/lib/streamers';
+import {
+  getCharacterCatalog,
+  type CharacterCatalogEntry,
+} from '@/lib/streamer-characters';
 import { StreamerProfileView } from '@/components/streamers/streamer-profile-view';
 
 // Evaluate the feature flag and streamer data per request (not at build time),
@@ -134,6 +138,17 @@ export default async function StreamerPage({ params }: StreamerPageProps) {
     getStreamerViewerTrend(username, INITIAL_TREND_RANGE, platform),
   ]);
 
+  // The character surface has its OWN independent fail-closed flag (R1.2/R1.4),
+  // evaluated per request so toggling propagates without a redeploy (R1.3). When
+  // disabled we do NOT fetch the catalog and pass an empty list so the surface
+  // stays hidden (fail closed).
+  const characterTrackingEnabled = await isFeatureFlagEnabled(
+    FEATURE_FLAGS.CHARACTER_TRACKING,
+  );
+  const characterCatalog: CharacterCatalogEntry[] = characterTrackingEnabled
+    ? await getCharacterCatalog(username)
+    : [];
+
   return (
     <CommonLayout showBackButton pageTitle={`Streamer: ${profile.displayName}`}>
       <StreamerProfileView
@@ -143,6 +158,8 @@ export default async function StreamerPage({ params }: StreamerPageProps) {
         identities={identities}
         initialTrend={initialTrend}
         initialRange={INITIAL_TREND_RANGE}
+        characterTrackingEnabled={characterTrackingEnabled}
+        characterCatalog={characterCatalog}
       />
     </CommonLayout>
   );

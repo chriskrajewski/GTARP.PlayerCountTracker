@@ -26,6 +26,22 @@ import {
 } from '@/lib/admin-types';
 import { getStoredAdminToken } from '@/lib/admin-auth';
 import { createBrowserClient } from '@/lib/supabase-browser';
+import type { ReviewQueueItem } from '@/lib/streamer-characters';
+
+// Streamer Character Tracking admin responses. The admin route returns the
+// payload directly (`{ success, items }` for the queue, `{ success }` /
+// `{ success, result }` for an action), not wrapped in `AdminAPIResponse.data`.
+export interface CharacterReviewQueueResponse {
+  success: boolean;
+  items?: ReviewQueueItem[];
+  error?: string;
+}
+
+export interface CharacterActionResponse {
+  success: boolean;
+  result?: unknown;
+  error?: string;
+}
 
 class AdminAPI {
   private baseURL: string = '/api/admin';
@@ -486,6 +502,19 @@ class AdminAPI {
 
   async dismissAlert(alertId: string): Promise<AdminAPIResponse<void>> {
     return this.delete(`/alerts/${alertId}`);
+  }
+
+  // ==================== CHARACTER TRACKING ====================
+  // Streamer Character Tracking review queue + corrections. The admin route
+  // returns the payload directly (`{ success, items }` / `{ success }`), not
+  // wrapped in `data`, and `request` returns the raw parsed JSON, so callers
+  // read `response.items` / `response.success` straight off the result.
+  async getCharacterReviewQueue(): Promise<CharacterReviewQueueResponse> {
+    return this.get('/characters') as unknown as Promise<CharacterReviewQueueResponse>;
+  }
+
+  async postCharacterAction(action: Record<string, unknown>): Promise<CharacterActionResponse> {
+    return this.post('/characters', action) as unknown as Promise<CharacterActionResponse>;
   }
 
   // ==================== UTILITIES ====================

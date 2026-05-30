@@ -11,12 +11,14 @@ import {
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ViewerTrendChart } from '@/components/streamers/viewer-trend-chart';
+import { CharacterClipsPanel } from '@/components/streamers/character-clips-panel';
 import type {
   StreamerProfile,
   Clip,
   PlatformIdentity,
   ViewerTrendPoint,
 } from '@/lib/streamers';
+import type { CharacterCatalogEntry } from '@/lib/streamer-characters';
 import type { ServerData } from '@/lib/data';
 
 /** Brand-accurate Kick glyph (lucide has no Kick icon), mirroring the favorites page. */
@@ -252,6 +254,17 @@ interface StreamerProfileViewProps {
   identities: PlatformIdentity[];
   initialTrend: ViewerTrendPoint[];
   initialRange: string;
+  /**
+   * Whether the independent `character_tracking` feature flag is enabled for
+   * this request (R1.2/R1.4 fail-closed). The character surface renders ONLY
+   * when this is `true`.
+   */
+  characterTrackingEnabled: boolean;
+  /**
+   * Server-derived Character_Catalog (most-recent first). Empty when the flag is
+   * disabled (the page skips the fetch entirely) or when no characters exist.
+   */
+  characterCatalog: CharacterCatalogEntry[];
 }
 
 /**
@@ -268,6 +281,8 @@ export function StreamerProfileView({
   identities,
   initialTrend,
   initialRange,
+  characterTrackingEnabled,
+  characterCatalog,
 }: StreamerProfileViewProps) {
   return (
     <div className="space-y-6">
@@ -289,6 +304,27 @@ export function StreamerProfileView({
       <ServerList servers={servers} />
 
       <ClipHistory clips={clips} />
+
+      {/*
+        Character surface (R3.1, R3.5, R8.1) — rendered BELOW the clip history
+        and ONLY when the independent `character_tracking` flag is enabled
+        (fail-closed: when off the page skips the catalog fetch and this is
+        never shown). The client `CharacterClipsPanel` owns selection state and
+        fetches a character's clips through the public API route; it renders its
+        own "Characters" catalog heading, so we mount it directly in a Card to
+        stay visually consistent with the other sections.
+      */}
+      {characterTrackingEnabled && (
+        <Card variant="glass">
+          <CardContent className="py-5">
+            <CharacterClipsPanel
+              username={profile.username}
+              platform={profile.platform}
+              entries={characterCatalog}
+            />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

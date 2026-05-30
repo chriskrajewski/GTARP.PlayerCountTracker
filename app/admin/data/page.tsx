@@ -43,6 +43,7 @@ import { cn } from '@/lib/utils';
 import { format, addDays } from 'date-fns';
 import { formatToLocalTimezone } from '@/lib/timezone-utils';
 import { ServerManagementPanel } from '@/components/admin/server-management-panel';
+import { CharacterReviewQueue } from '@/components/admin/character-review-queue';
 
 export default function AdminDataPage() {
   const [dataStatus, setDataStatus] = useState<DataCollectionStatus[]>([]);
@@ -347,10 +348,11 @@ export default function AdminDataPage() {
               </div>
 
               <Tabs defaultValue="collection" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 bg-[#26262c]">
+                <TabsList className="grid w-full grid-cols-4 bg-[#26262c]">
                   <TabsTrigger value="collection" className="text-white">Data Collection</TabsTrigger>
                   <TabsTrigger value="analytics" className="text-white">Analytics</TabsTrigger>
                   <TabsTrigger value="servers" className="text-white">Server Management</TabsTrigger>
+                  <TabsTrigger value="characters" className="text-white">Characters</TabsTrigger>
                 </TabsList>
 
                 {/* Data Collection Status */}
@@ -623,6 +625,11 @@ export default function AdminDataPage() {
                 {/* Server Management */}
                 <TabsContent value="servers" className="space-y-6">
                   <ServerManagementPanel />
+                </TabsContent>
+
+                {/* Character Review Queue */}
+                <TabsContent value="characters" className="space-y-6">
+                  <CharacterReviewQueue />
                 </TabsContent>
               </Tabs>
             </div>

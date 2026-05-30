@@ -47,6 +47,7 @@ export const FEATURE_FLAGS = {
   PREDICTION_ACCURACY: 'prediction_accuracy',
   ANOMALY_PUBLIC: 'anomaly_public',
   CAPACITY_ADVISOR: 'capacity_advisor',
+  CHARACTER_TRACKING: 'character_tracking',
 } as const;
 
 export type FeatureFlagKey = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS];
@@ -72,6 +73,7 @@ export const FAIL_CLOSED_FLAGS = new Set<string>([
   FEATURE_FLAGS.PREDICTION_ACCURACY,
   FEATURE_FLAGS.ANOMALY_PUBLIC,
   FEATURE_FLAGS.CAPACITY_ADVISOR,
+  FEATURE_FLAGS.CHARACTER_TRACKING,
 ]);
 
 /**
