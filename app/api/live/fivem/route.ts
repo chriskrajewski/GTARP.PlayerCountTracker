@@ -364,8 +364,15 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString()
     }, {
       headers: {
-        // Allow caching for 15 seconds to reduce API load
-        'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30'
+        // Do NOT let a shared/edge cache (e.g. Cloudflare) cache this realtime
+        // endpoint. The route already keeps a short-lived in-memory cache
+        // (CACHE_TTL_MS) to protect the upstream FiveM API, so CDN caching here
+        // only causes stale/empty player counts when proxied. The explicit
+        // Cloudflare-CDN-Cache-Control header overrides any "Cache Everything"
+        // rule that might be configured at the edge.
+        'Cache-Control': 'private, no-cache, no-store, max-age=0, must-revalidate',
+        'CDN-Cache-Control': 'no-store',
+        'Cloudflare-CDN-Cache-Control': 'no-store'
       }
     });
 
