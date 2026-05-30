@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Loader2, ExternalLink, Twitch, X } from "lucide-react";
 import { trackStreamClick } from "@/lib/gtag";
+import { useFailClosedFeatureFlag, FEATURE_FLAGS } from "@/lib/feature-flags";
 
 // Kick icon component (they don't have an official icon in lucide)
 function KickIcon({ className }: { className?: string }) {
@@ -442,6 +444,13 @@ function StreamCard({
 }) {
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
   const [imageError, setImageError] = useState(false);
+  const isStreamerPagesEnabled = useFailClosedFeatureFlag(FEATURE_FLAGS.STREAMER_PAGES);
+
+  // Link to the streamer detail page (R4). Username casing varies across
+  // sources, so lowercase + encode it for a stable, valid URL segment.
+  const streamerHref = `/streamers/${stream.platform}/${encodeURIComponent(
+    stream.user_name.toLowerCase(),
+  )}`;
 
   // Format the stream thumbnail URL
   // Twitch URLs are already formatted on the server with {width} and {height} replaced
@@ -588,7 +597,18 @@ function StreamCard({
             ) : (
               <Twitch className="h-4 w-4" style={{ color: '#9146FF' }} />
             )}
-            <span>{stream.user_name}</span>
+            {isStreamerPagesEnabled ? (
+              <Link
+                href={streamerHref}
+                onClick={(e) => e.stopPropagation()}
+                className="hover:text-cyan-400 hover:underline transition-colors"
+                title={`View ${stream.user_name}'s streamer page`}
+              >
+                {stream.user_name}
+              </Link>
+            ) : (
+              <span>{stream.user_name}</span>
+            )}
           </div>
           
           <div className="text-xs py-1 px-2 rounded text-white" style={{ backgroundColor: 'rgba(20, 20, 20, 0.95)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
@@ -621,6 +641,10 @@ function StreamCard({
 function StreamModal({ stream, onClose }: { stream: StreamData, onClose: () => void }) {
   const [playerLoaded, setPlayerLoaded] = useState(false);
   const [isPlayerError, setIsPlayerError] = useState(false);
+  const isStreamerPagesEnabled = useFailClosedFeatureFlag(FEATURE_FLAGS.STREAMER_PAGES);
+  const streamerHref = `/streamers/${stream.platform}/${encodeURIComponent(
+    stream.user_name.toLowerCase(),
+  )}`;
   
   useEffect(() => {
     // Add overflow:hidden to body when modal is open
@@ -673,7 +697,17 @@ function StreamModal({ stream, onClose }: { stream: StreamData, onClose: () => v
             <div className="bg-[#0e0e10]/80 backdrop-blur-sm p-2 sm:p-3 flex items-center border-b border-[#26262c]/50">
               <div className="flex-1 overflow-hidden">
                 <h3 className="text-sm sm:text-base font-semibold text-white flex items-center">
-                  <span className="truncate">{stream.user_name}</span>
+                  {isStreamerPagesEnabled ? (
+                    <Link
+                      href={streamerHref}
+                      className="truncate hover:text-cyan-400 hover:underline transition-colors"
+                      title={`View ${stream.user_name}'s streamer page`}
+                    >
+                      {stream.user_name}
+                    </Link>
+                  ) : (
+                    <span className="truncate">{stream.user_name}</span>
+                  )}
                   <span className="ml-2 text-xs bg-red-600/90 text-white px-1.5 py-0.5 rounded-sm">LIVE</span>
                 </h3>
                 <p className="text-[#EFEFF1] text-xs line-clamp-1">{stream.title}</p>
