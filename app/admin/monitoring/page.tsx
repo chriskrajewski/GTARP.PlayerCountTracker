@@ -18,6 +18,8 @@ import {
   RefreshCw,
   Send,
   Shield,
+  TrendingUp,
+  TrendingDown,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { adminAPI } from '@/lib/admin-api';
@@ -57,6 +59,25 @@ interface ServerInfo {
   server_name: string;
 }
 
+interface AnomalyRow {
+  id: number;
+  server_id: string;
+  server_name: string;
+  timestamp: string;
+  observed_value: number;
+  expected_value: number;
+  direction: 'spike' | 'drop';
+  deviation_percent: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+interface AnomalyConfig {
+  thresholdPercent: number;
+  minChange: number;
+  dedupWindowMinutes: number;
+}
+
 export default function MonitoringPage() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,6 +101,14 @@ export default function MonitoringPage() {
   const [testingSend, setTestingSend] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
   const [showResolved, setShowResolved] = useState(false);
+  const [anomalies, setAnomalies] = useState<AnomalyRow[]>([]);
+  const [anomaliesLoading, setAnomaliesLoading] = useState(true);
+  const [anomalyConfig, setAnomalyConfig] = useState<AnomalyConfig>({
+    thresholdPercent: 50,
+    minChange: 20,
+    dedupWindowMinutes: 30,
+  });
+  const [savingAnomalyConfig, setSavingAnomalyConfig] = useState(false);
   const { toast } = useToast();
 
   const loadAlerts = async () => {
@@ -130,10 +159,42 @@ export default function MonitoringPage() {
     }
   };
 
+  const loadAnomalies = async () => {
+    try {
+      setAnomaliesLoading(true);
+      const response = await adminAPI.getAnomalies({ limit: 50 });
+      setAnomalies(response.data || []);
+    } catch (error) {
+      console.error('Failed to load anomalies:', error);
+    } finally {
+      setAnomaliesLoading(false);
+    }
+  };
+
+  const loadAnomalyConfig = async () => {
+    try {
+      const response = await adminAPI.getAnomalyConfig();
+      if (response.data) {
+        setAnomalyConfig({
+          thresholdPercent: response.data.thresholdPercent,
+          minChange: response.data.minChange,
+          dedupWindowMinutes: response.data.dedupWindowMinutes,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load anomaly config:', error);
+    }
+  };
+
   useEffect(() => {
     loadAlerts();
     loadConfig();
   }, [showResolved]);
+
+  useEffect(() => {
+    loadAnomalies();
+    loadAnomalyConfig();
+  }, []);
 
   const handleRunChecks = async () => {
     setRunning(true);
@@ -196,6 +257,22 @@ export default function MonitoringPage() {
       toast({ title: 'Save failed', variant: 'destructive' });
     } finally {
       setSavingConfig(false);
+    }
+  };
+
+  const handleSaveAnomalyConfig = async () => {
+    setSavingAnomalyConfig(true);
+    try {
+      await adminAPI.updateAnomalyConfig(anomalyConfig);
+      toast({ title: 'Anomaly thresholds saved' });
+    } catch (error) {
+      toast({
+        title: 'Save failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingAnomalyConfig(false);
     }
   };
 
@@ -456,6 +533,154 @@ export default function MonitoringPage() {
                 </CardContent>
               </Card>
               )}
+
+              {/* Anomaly Detection Thresholds (R7.7) */}
+              <Card className="bg-[#1a1a1e] border-[#26262c]">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-white">
+                    <TrendingUp className="h-5 w-5" />
+                    Anomaly Detection Thresholds
+                  </CardTitle>
+                  <CardDescription className="text-[#ADADB8]">
+                    Tune how the Anomaly_Detector flags unusual player-count spikes and drops
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-white text-sm">Deviation Threshold (%)</Label>
+                      <Input
+                        type="number"
+                        value={anomalyConfig.thresholdPercent}
+                        onChange={(e) => setAnomalyConfig(c => ({ ...c, thresholdPercent: Number(e.target.value) }))}
+                        min={1}
+                        max={500}
+                        className="bg-[#26262c] border-[#40404a] text-white"
+                      />
+                      <p className="text-xs text-[#ADADB8]">% deviation from expected to flag a point</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-white text-sm">Min Absolute Change</Label>
+                      <Input
+                        type="number"
+                        value={anomalyConfig.minChange}
+                        onChange={(e) => setAnomalyConfig(c => ({ ...c, minChange: Number(e.target.value) }))}
+                        min={0}
+                        max={1000}
+                        className="bg-[#26262c] border-[#40404a] text-white"
+                      />
+                      <p className="text-xs text-[#ADADB8]">Minimum player change required</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-white text-sm">Dedup Window (min)</Label>
+                      <Input
+                        type="number"
+                        value={anomalyConfig.dedupWindowMinutes}
+                        onChange={(e) => setAnomalyConfig(c => ({ ...c, dedupWindowMinutes: Number(e.target.value) }))}
+                        min={1}
+                        max={1440}
+                        className="bg-[#26262c] border-[#40404a] text-white"
+                      />
+                      <p className="text-xs text-[#ADADB8]">Suppress repeat anomalies within this window</p>
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={handleSaveAnomalyConfig}
+                    disabled={savingAnomalyConfig}
+                    className="bg-[#9147ff] hover:bg-[#772ce8] text-white"
+                  >
+                    {savingAnomalyConfig ? 'Saving...' : 'Save Thresholds'}
+                  </Button>
+
+                  <div className="p-3 bg-[#26262c]/30 rounded-lg border border-[#40404a]/30">
+                    <p className="text-xs text-[#ADADB8]">
+                      <span className="text-white font-medium">Cron Setup:</span> To evaluate anomalies automatically, set up an external cron to hit:<br />
+                      <code className="text-cyan-400">GET /api/cron/anomaly?secret=YOUR_CRON_SECRET</code><br />
+                      Set <code className="text-cyan-400">CRON_SECRET</code> in your environment variables.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Detected Anomalies (R7.4) */}
+              <Card className="bg-[#1a1a1e] border-[#26262c]">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2 text-white">
+                        <AlertTriangle className="h-5 w-5" />
+                        Detected Anomalies
+                      </CardTitle>
+                      <CardDescription className="text-[#ADADB8]">
+                        Recent player-count spikes and drops flagged by the detector
+                      </CardDescription>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={loadAnomalies}
+                      disabled={anomaliesLoading}
+                      className="text-[#ADADB8] hover:text-white h-7 px-2 text-xs flex-shrink-0"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${anomaliesLoading ? 'animate-spin' : ''}`} />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {anomaliesLoading ? (
+                    <div className="text-center text-[#ADADB8] py-8">Loading...</div>
+                  ) : anomalies.length === 0 ? (
+                    <div className="text-center py-8">
+                      <CheckCircle2 className="h-8 w-8 text-emerald-400 mx-auto mb-2" />
+                      <p className="text-[#ADADB8]">No anomalies detected</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {anomalies.map((anomaly) => (
+                        <div
+                          key={anomaly.id}
+                          className="p-3 rounded-lg border bg-[#26262c]/30 border-[#40404a]/30 flex items-start gap-3"
+                        >
+                          {anomaly.direction === 'spike' ? (
+                            <TrendingUp className="h-4 w-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                          ) : (
+                            <TrendingDown className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm text-white font-medium">{anomaly.server_name}</span>
+                              <Badge
+                                variant="outline"
+                                className={`text-xs ${
+                                  anomaly.direction === 'spike'
+                                    ? 'border-emerald-500/30 text-emerald-300 bg-emerald-500/10'
+                                    : 'border-red-500/30 text-red-300 bg-red-500/10'
+                                }`}
+                              >
+                                {anomaly.direction}
+                              </Badge>
+                              {anomaly.is_active && (
+                                <Badge variant="outline" className="text-xs border-cyan-500/30 text-cyan-300 bg-cyan-500/10">
+                                  active
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-[#ADADB8] mt-0.5">
+                              Observed <span className="text-white font-medium">{anomaly.observed_value}</span>{' '}
+                              vs expected <span className="text-white font-medium">{anomaly.expected_value}</span>{' '}
+                              ({anomaly.deviation_percent}% deviation)
+                            </p>
+                            <p className="text-xs text-[#ADADB8]/60 mt-0.5">
+                              {new Date(anomaly.timestamp).toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
               {/* Alert History */}
               <Card className="bg-[#1a1a1e] border-[#26262c]">

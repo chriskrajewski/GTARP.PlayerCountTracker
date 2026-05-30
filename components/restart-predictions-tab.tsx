@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Calendar,
   Hourglass,
+  Target,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +19,9 @@ import { Button } from '@/components/ui/button';
 import { RestartEventsTimeline } from '@/components/restart-events-timeline';
 import { cn } from '@/lib/utils';
 import { formatToLocalTimezone } from '@/lib/timezone-utils';
+import { getConfidenceLevel as getSharedConfidenceLevel } from '@/lib/restart-prediction';
+import { FEATURE_FLAGS, useFailClosedFeatureFlag } from '@/lib/feature-flags';
+import type { AccuracyDisplay } from '@/lib/prediction-accuracy';
 import type { RestartPrediction } from '@/hooks/use-restart-predictions';
 
 interface RestartPredictionsTabProps {
@@ -28,13 +32,14 @@ interface RestartPredictionsTabProps {
 }
 
 /**
- * Gets confidence level description
+ * Gets confidence level description.
+ *
+ * Delegates to the shared `getConfidenceLevel` from `@/lib/restart-prediction`
+ * (R6.5) so the confidence-level thresholds are defined in exactly one place
+ * and never drift from the rest of the restart-prediction subsystem.
  */
 function getConfidenceLevel(confidence: number): 'high' | 'medium' | 'low' | 'none' {
-  if (confidence >= 75) return 'high';
-  if (confidence >= 50) return 'medium';
-  if (confidence >= 25) return 'low';
-  return 'none';
+  return getSharedConfidenceLevel(confidence);
 }
 
 /**
@@ -112,6 +117,114 @@ function formatTimeSince(dateString: string | null): string {
   } else {
     return `${minutes}m ago`;
   }
+}
+
+/**
+ * Rolling 7-day prediction-accuracy section (R6.4, R6.6).
+ *
+ * Gated by the fail-closed `prediction_accuracy` flag (R1.2/R1.4): the whole
+ * section is hidden unless the flag is explicitly enabled. The accuracy metric
+ * itself is NOT computed here — it is fetched from
+ * `/api/restart-prediction/accuracy`, which delegates to
+ * `getDisplayAccuracy()` in `lib/prediction-accuracy.ts`.
+ *
+ * When the metric is `{ available: false }` it renders an explicit
+ * "not yet available" message rather than a misleading `0%` (R6.6).
+ *
+ * `useFailClosedFeatureFlag` requires a `FeatureFlagProvider` ancestor; the
+ * provider is mounted globally in `app/layout.tsx`, so this hook is safe on
+ * every surface that renders the predictions tab (including the admin panel).
+ */
+function PredictionAccuracySection() {
+  const accuracyEnabled = useFailClosedFeatureFlag(FEATURE_FLAGS.PREDICTION_ACCURACY);
+  const [accuracy, setAccuracy] = useState<AccuracyDisplay | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [errored, setErrored] = useState(false);
+
+  useEffect(() => {
+    if (!accuracyEnabled) return;
+
+    let cancelled = false;
+    setLoading(true);
+    setErrored(false);
+
+    fetch('/api/restart-prediction/accuracy')
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to fetch accuracy');
+        return res.json();
+      })
+      .then((data) => {
+        if (cancelled) return;
+        if (data?.success && data.accuracy) {
+          setAccuracy(data.accuracy as AccuracyDisplay);
+        } else {
+          setErrored(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setErrored(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accuracyEnabled]);
+
+  // Fail closed: render nothing unless the flag is explicitly enabled (R1.2/R1.4).
+  if (!accuracyEnabled) {
+    return null;
+  }
+
+  return (
+    <Card className="bg-[#1a1a1e] border-[#26262c]">
+      <CardHeader>
+        <CardTitle className="text-white flex items-center space-x-2">
+          <Target className="h-5 w-5 text-[#00D9FF]" />
+          <span>Prediction Accuracy</span>
+        </CardTitle>
+        <CardDescription className="text-[#ADADB8]">
+          How often recent restart predictions landed close to the actual restart
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex items-center space-x-2 text-[#ADADB8]">
+            <RefreshCw className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Loading accuracy…</span>
+          </div>
+        ) : errored || !accuracy || !accuracy.available ? (
+          // R6.6: never show 0% or a misleading value when unavailable.
+          <div className="bg-[#26262c]/50 rounded-lg p-4">
+            <p className="text-sm text-[#ADADB8]">Accuracy not yet available</p>
+            <p className="text-xs text-[#ADADB8]/70 mt-1">
+              Accuracy appears once enough predictions have been matched to observed restarts.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <p className="text-xs text-[#ADADB8] mb-1">
+                Last {accuracy.windowDays} days
+              </p>
+              <p className="text-2xl font-bold text-[#00D9FF]">
+                {accuracy.accuracyPercent}%
+              </p>
+              <p className="text-xs text-[#ADADB8] mt-1">
+                based on {accuracy.sampleSize} matched prediction
+                {accuracy.sampleSize === 1 ? '' : 's'}
+              </p>
+            </div>
+            <div className="text-xs text-[#ADADB8] sm:text-right">
+              within ±{accuracy.toleranceMinutes} min of the predicted time
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 /**
@@ -232,6 +345,9 @@ export function RestartPredictionsTab({
           </div>
         </div>
       )}
+
+      {/* Rolling 7-day prediction accuracy (R6.4) — gated by prediction_accuracy */}
+      <PredictionAccuracySection />
 
       {/* Main Prediction Card */}
       <Card className={cn('bg-[#1a1a1e] border-[#26262c]', confidenceDisplay.bg, confidenceDisplay.border)}>

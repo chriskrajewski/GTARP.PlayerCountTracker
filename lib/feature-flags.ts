@@ -51,7 +51,50 @@ export const FEATURE_FLAGS = {
   SERVER_CARD_CLIPS: 'server_card_clips',
   // Tracking
   VISITOR_TRACKING: 'visitor_tracking',
+  // Site feature enhancements (fail-closed gated — see FAIL_CLOSED_FLAGS)
+  COMPARISON_VIEW: 'comparison_view',
+  ALERTS: 'alerts',
+  STREAMER_PAGES: 'streamer_pages',
+  INSIGHTS_WRAPPED: 'insights_wrapped',
+  PREDICTION_ACCURACY: 'prediction_accuracy',
+  ANOMALY_PUBLIC: 'anomaly_public',
+  CAPACITY_ADVISOR: 'capacity_advisor',
 } as const;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FAIL-CLOSED FLAGS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * The seven site-feature-enhancement flags that MUST fail closed (R1.4).
+ *
+ * Unlike the legacy flags — for which the provider intentionally fails *open*
+ * (defaulting to enabled while loading or on fetch error to avoid breaking the
+ * existing site) — these flags are treated as DISABLED whenever their value is
+ * `undefined`, missing, errored, or still loading. A surface gated by one of
+ * these keys is only shown when the flag is explicitly `true`.
+ *
+ * Use {@link useFailClosedFeatureFlag} (React) or {@link isGatedFeatureEnabled}
+ * (pure) to gate these surfaces — do NOT use the legacy `useFeatureFlag` hook,
+ * which fails open while loading.
+ */
+export const FAIL_CLOSED_FLAGS = new Set<string>([
+  FEATURE_FLAGS.COMPARISON_VIEW,
+  FEATURE_FLAGS.ALERTS,
+  FEATURE_FLAGS.STREAMER_PAGES,
+  FEATURE_FLAGS.INSIGHTS_WRAPPED,
+  FEATURE_FLAGS.PREDICTION_ACCURACY,
+  FEATURE_FLAGS.ANOMALY_PUBLIC,
+  FEATURE_FLAGS.CAPACITY_ADVISOR,
+]);
+
+/**
+ * Returns true if the given flag key is one of the fail-closed
+ * site-feature-enhancement flags.
+ */
+export function isFailClosedFlag(key: string): boolean {
+  return FAIL_CLOSED_FLAGS.has(key);
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONTEXT
@@ -169,6 +212,56 @@ export function useFeatureFlag(key?: string) {
 
   // Otherwise return the full context
   return context;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FAIL-CLOSED GATING HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Pure fail-closed gating decision (R1.4).
+ *
+ * Returns `true` ONLY when the flag is explicitly `true` in the resolved flag
+ * map. Any other condition — value `undefined`/missing, an errored fetch (which
+ * leaves these keys absent from the map), or the provider still `loading` —
+ * resolves to `false`. This is intentionally the opposite of the legacy
+ * `useFeatureFlag`/provider behavior, which fails open while loading and on
+ * error.
+ *
+ * @param flags   the resolved flag map (e.g. the provider's `flags`)
+ * @param key     the flag key to evaluate
+ * @param loading whether the flag map is still loading (defaults to false)
+ */
+export function isGatedFeatureEnabled(
+  flags: Record<string, boolean>,
+  key: string,
+  loading: boolean = false
+): boolean {
+  if (loading) {
+    return false;
+  }
+  return flags[key] === true;
+}
+
+/**
+ * React hook for fail-closed feature gating of the seven site-feature-
+ * enhancement flags (R1.4).
+ *
+ * Use this for App_User-facing surfaces gated by a {@link FAIL_CLOSED_FLAGS}
+ * key. It returns `false` while loading, on fetch error, or when the flag value
+ * is `undefined`/missing — the surface is shown only when the flag is
+ * explicitly enabled. Unlike {@link useFeatureFlag}, it never fails open.
+ *
+ * Must be used within a {@link FeatureFlagProvider}.
+ */
+export function useFailClosedFeatureFlag(key: string): boolean {
+  const context = useContext(FeatureFlagContext);
+
+  if (context === undefined) {
+    throw new Error('useFailClosedFeatureFlag must be used within a FeatureFlagProvider');
+  }
+
+  return isGatedFeatureEnabled(context.flags, key, context.loading);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

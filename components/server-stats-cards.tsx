@@ -13,6 +13,8 @@ import { type RestartPrediction } from "@/lib/restart-prediction"
 import { RestartCountdown } from "@/components/restart-countdown"
 import { memo } from "react"
 import { useFeatureFlag, FEATURE_FLAGS } from "@/lib/feature-flags"
+import { CapacityAdvisorCard } from "@/components/capacity-advisor-card"
+import { ServerAnomaliesCard } from "@/components/server-anomalies-card"
 
 // Kick icon component (they don't have an official icon in lucide)
 function KickIcon({ className }: { className?: string }) {
@@ -484,6 +486,20 @@ export default function ServerStatsCards({
             delay={8}
           />
         </CardContent>
+        
+        {/* Capacity Advisor — "best time to join" (R8). Self-gated fail-closed
+            behind the `capacity_advisor` flag; renders nothing when disabled. */}
+        <div className="px-6 pb-2 relative z-10">
+          <CapacityAdvisorCard serverId={serverId} serverName={serverName} />
+        </div>
+
+        {/* Public anomaly surface (R7.5). Self-gated fail-closed behind the
+            `anomaly_public` flag; renders nothing when disabled or when there
+            are no active anomalies, so the surface is unchanged in the common
+            case. */}
+        <div className="px-6 pb-2 relative z-10">
+          <ServerAnomaliesCard serverId={serverId} serverName={serverName} />
+        </div>
         
         {/* Footer */}
         <CardFooter className="pt-3 pb-4 flex items-center gap-2 relative z-10">

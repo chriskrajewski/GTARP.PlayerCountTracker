@@ -13,7 +13,7 @@ Conventions:
 
 ## Tasks
 
-- [ ] 1. Test harness and shared data-layer foundations
+- [x] 1. Test harness and shared data-layer foundations
   - [x] 1.1 Add a test runner and property-testing dependencies
     - Add a Jest (or Vitest) config compatible with the existing `__tests__/*.test.ts` files and the `@/*` path alias; add a `test` script to `package.json`
     - Add `fast-check` as a dev dependency for property-based testing
@@ -31,7 +31,7 @@ Conventions:
     - Cross-user read/modify denial and own-row success examples
     - _Requirements: 9.4_
 
-- [ ] 2. Feature flag gating (cross-cutting, R1)
+- [x] 2. Feature flag gating (cross-cutting, R1)
   - [x] 2.1 Register new flag keys and a fail-closed gating helper
     - Add `comparison_view`, `alerts`, `streamer_pages`, `insights_wrapped`, `prediction_accuracy`, `anomaly_public`, `capacity_advisor` to the `FEATURE_FLAGS` constant in `lib/feature-flags.ts`
     - Add a client gating helper that treats `undefined`/error flag values as `false` (fail-closed) for these seven keys; confirm `isFeatureFlagEnabled` server-side already returns `false` on error
@@ -49,7 +49,7 @@ Conventions:
     - Enabled, disabled, and missing states for each of the seven flags
     - _Requirements: 1.1, 1.2, 1.4_
 
-- [ ] 3. Phase 1 — Server Comparison View (R2)
+- [x] 3. Phase 1 — Server Comparison View (R2)
   - [x] 3.1 Define the `comparison_preferences` table
     - Create `api2db/sql/comparison_preferences_schema.sql` with id, user_id FK→app_users cascade, pinned_server_ids text[], time_range, timestamps, unique(user_id), index(user_id), owner-only RLS
     - _Requirements: 9.2, 9.4_
@@ -84,11 +84,11 @@ Conventions:
     - Exactly 2 and exactly 4 pinned; 5th-server rejection message; < 2 prompt state
     - _Requirements: 2.2, 2.3_
 
-- [ ] 4. Phase 1 — Restart Prediction Accuracy Tracking (R6)
+- [x] 4. Phase 1 — Restart Prediction Accuracy Tracking (R6)
   - [x] 4.1 Define the `recorded_restart_predictions` table
     - Create `api2db/sql/recorded_restart_predictions_schema.sql` with server_id, predicted_restart_time, confidence, prediction_made_at, observed_restart_time, difference_minutes, matched_at and the three indexes; service-role write, client read-only
     - _Requirements: 9.2, 6.1, 6.2_
-  - [~] 4.2 Implement `lib/prediction-accuracy.ts`
+  - [x] 4.2 Implement `lib/prediction-accuracy.ts`
     - `recordPrediction`, `matchRestartToPrediction` (most-recent applicable, signed minute diff), pure `accuracyWithinTolerance` and `rollingAccuracy`, plus `computeRollingAccuracy` and `getDisplayAccuracy` ("not yet available" on empty window); reuse `detectRestartEvents` from `lib/restart-prediction.ts`
     - _Requirements: 6.1, 6.2, 6.3, 6.6, 9.3_
   - [ ]* 4.3 Write property test for prediction recording round trip
@@ -103,18 +103,18 @@ Conventions:
   - [ ]* 4.6 Write property test for empty-window accuracy state
     - **Property 25: No in-window records yields "not yet available"**
     - **Validates: Requirements 6.6**
-  - [~] 4.7 Add the `/api/cron/record-predictions` route
+  - [x] 4.7 Add the `/api/cron/record-predictions` route
     - Guard with `CRON_SECRET` like `/api/cron/monitoring`; snapshot current predictions via `recordPrediction`, run restart detection, and match newly observed restarts via `matchRestartToPrediction`
     - _Requirements: 6.1, 6.2_
-  - [~] 4.8 Surface accuracy and confidence in the predictions tab
+  - [x] 4.8 Surface accuracy and confidence in the predictions tab
     - Display the rolling 7-day accuracy metric and a confidence level/interval beside each predicted restart, gated by `prediction_accuracy`, reusing `formatConfidence`/`getConfidenceLevel`
     - _Requirements: 6.4, 6.5, 6.6_
   - [ ]* 4.9 Write unit tests for accuracy edge cases
     - Within/outside tolerance boundary; no-applicable-prediction skip
     - _Requirements: 6.2, 6.6_
 
-- [ ] 5. Phase 1 — Capacity and Queue Insights (R8)
-  - [~] 5.1 Implement `lib/capacity-advisor.ts`
+- [x] 5. Phase 1 — Capacity and Queue Insights (R8)
+  - [x] 5.1 Implement `lib/capacity-advisor.ts`
     - `computeJoinWindow` (hour-of-week occupancy over a >= 7-day window, optional queue penalty, low-occupancy selection, `{ available: false }` when sparse), `formatRecommendationLocal` (IANA TZ), `isCurrentlyFull`; reuse `getServerCapacities`, `getPlayerCounts`, and `hasQueueSupport`/`getQueueConfig`
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 9.3_
   - [ ]* 5.2 Write property test for capacity recommendation window
@@ -132,7 +132,7 @@ Conventions:
   - [ ]* 5.6 Write property test for near-full detection
     - **Property 34: Near-full detection accompanies the recommendation**
     - **Validates: Requirements 8.6**
-  - [~] 5.7 Build the Capacity Advisor UI on server surfaces
+  - [x] 5.7 Build the Capacity Advisor UI on server surfaces
     - Render the recommended join window in the viewer's local time zone, the "not yet available" state, and the currently-full/near-full indicator, gated by `capacity_advisor`
     - _Requirements: 8.1, 8.4, 8.5, 8.6_
   - [ ]* 5.8 Write unit tests for capacity examples
@@ -142,14 +142,14 @@ Conventions:
     - Add `api2db/sql/queue_history_schema.sql` (id, server_id, timestamp, total_players, queue_length, index(server_id, timestamp desc)) and a sampling write so the advisor can incorporate historical queue data; advisor already degrades gracefully when absent
     - _Requirements: 8.3_
 
-- [ ] 6. Checkpoint — Phase 1
+- [x] 6. Checkpoint — Phase 1
   - Ensure all tests pass; run `npm run lint` and `npm run check-types`. Ask the user if questions arise.
 
-- [ ] 7. Phase 2 — User Alerts and Notifications (R3)
-  - [~] 7.1 Define the alert/push/delivery tables
+- [x] 7. Phase 2 — User Alerts and Notifications (R3)
+  - [x] 7.1 Define the alert/push/delivery tables
     - Create `api2db/sql/alert_subscriptions_schema.sql`, `push_subscriptions_schema.sql`, and `notification_deliveries_schema.sql` with the columns, checks, indexes, and owner-only RLS from the design
     - _Requirements: 9.2, 9.4_
-  - [~] 7.2 Implement subscription CRUD in `lib/alerts.ts`
+  - [x] 7.2 Implement subscription CRUD in `lib/alerts.ts`
     - `createSubscription` (both types, requires resolved `app_users.id`), `listSubscriptions`, `updateSubscription`, `deleteSubscription`, all owner-scoped via the ownership helper
     - _Requirements: 3.1, 3.2, 3.3, 3.8, 9.4_
   - [ ]* 7.3 Write property test for subscription create round trip
@@ -158,7 +158,7 @@ Conventions:
   - [ ]* 7.4 Write property test for create-requires-auth
     - **Property 10: Subscription creation requires authentication**
     - **Validates: Requirements 3.3**
-  - [~] 7.5 Implement `lib/web-push.ts`
+  - [x] 7.5 Implement `lib/web-push.ts`
     - Add the `web-push` npm dependency; `savePushSubscription`, `deliver` (VAPID-signed), `markInactiveIfGone` (404/410), `recordDelivery`; add `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` env wiring
     - _Requirements: 3.4, 3.9, 3.10_
   - [ ]* 7.6 Write property test for push subscription storage round trip
@@ -170,33 +170,33 @@ Conventions:
   - [ ]* 7.8 Write property test for delivery logging
     - **Property 14: Every delivery is logged**
     - **Validates: Requirements 3.10**
-  - [~] 7.9 Implement edge-triggered evaluation in `lib/alerts.ts`
+  - [x] 7.9 Implement edge-triggered evaluation in `lib/alerts.ts`
     - `evaluateAlertSubscriptions(now)` detecting `cleared → met` transitions (player count crossing below threshold, streamer offline→live), delivering at most once per trigger, updating `last_condition_state` only after a logged delivery; reuse `lib/data.ts` reads and `lib/web-push.ts`
     - _Requirements: 3.5, 3.6, 3.7, 3.10, 9.3_
   - [ ]* 7.10 Write property test for edge-triggered delivery
     - **Property 12: Alert delivery is edge-triggered exactly once per trigger**
     - **Validates: Requirements 3.5, 3.6, 3.7**
-  - [~] 7.11 Add the alert subscription and push-subscribe API routes
+  - [x] 7.11 Add the alert subscription and push-subscribe API routes
     - `POST/GET /api/alerts/subscriptions`, `PATCH/DELETE /api/alerts/subscriptions/[id]`, `POST /api/alerts/push-subscribe`; return 401 for unauthenticated callers and delegate to `lib/`
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.8_
-  - [~] 7.12 Add the `/api/cron/alerts` route
+  - [x] 7.12 Add the `/api/cron/alerts` route
     - Guard with `CRON_SECRET`; delegate to `evaluateAlertSubscriptions` and return `{ evaluated, delivered }`
     - _Requirements: 3.5, 3.6, 3.7, 3.10_
-  - [~] 7.13 Add web-push handlers to `public/sw.js`
+  - [x] 7.13 Add web-push handlers to `public/sw.js`
     - Append `push` (parse JSON, `showNotification`, generic fallback on parse failure) and `notificationclick` (focus existing client or open `notification.data.url`) handlers without removing existing caching
     - _Requirements: 3.4, 3.9_
-  - [~] 7.14 Build the Alerts UI and wire it together
+  - [x] 7.14 Build the Alerts UI and wire it together
     - `app/alerts/page.tsx` (gated by `alerts`, requires auth) with `AlertSubscriptionForm`, `AlertSubscriptionList`, `EnablePushButton` (requests permission, subscribes via VAPID public key, posts to push-subscribe)
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.8_
   - [ ]* 7.15 Write unit tests for alerts/web-push integration points
     - 401 on unauthenticated create; edge-trigger at the exact threshold value; a 410 marks a subscription inactive; one delivery writes one log row; cron route authorizes via `CRON_SECRET`
     - _Requirements: 3.3, 3.5, 3.9, 3.10_
 
-- [ ] 8. Phase 2 — Anomaly Detection (R7)
-  - [~] 8.1 Define the `anomaly_records` table
+- [x] 8. Phase 2 — Anomaly Detection (R7)
+  - [x] 8.1 Define the `anomaly_records` table
     - Create `api2db/sql/anomaly_records_schema.sql` with server_id, timestamp, observed_value, expected_value, direction, deviation_percent, is_active, created_at and the three indexes
     - _Requirements: 9.2, 7.2, 7.3, 7.6_
-  - [~] 8.2 Implement `lib/anomaly.ts`
+  - [x] 8.2 Implement `lib/anomaly.ts`
     - `classifyPoint` (percent deviation > threshold and absolute change > minChange, direction spike/drop), `expectedValueFor` (hour-of-week mean baseline with the `previous > 10` guard), `recordAnomaly` (dedup on active server+direction within window), `getAnomaliesForServer`, and `loadAnomalyConfig`/`saveAnomalyConfig` via `lib/system-settings.ts` defaulting to monitoring config
     - _Requirements: 7.1, 7.2, 7.3, 7.6, 7.7_
   - [ ]* 8.3 Write property test for anomaly classification
@@ -211,21 +211,21 @@ Conventions:
   - [ ]* 8.6 Write property test for anomaly config round trip
     - **Property 29: Anomaly threshold config round trip and application**
     - **Validates: Requirements 7.7**
-  - [~] 8.7 Add anomaly evaluation cron and admin surfacing
+  - [x] 8.7 Add anomaly evaluation cron and admin surfacing
     - Add `/api/cron/anomaly` (guarded by `CRON_SECRET`, delegates to `lib/anomaly.ts`) and surface recorded anomalies in `app/admin/monitoring/page.tsx`; add admin threshold config controls
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.7_
-  - [~] 8.8 Surface public anomalies on the server page
+  - [x] 8.8 Surface public anomalies on the server page
     - Render recorded anomalies on a server's public surface gated by `anomaly_public`
     - _Requirements: 7.5_
   - [ ]* 8.9 Write unit tests for anomaly examples
     - Spike vs drop classification; dedup suppression within the window
     - _Requirements: 7.1, 7.6_
 
-- [ ] 9. Checkpoint — Phase 2
+- [x] 9. Checkpoint — Phase 2
   - Ensure all tests pass; run `npm run lint` and `npm run check-types`. Ask the user if questions arise.
 
-- [ ] 10. Phase 3 — Streamer-Centric Pages (R4)
-  - [~] 10.1 Implement `lib/streamers.ts`
+- [x] 10. Phase 3 — Streamer-Centric Pages (R4)
+  - [x] 10.1 Implement `lib/streamers.ts`
     - `getStreamerProfile`, `getStreamerServers` (from `streamer_server_history`), `getStreamerClips` (from `twitch_clips`/`kick_clips`), `getStreamerLiveStatus`, `getStreamerViewerTrend` (reuse `getViewerCounts`), `linkPlatformIdentities` (Twitch + Kick) with a no-data empty state
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 9.3_
   - [ ]* 10.2 Write property test for streamer servers from history
@@ -240,18 +240,18 @@ Conventions:
   - [ ]* 10.5 Write property test for dual-platform identities
     - **Property 18: Dual-platform identities are both surfaced**
     - **Validates: Requirements 4.7**
-  - [~] 10.6 Build the Streamer Profile page and wire it together
+  - [x] 10.6 Build the Streamer Profile page and wire it together
     - `app/streamers/[platform]/[username]/page.tsx` gated by `streamer_pages`; display name/platform/live status, server list, clip history, live viewer count, selectable viewer trend, no-data message, and per-platform identities
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7_
   - [ ]* 10.7 Write unit tests for streamer profile examples
     - Empty-state (R4.6) and dual-platform (R4.7)
     - _Requirements: 4.6, 4.7_
 
-- [ ] 11. Phase 3 — Historical Wrapped and Insights (R5)
-  - [~] 11.1 Define the `insights_reports` table
+- [x] 11. Phase 3 — Historical Wrapped and Insights (R5)
+  - [x] 11.1 Define the `insights_reports` table
     - Create `api2db/sql/insights_reports_schema.sql` with month UNIQUE, metrics jsonb, generated_at, share_slug UNIQUE and indexes; public read by slug, service-role writes
     - _Requirements: 9.2_
-  - [~] 11.2 Implement `lib/insights.ts`
+  - [x] 11.2 Implement `lib/insights.ts`
     - `computeMetrics` (peak-activity day, busiest server, largest MoM growth, `{ available: false }` for sparse metrics), `generateMonthlyReport`, `getReport`, `listReports`; reuse `getPlayerCounts`; reports immutable once generated
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.6, 9.3_
   - [ ]* 11.3 Write property test for insights metrics
@@ -263,17 +263,17 @@ Conventions:
   - [ ]* 11.5 Write property test for report retention/retrieval
     - **Property 21: Generated reports are retained and retrievable unchanged**
     - **Validates: Requirements 5.4, 5.6**
-  - [~] 11.6 Add the `/api/cron/insights` route
+  - [x] 11.6 Add the `/api/cron/insights` route
     - Guard with `CRON_SECRET`; generate the previous month's report once a calendar month completes, idempotently
     - _Requirements: 5.1, 5.6_
-  - [~] 11.7 Build the Wrapped pages, share metadata, and OG image
+  - [x] 11.7 Build the Wrapped pages, share metadata, and OG image
     - `app/wrapped/page.tsx` (retained reports list), `app/wrapped/[month]/page.tsx` with `generateMetadata` emitting OG/Twitter tags, and `app/wrapped/[month]/opengraph-image.tsx` using `ImageResponse` (fallback image, not 500, on load failure); all gated by `insights_wrapped`
     - _Requirements: 5.3, 5.4, 5.5, 5.6_
   - [ ]* 11.8 Write unit tests for insights examples
     - A month with one metric unavailable (R5.3); share-slug resolution returns the same report (R5.4)
     - _Requirements: 5.3, 5.4_
 
-- [ ] 12. Final checkpoint and full verification
+- [x] 12. Final checkpoint and full verification
   - Run `npm run lint`, `npm run check-types`, and the full test suite (unit + property); fix any failures
   - Confirm each new table's SQL definition is expressible in both the Supabase schema and a Prisma representation (R9.2)
   - Ensure all tests pass, ask the user if questions arise.

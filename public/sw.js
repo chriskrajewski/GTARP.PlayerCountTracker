@@ -353,3 +353,97 @@ async function getCacheSize() {
 
   return totalSize;
 }
+
+/* ========================================================================== */
+/* Web Push notifications (R3.4, R3.9)                                        */
+/* ========================================================================== */
+/*
+ * These handlers ADD web-push support on top of the caching logic above; they
+ * do not modify any of the existing install/activate/fetch/message behavior.
+ *
+ * The server (lib/web-push.ts) delivers a VAPID-signed push whose data is the
+ * JSON payload `{ title, body, url?, icon? }`. The `push` handler shows that
+ * notification (with a generic fallback if the payload can't be parsed), and
+ * `notificationclick` focuses an existing client or opens the deep link.
+ */
+
+/* global Notification, clients */
+
+const DEFAULT_NOTIFICATION_ICON = '/icons/icon-192.png';
+const DEFAULT_NOTIFICATION_TITLE = 'RPStats';
+const DEFAULT_NOTIFICATION_BODY = 'You have a new notification.';
+
+/**
+ * Push event - show a notification from the server payload.
+ * Falls back to a generic notification if the payload is missing or not valid
+ * JSON, rather than throwing (R3.9 resilience).
+ */
+self.addEventListener('push', (event) => {
+  let payload = {};
+
+  if (event.data) {
+    try {
+      payload = event.data.json();
+    } catch (error) {
+      // Malformed/expired payload - show a generic notification instead of failing.
+      console.debug('Push payload was not valid JSON, using fallback:', error);
+      try {
+        payload = { body: event.data.text() };
+      } catch {
+        payload = {};
+      }
+    }
+  }
+
+  const title = (payload && payload.title) || DEFAULT_NOTIFICATION_TITLE;
+  const options = {
+    body: (payload && payload.body) || DEFAULT_NOTIFICATION_BODY,
+    icon: (payload && payload.icon) || DEFAULT_NOTIFICATION_ICON,
+    badge: DEFAULT_NOTIFICATION_ICON,
+    data: {
+      url: (payload && payload.url) || '/',
+    },
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+/**
+ * Notification click - focus an existing client on the target URL if one is
+ * open, otherwise open a new window to the deep link in `notification.data.url`.
+ */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/';
+
+  event.waitUntil(
+    (async () => {
+      const allClients = await clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      });
+
+      // Prefer focusing an already-open client; navigate it to the target URL.
+      for (const client of allClients) {
+        if ('focus' in client) {
+          try {
+            if ('navigate' in client) {
+              await client.navigate(targetUrl);
+            }
+          } catch {
+            // Navigation can fail for cross-origin clients; focus regardless.
+          }
+          return client.focus();
+        }
+      }
+
+      // No open client - open a new window to the deep link.
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+
+      return undefined;
+    })()
+  );
+});

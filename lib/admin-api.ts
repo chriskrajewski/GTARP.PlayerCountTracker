@@ -235,6 +235,34 @@ class AdminAPI {
     return this.post('/monitoring/config', { webhook_url: webhookUrl });
   }
 
+  // ==================== ANOMALY DETECTION ====================
+  async getAnomalies(params?: { limit?: number; active?: boolean }): Promise<AdminAPIResponse<any[]>> {
+    const queryParams: Record<string, string> = {};
+    if (params?.limit) queryParams.limit = String(params.limit);
+    if (params?.active) queryParams.active = 'true';
+    return this.get<any[]>('/monitoring/anomalies', queryParams);
+  }
+
+  async getAnomalyConfig(): Promise<AdminAPIResponse<{
+    thresholdPercent: number;
+    minChange: number;
+    dedupWindowMinutes: number;
+  }>> {
+    return this.get('/monitoring/anomaly-config');
+  }
+
+  async updateAnomalyConfig(config: {
+    thresholdPercent?: number;
+    minChange?: number;
+    dedupWindowMinutes?: number;
+  }): Promise<AdminAPIResponse<{
+    thresholdPercent: number;
+    minChange: number;
+    dedupWindowMinutes: number;
+  }>> {
+    return this.patch('/monitoring/anomaly-config', config);
+  }
+
   async triggerDataCollection(serverId?: string): Promise<AdminAPIResponse<void>> {
     return this.post('/data/collect', serverId ? { server_id: serverId } : undefined);
   }
