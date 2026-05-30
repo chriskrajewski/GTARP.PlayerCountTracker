@@ -1051,16 +1051,22 @@ interface CharacterUpdateChain extends PromiseLike<CharacterWriteResult> {
  * and keeps it injectable so tests can supply a deterministic in-memory fake.
  *
  * Two write shapes are exposed because the real service-role client supports
- * both: `.upsert(...)` (used by {@link processStreamerTitles}) and an
- * UPDATE-by-id chain `.update(patch).eq('id', value)` (used by
- * {@link applyAdminReview}). Keeping `upsert` intact means the processing path
- * still compiles against the same `CharacterWriteClient`.
+ * both: `.insert(...)` (used by {@link processStreamerTitles} for brand-new
+ * `(streamer, title)` rows) and an UPDATE-by-id chain `.update(patch).eq('id',
+ * value)` (used by {@link applyAdminReview}).
+ *
+ * NOTE — why `insert`, not `upsert`: processing only ever writes titles that are
+ * NOT already in the processed ledger (the in-memory `processedTitles` check
+ * short-circuits existing ones before any write), so the write is always an
+ * INSERT of a new row. We deliberately avoid Supabase `.upsert(..., { onConflict
+ * })` here because PostgREST's `on_conflict` only accepts plain column names —
+ * it cannot target the EXPRESSION unique index `lower(streamer_name)` and would
+ * fail with `42703 column "lower" does not exist`. The expression index still
+ * enforces idempotency at the DB level: a concurrent duplicate raises `23505`,
+ * which {@link isUniqueConstraintConflict} catches and treats as a reuse.
  */
 interface CharacterUpsertTable {
-  upsert(
-    values: Record<string, unknown>,
-    options?: { onConflict?: string },
-  ): PromiseLike<CharacterWriteResult>;
+  insert(values: Record<string, unknown>): PromiseLike<CharacterWriteResult>;
   update(patch: Record<string, unknown>): CharacterUpdateChain;
 }
 
@@ -1073,9 +1079,6 @@ export interface CharacterWriteClient {
 function defaultWriteClient(): CharacterWriteClient {
   return createServiceRoleClient() as unknown as CharacterWriteClient;
 }
-
-/** The unique index that backs the `(streamer, title)` idempotency key. */
-const STREAMER_TITLE_CONFLICT_TARGET = 'lower(streamer_name), source_title';
 
 /**
  * Best-effort detection of a Postgres unique-constraint violation from the
@@ -1110,12 +1113,12 @@ function isUniqueConstraintConflict(error: { message: string } | null): boolean 
  *     - already processed (unchanged title text) → REUSE: no AI call,
  *       `reused += 1` (R2.8/R9.3, Property 7/22).
  *     - new/changed → call {@link extractCharacterFromTitle} (`aiCalls += 1`),
- *       then UPSERT a row with the extractor output and a `review_state` derived
+ *       then INSERT a row with the extractor output and a `review_state` derived
  *       from {@link readConfidenceThreshold} (R6.1/R6.2). On success
  *       `processed += 1`. A unique-constraint conflict on the idempotency key is
  *       tolerated as "already processed" → `reused += 1` (no throw).
  *
- * Error handling (R8.4): per-title extraction/upsert failures are logged and
+ * Error handling (R8.4): per-title extraction/insert failures are logged and
  * SKIPPED so the batch continues; the returned counts reflect only what actually
  * succeeded. A catastrophic read failure (cannot load extractions or titles, or
  * an empty/whitespace username) logs and returns `{ processed: 0, reused: 0,
@@ -1128,7 +1131,7 @@ function isUniqueConstraintConflict(error: { message: string } | null): boolean 
  * @param opts.aiClient injectable {@link CharacterAiClient} (passed straight to
  *   {@link extractCharacterFromTitle}; defaults to the gateway-backed client).
  * @param opts.writeClient injectable {@link CharacterWriteClient} for the
- *   upserts (defaults to the service-role-backed client). The read `client`
+ *   inserts (defaults to the service-role-backed client). The read `client`
  *   (titles + extractions) stays the read-only {@link MinimalStreamerClient},
  *   so the design's 4-argument signature is preserved by carrying the write
  *   client inside `opts`.
@@ -1238,23 +1241,24 @@ export async function processStreamerTitles(
 
       const writeResult = await writeClient
         .from(CHARACTER_EXTRACTIONS_TABLE)
-        .upsert(payload, { onConflict: STREAMER_TITLE_CONFLICT_TARGET });
+        .insert(payload);
 
       if (writeResult.error) {
-        // A unique-constraint conflict means a concurrent run already processed
-        // this (streamer, title): tolerate it as a reuse rather than throwing
-        // (R2.8/R9.3). Any other write error is logged + skipped.
+        // A unique-constraint conflict (expression index on
+        // lower(streamer_name), source_title) means a concurrent run already
+        // processed this (streamer, title): tolerate it as a reuse rather than
+        // throwing (R2.8/R9.3). Any other write error is logged + skipped.
         if (isUniqueConstraintConflict(writeResult.error)) {
           reused += 1;
         } else {
-          console.error(`Error upserting extraction for title "${title}":`, writeResult.error);
+          console.error(`Error inserting extraction for title "${title}":`, writeResult.error);
         }
         continue;
       }
 
       processed += 1;
     } catch (err) {
-      // Per-title failure (extraction or upsert): log + skip so the batch
+      // Per-title failure (extraction or insert): log + skip so the batch
       // continues; counts reflect only what actually succeeded (R8.4).
       console.error(`Error processing title "${title}":`, err);
     }
