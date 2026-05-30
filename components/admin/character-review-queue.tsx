@@ -25,6 +25,8 @@ interface BackfillResult {
   processed: number;
   reused: number;
   aiCalls: number;
+  /** Distinct unprocessed titles left after this run's per-run cap; re-run to resume. */
+  remaining?: number;
 }
 
 /**
@@ -100,9 +102,11 @@ export function CharacterReviewQueue() {
   /**
    * Trigger a character-extraction backfill for a single streamer (R9.1). POSTs
    * `{ kind: 'backfill', username }` to `/api/admin/characters`, which reads the
-   * streamer's recent stream titles, runs extraction, and upserts rows into
-   * `character_extractions`. On success it reports the run counts and refreshes
-   * the review queue so any new low-confidence extractions appear immediately.
+   * streamer's recent stream titles, runs extraction, and inserts rows into
+   * `character_extractions`. Each run is capped (new extractions are bounded per
+   * invocation to avoid serverless timeouts), so when `remaining > 0` the admin
+   * re-runs to resume. On success it reports the run counts and refreshes the
+   * review queue so any new low-confidence extractions appear immediately.
    */
   const handleBackfill = async () => {
     const username = backfillUsername.trim();
@@ -121,10 +125,12 @@ export function CharacterReviewQueue() {
       if (response?.success) {
         const result = (response.result ?? null) as BackfillResult | null;
         setBackfillResult(result);
+        const remaining = result?.remaining ?? 0;
         toast({
-          title: 'Backfill complete',
+          title: remaining > 0 ? 'Backfill batch complete' : 'Backfill complete',
           description: result
-            ? `${result.processed} processed, ${result.reused} reused, ${result.aiCalls} AI calls for ${username}`
+            ? `${result.processed} processed, ${result.reused} reused, ${result.aiCalls} AI calls for ${username}` +
+              (remaining > 0 ? ` — ${remaining} left, run again to continue.` : '')
             : `Backfill finished for ${username}`,
         });
         // Surface any newly created pending extractions.
@@ -294,6 +300,13 @@ export function CharacterReviewQueue() {
             <p className="text-xs text-emerald-300">
               ✓ {backfillResult.processed} processed, {backfillResult.reused} reused,{' '}
               {backfillResult.aiCalls} AI calls
+              {(backfillResult.remaining ?? 0) > 0 && (
+                <span className="text-amber-300">
+                  {' '}
+                  — {backfillResult.remaining} title{backfillResult.remaining === 1 ? '' : 's'} left,
+                  run again to continue.
+                </span>
+              )}
             </p>
           )}
         </div>

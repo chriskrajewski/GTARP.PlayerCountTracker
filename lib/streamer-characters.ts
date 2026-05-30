@@ -968,15 +968,41 @@ export async function getCharacterReviewQueue(
 
 /**
  * Outcome counters returned by {@link processStreamerTitles} (R9). `processed`
- * = distinct titles newly extracted + upserted this run; `reused` = distinct
+ * = distinct titles newly extracted + inserted this run; `reused` = distinct
  * titles whose stored extraction was reused with NO AI call (idempotency,
- * R2.8/R9.3); `aiCalls` = actual AI extraction requests issued this run.
+ * R2.8/R9.3); `aiCalls` = actual AI extraction requests issued this run;
+ * `remaining` = distinct unprocessed titles left over AFTER this run's batch cap
+ * ({@link MAX_NEW_EXTRACTIONS_PER_RUN}) was hit — re-run to resume (the work is
+ * idempotent), or `0` when the streamer is fully processed.
  */
 export interface ProcessResult {
   processed: number;
   reused: number;
   aiCalls: number;
+  remaining: number;
 }
+
+/**
+ * Hard cap on the number of NEW AI extractions performed in a single
+ * {@link processStreamerTitles} invocation. Each extraction is a network round
+ * trip to the AI gateway (hundreds of ms to a few seconds), and the whole call
+ * runs inside ONE serverless request with a finite execution budget (~300s on
+ * Vercel). A busy streamer can have many hundreds of distinct new titles, so
+ * processing them all in one request blows the timeout
+ * (`FUNCTION_INVOCATION_TIMEOUT`). Bounding new work per run keeps every
+ * invocation well under the limit; because processing is idempotent (already
+ * stored titles are skipped), re-running resumes where the last run stopped
+ * until `remaining` reaches 0.
+ */
+const MAX_NEW_EXTRACTIONS_PER_RUN = 40;
+
+/**
+ * How many NEW-title extractions run concurrently within a single invocation.
+ * The serial-loop original issued one AI call at a time; a small concurrency
+ * pool cuts wall-clock time roughly {@link EXTRACTION_CONCURRENCY}× while staying
+ * gentle on the AI gateway and the DB.
+ */
+const EXTRACTION_CONCURRENCY = 5;
 
 /**
  * Default `Confidence_Threshold` (R6.1/R6.2): an extraction whose confidence is
@@ -1145,7 +1171,7 @@ export async function processStreamerTitles(
   client?: MinimalStreamerClient,
   now: Date = new Date(),
 ): Promise<ProcessResult> {
-  const empty: ProcessResult = { processed: 0, reused: 0, aiCalls: 0 };
+  const empty: ProcessResult = { processed: 0, reused: 0, aiCalls: 0, remaining: 0 };
 
   const normalized = username.trim();
   if (normalized.length === 0) return empty;
@@ -1210,22 +1236,36 @@ export async function processStreamerTitles(
     return empty;
   }
 
-  // ---- Step 3: process each distinct title with per-title error isolation.
-  let processed = 0;
+  // ---- Step 3: process the distinct titles. Already-processed titles are
+  // reused for free (no AI call); the NEW titles are the expensive part (one AI
+  // round trip each), so they are CAPPED at MAX_NEW_EXTRACTIONS_PER_RUN per
+  // invocation and run with bounded concurrency to stay under the serverless
+  // execution budget. Any new titles beyond the cap are left for a follow-up
+  // run (reported via `remaining`); the work is idempotent so re-running resumes.
   let reused = 0;
+  const newTitles: string[] = [];
+  for (const title of distinctTitles) {
+    if (processedTitles.has(title)) {
+      // Unchanged/already-processed title → reuse, no AI call (R2.8/R9.3).
+      reused += 1;
+    } else {
+      newTitles.push(title);
+    }
+  }
+
+  const batch = newTitles.slice(0, MAX_NEW_EXTRACTIONS_PER_RUN);
+  const remaining = newTitles.length - batch.length;
+
+  let processed = 0;
   let aiCalls = 0;
 
-  for (const title of distinctTitles) {
-    // Unchanged/already-processed title → reuse the stored result, no AI call
-    // (R2.8/R9.3, Property 7/22).
-    if (processedTitles.has(title)) {
-      reused += 1;
-      continue;
-    }
-
+  /**
+   * Extract + insert one new title with per-title error isolation: a failed
+   * extraction or insert is logged and skipped so the batch continues, and the
+   * counts reflect only what actually succeeded (R8.4).
+   */
+  const processOne = async (title: string): Promise<void> => {
     try {
-      // New/changed title → one extraction (the injected client keeps this
-      // deterministic + network-free in tests).
       const result = await extractCharacterFromTitle(title, opts?.aiClient);
       aiCalls += 1;
 
@@ -1239,9 +1279,7 @@ export async function processStreamerTitles(
         review_state: reviewState,
       };
 
-      const writeResult = await writeClient
-        .from(CHARACTER_EXTRACTIONS_TABLE)
-        .insert(payload);
+      const writeResult = await writeClient.from(CHARACTER_EXTRACTIONS_TABLE).insert(payload);
 
       if (writeResult.error) {
         // A unique-constraint conflict (expression index on
@@ -1253,18 +1291,31 @@ export async function processStreamerTitles(
         } else {
           console.error(`Error inserting extraction for title "${title}":`, writeResult.error);
         }
-        continue;
+        return;
       }
 
       processed += 1;
     } catch (err) {
-      // Per-title failure (extraction or insert): log + skip so the batch
-      // continues; counts reflect only what actually succeeded (R8.4).
       console.error(`Error processing title "${title}":`, err);
     }
-  }
+  };
 
-  return { processed, reused, aiCalls };
+  // Run the batch with a small fixed-size worker pool (bounded concurrency) so
+  // wall-clock time is ~EXTRACTION_CONCURRENCY× faster than the original serial
+  // loop while keeping load on the AI gateway and DB modest.
+  let cursor = 0;
+  const worker = async (): Promise<void> => {
+    while (cursor < batch.length) {
+      const index = cursor;
+      cursor += 1;
+      await processOne(batch[index]);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(EXTRACTION_CONCURRENCY, batch.length) }, () => worker()),
+  );
+
+  return { processed, reused, aiCalls, remaining };
 }
 
 /* -------------------------------------------------------------------------- */

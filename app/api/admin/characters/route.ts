@@ -158,3 +158,9 @@ export async function POST(request: NextRequest) {
 }
 
 export const dynamic = 'force-dynamic';
+
+// A backfill performs up to MAX_NEW_EXTRACTIONS_PER_RUN AI extractions (bounded
+// concurrency) per call. Allow more than the platform's default 10s/15s budget
+// so a full batch completes, while staying well under the 300s hard limit that
+// the original unbounded run hit (FUNCTION_INVOCATION_TIMEOUT).
+export const maxDuration = 60;
