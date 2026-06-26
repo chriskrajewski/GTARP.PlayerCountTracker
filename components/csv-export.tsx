@@ -110,7 +110,7 @@ export function CSVExport({ servers, selectedServers }: CSVExportProps) {
 
   return (
     <motion.div 
-      className="flex flex-col gap-4 p-4 sm:p-5 rounded-xl relative overflow-hidden"
+      className="flex flex-col gap-4 p-4 sm:p-5 rounded-xl relative overflow-visible"
       style={{
         background: 'linear-gradient(135deg, rgba(14, 14, 16, 0.95) 0%, rgba(10, 10, 12, 0.95) 100%)',
         border: '1px solid rgba(0, 217, 255, 0.15)',
