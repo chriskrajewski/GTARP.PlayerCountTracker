@@ -13,6 +13,52 @@ import { playerCountsToCSV, streamerCountsToCSV, viewerCountsToCSV, downloadCSV 
 import { supabase } from "@/lib/supabase"
 import { motion } from "motion/react"
 
+const PAGE_SIZE = 1000
+
+/**
+ * Fetches all rows from a Supabase query by paginating through results.
+ * Supabase limits responses to 1000 rows by default, so we fetch in batches.
+ */
+async function fetchAllRows<T>(
+  table: string,
+  select: string,
+  filters: {
+    serverIds: string[]
+    startDate: string
+    endDate: string
+  }
+): Promise<T[]> {
+  const allData: T[] = []
+  let from = 0
+  let hasMore = true
+
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from(table)
+      .select(select)
+      .in("server_id", filters.serverIds)
+      .gte("timestamp", filters.startDate)
+      .lte("timestamp", filters.endDate)
+      .order("timestamp", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1)
+
+    if (error) {
+      throw error
+    }
+
+    if (data && data.length > 0) {
+      allData.push(...(data as T[]))
+      from += data.length
+      // If we got fewer rows than the page size, we've reached the end
+      hasMore = data.length === PAGE_SIZE
+    } else {
+      hasMore = false
+    }
+  }
+
+  return allData
+}
+
 type CSVExportProps = {
   servers: ServerData[]
   selectedServers: string[]
@@ -23,6 +69,7 @@ export function CSVExport({ servers, selectedServers }: CSVExportProps) {
   const [endDate, setEndDate] = useState<Date | undefined>(new Date()) // Default: today
   const [dataType, setDataType] = useState<string>("player") // Default: player data
   const [isExporting, setIsExporting] = useState(false)
+  const [exportProgress, setExportProgress] = useState<string>("")
 
   // Function to handle export
   const handleExport = async () => {
@@ -31,6 +78,7 @@ export function CSVExport({ servers, selectedServers }: CSVExportProps) {
     }
 
     setIsExporting(true)
+    setExportProgress("Fetching data...")
 
     try {
       // Format dates for database query
@@ -47,57 +95,39 @@ export function CSVExport({ servers, selectedServers }: CSVExportProps) {
       const dateStr = format(new Date(), "yyyy-MM-dd")
       
       if (dataType === "player") {
-        // Direct database query with date filtering
-        const { data: playerData, error } = await supabase
-          .from("player_counts")
-          .select("server_id, timestamp, player_count")
-          .in("server_id", selectedServers)
-          .gte("timestamp", customStartDate)
-          .lte("timestamp", customEndDate)
-          .order("timestamp", { ascending: true })
-        
-        if (error) {
-          throw error
-        }
+        setExportProgress("Fetching player count data...")
+        const playerData = await fetchAllRows<{ server_id: string; timestamp: string; player_count: number }>(
+          "player_counts",
+          "server_id, timestamp, player_count",
+          { serverIds: selectedServers, startDate: customStartDate, endDate: customEndDate }
+        )
 
-        // Convert to CSV and download
-        const csvContent = playerCountsToCSV(playerData || [], servers)
+        setExportProgress(`Processing ${playerData.length.toLocaleString()} rows...`)
+        const csvContent = playerCountsToCSV(playerData, servers)
         downloadCSV(csvContent, `player-counts-${serverNames}-${dateStr}.csv`)
       } 
       else if (dataType === "streamer") {
-        // Direct database query with date filtering
-        const { data: streamerData, error } = await supabase
-          .from("streamer_count")
-          .select("server_id, timestamp, streamercount")
-          .in("server_id", selectedServers)
-          .gte("timestamp", customStartDate)
-          .lte("timestamp", customEndDate)
-          .order("timestamp", { ascending: true })
-        
-        if (error) {
-          throw error
-        }
+        setExportProgress("Fetching streamer count data...")
+        const streamerData = await fetchAllRows<{ server_id: string; timestamp: string; streamercount: number }>(
+          "streamer_count",
+          "server_id, timestamp, streamercount",
+          { serverIds: selectedServers, startDate: customStartDate, endDate: customEndDate }
+        )
 
-        // Convert to CSV and download
-        const csvContent = streamerCountsToCSV(streamerData || [], servers)
+        setExportProgress(`Processing ${streamerData.length.toLocaleString()} rows...`)
+        const csvContent = streamerCountsToCSV(streamerData, servers)
         downloadCSV(csvContent, `streamer-counts-${serverNames}-${dateStr}.csv`)
       }
       else if (dataType === "viewer") {
-        // Direct database query with date filtering
-        const { data: viewerData, error } = await supabase
-          .from("viewer_count")
-          .select("server_id, timestamp, viewcount")
-          .in("server_id", selectedServers)
-          .gte("timestamp", customStartDate)
-          .lte("timestamp", customEndDate)
-          .order("timestamp", { ascending: true })
-        
-        if (error) {
-          throw error
-        }
+        setExportProgress("Fetching viewer count data...")
+        const viewerData = await fetchAllRows<{ server_id: string; timestamp: string; viewcount: number }>(
+          "viewer_count",
+          "server_id, timestamp, viewcount",
+          { serverIds: selectedServers, startDate: customStartDate, endDate: customEndDate }
+        )
 
-        // Convert to CSV and download
-        const csvContent = viewerCountsToCSV(viewerData || [], servers)
+        setExportProgress(`Processing ${viewerData.length.toLocaleString()} rows...`)
+        const csvContent = viewerCountsToCSV(viewerData, servers)
         downloadCSV(csvContent, `viewer-counts-${serverNames}-${dateStr}.csv`)
       }
     } catch (error) {
@@ -105,6 +135,7 @@ export function CSVExport({ servers, selectedServers }: CSVExportProps) {
       alert("Failed to export data. Please try again.")
     } finally {
       setIsExporting(false)
+      setExportProgress("")
     }
   }
 
@@ -241,7 +272,7 @@ export function CSVExport({ servers, selectedServers }: CSVExportProps) {
           {isExporting ? (
             <span className="flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Exporting...
+              {exportProgress || "Exporting..."}
             </span>
           ) : (
             <span className="flex items-center gap-2">
